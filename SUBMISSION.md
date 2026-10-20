@@ -4,17 +4,19 @@
 
 ## Concept
 
-<!-- Written by the Team before the code: your own choice, a few sentences per answer. Everything else in the Submission follows from it. -->
+**Enterprise:** Реальный медный рудник Актогай (KAZ Minerals, область Абай): карьер, обогатительная фабрика и энергия, которой они питаются.
 
-**Enterprise:** <!-- Which mining enterprise, or which part of it, the twin represents. -->
+**Users:** Те, кто принимает решения из следующего пункта: энергетик и диспетчер рудника (каждый час) и руководство рудника (решение о ветряках и солнечных панелях).
 
-**Users:** <!-- Who uses the twin. -->
+**Decision:** Двойник помогает решить проблемы рудника с энергией:
+- когда и какую руду молоть, чтобы брать больше энергии ветра и солнца;
+- когда заряжать электрические самосвалы;
+- может ли рудник помочь энергосистеме, если она попросит снизить нагрузку;
+- сколько ветряков и солнечных панелей стоит построить у рудника.
 
-**Decision:** <!-- Which decision the twin helps them make. -->
+**Why this choice:** Чтобы был чище воздух и сжигалось меньше угля: рудник берёт энергию ветра и солнца вместо угольной. Двойник должен быть полезным для людей и для работников рудника.
 
-**Why this choice:** <!-- Why this enterprise, these users and this decision. -->
-
-**Real or fictional:** <!-- A real object: name it and give the sources of its numbers. A fictional one: which real objects it resembles and where its numbers come from. A real object with sourced numbers scores higher. -->
+**Real or fictional:** Объект реальный — рудник Актогай. Цифры берутся из открытых отчётов KAZ Minerals и реальной погоды в точке рудника; всё, чего на руднике пока нет (ветряки, солнечные панели, электрические самосвалы), помечается как допущение.
 
 ## Team
 
@@ -22,7 +24,9 @@
 
 | GitHub |
 |---|
-|  |
+| shrailymadil-debug |
+| liyaaal |
+| yusubovanazik |
 
 ## Mine
 
