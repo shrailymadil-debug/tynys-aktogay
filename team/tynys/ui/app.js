@@ -2,7 +2,7 @@
 const NS = 'kz.tynys';
 const NAMES = ['site','pit','plant','energy','coordinator','scenario','shadow-v0','shadow-v1','pile-soft','pile-hard',
   'line-1','line-2','flotation','wind','pv','bess','substation', ...Array.from({length:14},(_,i)=>`truck-${String(i+1).padStart(2,'0')}`)];
-const EVENTS = {lull:['Штиль на сутки',3,24], line_trip:['Авария линии 2',0,8], kegoc:['Запрос KEGOC: −60 МВт',2,4],
+const EVENTS = {lull:['Штиль на сутки',3,24], line_trip:['Авария линии 2',0,8], kegoc:['Запрос KEGOC: −80 МВт',2,4],
   hard_ore:['Пошла твёрдая руда',0,72], plan_up:['План добычи +10 %',0,48], bess_fault:['Отказ накопителя',0,12]};
 const $ = id => document.getElementById(id);
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -85,7 +85,13 @@ function render() {
   const cols = ['shadow-v0', 'shadow-v1', 'site'];
   const rows = [['Медь, т', 'cu_t', 0], ['Медь с учётом склада, т', 'cu_adj_t', 0], ['Из сети, МВт·ч', 'grid_mwh', 0], ['CO₂, т', 'co2_t', 0], ['CO₂ на т меди', 'co2_per_t_cu', 2],
     ['Сброс ВИЭ, МВт·ч', 'curtail_mwh', 0], ['Оплата сети, млн ₸', 'grid_cost_mkzt', 0]];
-  $('kpi').innerHTML = rows.map(([lbl, f, k]) => `<tr><td>${lbl}</td>${cols.map(c => `<td>${fmt(v(c, f), k)}</td>`).join('')}</tr>`).join('');
+  const CU_MKZT = 9500 * 480 * 0.85 / 1e6;   // оплачиваемая медь, млн ₸/т (допущение, params.py)
+  const margin = c => v(c, 'cu_adj_t') * CU_MKZT - v(c, 'grid_cost_mkzt');
+  const best = Math.max(...cols.map(margin));
+  rows.push(['<b>Медь − энергия, млн ₸</b>', null, 0]);
+  $('kpi').innerHTML = rows.map(([lbl, f, k]) => f === null
+    ? `<tr><td>${lbl}</td>${cols.map(c => `<td style="${margin(c) === best ? 'color:var(--v2);font-weight:700' : ''}">${fmt(margin(c))}</td>`).join('')}</tr>`
+    : `<tr><td>${lbl}</td>${cols.map(c => `<td>${fmt(v(c, f), k)}</td>`).join('')}</tr>`).join('');
   $('flex').textContent = fmt(v('substation', 'flex_down_mw')); $('flexh').textContent = fmt(v('substation', 'flex_down_h'), 1);
   const now = [['Нагрузка', fmt(v('energy', 'load_mw')) + ' МВт'], ['ВИЭ', fmt(v('energy', 'renew_mw')) + ' МВт'],
     ['Доля ВИЭ', fmt(v('energy', 'renew_share_pct')) + ' %'], ['Сеть', fmt(v('energy', 'grid_mw')) + ' МВт'],
@@ -150,4 +156,29 @@ async function poll() {
     render();
   } catch (e) { $('clock').textContent = 'нет связи с Ditto: ' + e.message; }
 }
+// ---------- «сколько строить»: результаты расчёта из атрибута двойника energy ----------
+let SZ = [];
+function drawSizing() {
+  if (!SZ.length) return;
+  const w = +$('sz-w').value, p = +$('sz-p').value;
+  const base = SZ.find(r => r.wind_mw == 0 && r.pv_mwp == 0 && r.variant == 'V0');
+  const a = SZ.find(r => r.wind_mw == w && r.pv_mwp == p && r.variant == 'V0');
+  const b = SZ.find(r => r.wind_mw == w && r.pv_mwp == p && r.variant == 'V2');
+  if (!base || !a || !b) return;
+  const rows = [['', 'Сегодня', 'ВИЭ без Тыныс', 'ВИЭ + Тыныс'],
+    ['CO₂ в год, тыс. т', base.co2_kt, a.co2_kt, b.co2_kt].map((x, i) => i ? fmt(x) : x),
+    ['Медь в год, тыс. т', base.cu_adj_t / 1000, a.cu_adj_t / 1000, b.cu_adj_t / 1000].map((x, i) => i ? fmt(x, 1) : x),
+    ['Доля ВИЭ, %', base.renew_share_pct, a.renew_share_pct, b.renew_share_pct].map((x, i) => i ? fmt(x) : x),
+    ['Сброс ВИЭ, ГВт·ч', base.curtail_mwh / 1000, a.curtail_mwh / 1000, b.curtail_mwh / 1000].map((x, i) => i ? fmt(x, 1) : x)];
+  $('sizing').innerHTML = rows.map((r, i) => `<tr>${r.map(c => i ? `<td>${c}</td>` : `<th>${c}</th>`).join('')}</tr>`).join('');
+}
+async function loadSizing() {
+  try { SZ = await api('GET', `things/${NS}:energy/attributes/sizing`) || []; } catch (e) { return setTimeout(loadSizing, 5000); }
+  if (!SZ.length) return;
+  const uniq = k => [...new Set(SZ.map(r => r[k]))].sort((a, b) => a - b);
+  $('sz-w').innerHTML = uniq('wind_mw').map(x => `<option ${x == 300 ? 'selected' : ''}>${x}</option>`).join('');
+  $('sz-p').innerHTML = uniq('pv_mwp').map(x => `<option ${x == 250 ? 'selected' : ''}>${x}</option>`).join('');
+  $('sz-w').onchange = $('sz-p').onchange = drawSizing; drawSizing();
+}
+loadSizing();
 poll(); setInterval(poll, 1000); requestAnimationFrame(animate);

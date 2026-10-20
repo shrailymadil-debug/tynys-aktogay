@@ -42,7 +42,18 @@ def twins():
             t("pv", "СЭС 250 МВт (допущение)", "pv_farm", "energy", {"power_mw": 0.0}),
             t("bess", "Накопитель 60 МВт / 120 МВт·ч (допущение)", "bess", "energy", {"soc": 50.0}),
             t("substation", "Подстанция 220 кВ — связь с KEGOC", "substation", "energy", {"grid_mw": 0.0})]
-    return dict(out)
+    d = dict(out)
+    d["energy"]["attributes"]["sizing"] = sizing()   # атрибут: поле не перезаписывает его
+    return d
+
+
+def sizing():
+    """Результаты расчёта «сколько строить» (team/tynys/sizing.py → data/sizing.csv)."""
+    import csv, os
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "sizing.csv")
+    if not os.path.exists(path):
+        return []
+    return [{k: (v if k == "variant" else float(v)) for k, v in r.items()} for r in csv.DictReader(open(path))]
 
 
 def main():

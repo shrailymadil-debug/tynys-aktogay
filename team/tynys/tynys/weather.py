@@ -8,6 +8,7 @@
 (например, PVGIS/Open-Meteo, CC BY 4.0) в CSV, его можно подать вместо синтетики.
 """
 import math
+import os
 import numpy as np
 from scipy.stats import norm
 from .params import Params
@@ -33,7 +34,42 @@ def wind_power_pu(v):
     return pu * 0.90
 
 
-def generate(p: Params, start_doy: int, days: int, seed: int):
+REAL_CSV = os.environ.get("TYNYS_WEATHER_CSV", os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "data", "openmeteo_aktogay_2024.csv"))
+
+
+def load_real(p: Params, start_doy: int, days: int, path: str = REAL_CSV):
+    """Реальная почасовая погода в точке Актогая за 2024 г. (Open-Meteo ERA5, CC BY 4.0):
+    скорость ветра на 100 м и суммарная радиация на горизонтальную площадку.
+    Индекс t — местное время (UTC+5), год зацикливается."""
+    import pandas as pd
+    d = pd.read_csv(path, skiprows=3)
+    v_all = d.iloc[:, 1].to_numpy(float)
+    ghi_all = d.iloc[:, 2].to_numpy(float)
+    N = len(v_all)
+    idx = (np.arange(days * 24) + (start_doy - 1) * 24 - 5) % N
+    v, ghi = v_all[idx], ghi_all[idx]
+    kt = np.zeros_like(ghi)
+    pv_pu = np.zeros_like(ghi)
+    for t in range(len(ghi)):
+        doy = (start_doy + t // 24 - 1) % 366 + 1
+        sh = _solar_elev_sin(p.lat, p.lon, doy, t % 24 + 0.5 - 5)
+        if sh <= 0.01 or ghi[t] <= 0:
+            continue
+        ghi_clear = 1098.0 * sh * math.exp(-0.057 / sh)
+        kt[t] = float(np.clip(ghi[t] / ghi_clear, 0.05, 1.0))
+        tilt_gain = 1.0 + 0.35 * (1 - sh)
+        pv_pu[t] = min(1.0, ghi[t] / 1000.0 * tilt_gain * 0.93)
+    return {"wind_v": v, "wind_pu": wind_power_pu(v), "pv_pu": pv_pu, "kt": kt, "source": "Open-Meteo ERA5 2024"}
+
+
+def generate(p: Params, start_doy: int, days: int, seed: int, real: bool = None):
+    """Погода для сценария. real=None: реальный ряд, если файл есть (так работает стенд),
+    иначе синтетика. Эксперименты с разными seed используют синтетику (real=False)."""
+    if real is None:
+        real = os.path.exists(REAL_CSV)
+    if real:
+        return load_real(p, start_doy, days)
     rng = np.random.default_rng(seed)
     n = days * 24
     # ---- ветер ----

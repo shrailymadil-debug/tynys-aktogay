@@ -1,5 +1,7 @@
 name: tynys-e2e
 # Запуск решения с нуля по README в окружении, близком к окружению судьи (Ubuntu 24.04).
+permissions:
+  contents: write
 on:
   push:
     branches: [main]
@@ -20,11 +22,12 @@ jobs:
           pip install playwright==1.48.0 && python -m playwright install --with-deps chromium
           sleep 40
           python team/tynys/scripts/screenshot.py http://127.0.0.1:8095 screen.png
-      - uses: actions/upload-artifact@v4
+      - name: Снимок в ветку ci-screens
         if: always()
-        with:
-          name: screen
-          path: screen.png
+        run: |
+          git config user.name github-actions; git config user.email github-actions@users.noreply.github.com
+          git checkout --orphan ci-screens; git rm -rfq --cached . ; git add -f screen.png
+          git commit -qm "screen ${GITHUB_SHA::7}"; git push -qf origin ci-screens
       - name: Логи
         if: failure()
         run: docker compose -f deploy/compose/docker-compose.yml -f team/tynys/compose.yml logs --tail=200

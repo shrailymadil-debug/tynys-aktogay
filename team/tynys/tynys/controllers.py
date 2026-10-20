@@ -100,7 +100,9 @@ class _VarIndex:
 class V2Tynys:
     """Скользящий горизонт: каждый час решается MILP на H часов вперёд, применяется первый шаг."""
 
-    def __init__(self, segregation=True, elastic_grind=True, use_forecast=True, name=None, explain=False):
+    def __init__(self, segregation=True, elastic_grind=True, use_forecast=True, name=None, explain=False, grind_modes=None):
+        # grind_modes: допустимые P80 (мкм); «зелёный» режим = не тоньше 150 мкм
+        self.grind_modes = grind_modes
         self.explain = explain
         self.last_plan = None
         self.segregated = segregation
@@ -127,7 +129,7 @@ class V2Tynys:
         mpd = {"soft": mplan * (1 - hf), "hard": mplan * hf}
         price = np.array([p.price_kzt_mwh((t + h) % 24) + p.co2_price_kzt_t * p.grid_co2_t_mwh for h in range(H)])
         bwi = st.bwi_est if self.segregated else p.bwi
-        grinds = range(NG) if self.elastic_grind else [G150]
+        grinds = ([g for g in range(NG) if P80_MODES[g] in self.grind_modes] if self.grind_modes else range(NG)) if self.elastic_grind else [G150]
         e = {(d, g): ph.bond_kwh_t(p, bwi[d], P80_MODES[g]) for d in DOMAINS for g in range(NG)}
         R = {(d, g): ph.recovery_inf(p, d, P80_MODES[g]) for d in DOMAINS for g in range(NG)}
         V = p.cu_value_kzt_t

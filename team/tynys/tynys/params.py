@@ -172,5 +172,5 @@ def aktogay() -> Params:
         n_trucks=42, charger_n=12,
         wind_mw=300.0, pv_mwp=250.0,
         bess_mw=60.0, bess_mwh=120.0,
-        grid_cap_mw=200.0,
+        grid_cap_mw=260.0,                                   # ASSUMPTION: предел присоединения 220 кВ (выше средней нагрузки 230 МВт)
     )
