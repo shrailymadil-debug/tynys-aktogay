@@ -33,9 +33,10 @@ for (const [k, [title]] of Object.entries(EVENTS)) {
 }
 
 // ---------- what-if через двойник scenario ----------
-async function writeScenario(events) {
+async function writeScenario(events, goal) {
   const rev = (v('scenario', 'rev', 0) || 0) + 1;
-  await api('PUT', `things/${NS}:scenario/features`, {events: {properties: {value: JSON.stringify(events)}}, rev: {properties: {value: rev}}});
+  await api('PUT', `things/${NS}:scenario/features`, {events: {properties: {value: JSON.stringify(events)}},
+    rev: {properties: {value: rev}}, goal: {properties: {value: goal || v('scenario', 'goal', 'copper')}}});
   await poll();
 }
 function curEvents() { try { return JSON.parse(v('scenario', 'events', '[]') || '[]'); } catch (e) { return []; } }
@@ -44,6 +45,9 @@ async function addEvent(kind) {
   await writeScenario([...curEvents().filter(e => e.t0 + e.dur > t), {kind, t0: t + 1 + lead, dur, id: Date.now()}]);
 }
 async function cancelEvent(id) { await writeScenario(curEvents().filter(e => e.id !== id)); }
+
+$('g-copper').onclick = () => writeScenario(curEvents(), 'copper');
+$('g-green').onclick = () => writeScenario(curEvents(), 'green');
 
 // ---------- отрисовка ----------
 let rot = 0;
@@ -98,6 +102,11 @@ function render() {
     ['CO₂ сейчас', fmt(v('substation', 'co2_t_h')) + ' т/ч'], ['Переработка', fmt(v('plant', 'feed_tph')) + ' т/ч'],
     ['Твёрдость (оценка)', `${fmt(v('pile-soft', 'bwi_est'), 1)} / ${fmt(v('pile-hard', 'bwi_est'), 1)} кВт·ч/т`]];
   $('now').innerHTML = now.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
+  const goal = v('scenario', 'goal', 'copper');
+  $('g-copper').className = goal === 'copper' ? 'on' : ''; $('g-green').className = goal === 'green' ? 'on' : '';
+  $('g-note').textContent = goal === 'green'
+    ? 'Мелем не тоньше 150 мкм: энергия идёт на то, чтобы не сбрасывать ветер и солнце, а не на лишнюю медь.'
+    : 'Мелем тоньше, когда это окупается медью: больше меди, но и больше энергии.';
   // события
   const evs = curEvents();
   $('events').innerHTML = evs.length ? '' : '<span class="mute">Сценариев нет — обычная работа.</span>';
@@ -164,12 +173,16 @@ function drawSizing() {
   const base = SZ.find(r => r.wind_mw == 0 && r.pv_mwp == 0 && r.variant == 'V0');
   const a = SZ.find(r => r.wind_mw == w && r.pv_mwp == p && r.variant == 'V0');
   const b = SZ.find(r => r.wind_mw == w && r.pv_mwp == p && r.variant == 'V2');
+  const g = SZ.find(r => r.wind_mw == w && r.pv_mwp == p && r.variant == 'V2green');
   if (!base || !a || !b) return;
-  const rows = [['', 'Сегодня', 'ВИЭ без Тыныс', 'ВИЭ + Тыныс'],
-    ['CO₂ в год, тыс. т', base.co2_kt, a.co2_kt, b.co2_kt].map((x, i) => i ? fmt(x) : x),
-    ['Медь в год, тыс. т', base.cu_adj_t / 1000, a.cu_adj_t / 1000, b.cu_adj_t / 1000].map((x, i) => i ? fmt(x, 1) : x),
-    ['Доля ВИЭ, %', base.renew_share_pct, a.renew_share_pct, b.renew_share_pct].map((x, i) => i ? fmt(x) : x),
-    ['Сброс ВИЭ, ГВт·ч', base.curtail_mwh / 1000, a.curtail_mwh / 1000, b.curtail_mwh / 1000].map((x, i) => i ? fmt(x, 1) : x)];
+  const cs = [base, a, b, ...(g ? [g] : [])];
+  const row = (lbl, f, k) => [lbl, ...cs.map(r => fmt(f(r), k))];
+  const rows = [['', 'Сегодня', 'ВИЭ', 'ВИЭ + Тыныс: медь', ...(g ? ['ВИЭ + Тыныс: CO₂'] : [])],
+    row('CO₂ в год, тыс. т', r => r.co2_kt, 0),
+    row('Медь в год, тыс. т', r => r.cu_adj_t / 1000, 1),
+    row('CO₂ на т меди, т', r => r.co2_kt * 1000 / r.cu_adj_t, 2),
+    row('Доля ВИЭ, %', r => r.renew_share_pct, 0),
+    row('Сброс ВИЭ, ГВт·ч', r => r.curtail_mwh / 1000, 0)];
   $('sizing').innerHTML = rows.map((r, i) => `<tr>${r.map(c => i ? `<td>${c}</td>` : `<th>${c}</th>`).join('')}</tr>`).join('');
 }
 async function loadSizing() {

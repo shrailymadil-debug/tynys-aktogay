@@ -57,7 +57,7 @@ def main():
     st = {k: init_state(p) for k in ("v2", "v0", "v1")}
     ctl = {"v0": V0Traditional(), "v1": V1Reactive()}
     tot = {k: Totals() for k in st}
-    t = 0
+    t, last = 0, {}
     while True:
         t_hour0 = time.time()
         if t >= env.sc.n():   # год прошёл — начинаем заново
@@ -78,6 +78,9 @@ def main():
         bus.send("site", {"sim_hour": t, "sim_time": sim_time.strftime("%Y-%m-%d %H:00"),
                           "start_doy": start_doy, "seed": SEED, "scenario_rev": ev_rev or 0,
                           "state_json": dumps(state_to_dict(st["v2"])), **tot["v2"].feats()})
+        # итоги теней публикуются в тот же момент, что и итоги V2 (за часы 0..t-1)
+        for k in ("v0", "v1"):
+            bus.send(f"shadow-{k}", {**tot[k].feats(), **last.get(k, {})})
         # --- 2. ждём координатора ---
         dec, source = None, "fallback_v1"
         deadline = time.time() + DECIDE_TIMEOUT
@@ -100,8 +103,7 @@ def main():
         for k in ("v0", "v1"):
             r = step(p, env, st[k], t, ctl[k].decide(p, env, st[k], t), ctl[k].segregated)
             tot[k].add(p, r, st[k])
-            bus.send(f"shadow-{k}", {**tot[k].feats(), "grid_mw": round(r["grid"], 1),
-                                     "curtail_mw": round(r["curtail"], 1), "feed_tph": round(r["feed"])})
+            last[k] = {"grid_mw": round(r["grid"], 1), "curtail_mw": round(r["curtail"], 1), "feed_tph": round(r["feed"])}
         publish_hour(bus, p, env, st["v2"], rec, t, source)
         # --- 4. анимация самосвалов до конца часа ---
         sub = 0

@@ -26,29 +26,20 @@ def explain(p, st, dec, plan, t):
     x = np.array(dec["x"])                      # [линия][домен][P80]
     hard = float(x[:, 1, :].sum()); soft = float(x[:, 0, :].sum()); feed = hard + soft
     p80 = plan["p80_um"][0] or 0
-    cheap = (sh is not None and not np.isnan(sh) and sh < 0.5 * tariff)
+    cheap = sh is not None and not np.isnan(sh) and sh < 0.8 * tariff
     mode = "вдох" if cheap else "выдох"
-    why = []
-    if cheap:
-        why.append(f"Энергии с избытком (ВИЭ {renew0:.0f} МВт) — МВт·ч почти ничего не стоит, «вдыхаем»:")
-        if hard > 0.55 * feed:
-            why.append(f"мелем твёрдую руду ({hard:.0f} т/ч из {feed:.0f}),")
-        if p80 and p80 < 145:
-            why.append(f"мелем тоньше (P80 {p80:.0f} мкм) — больше меди извлекается,")
-        if dec["charge_mw"] > 5:
-            why.append(f"заряжаем самосвалы {dec['charge_mw']:.0f} МВт,")
-        if dec["bess_mw"] < -5:
-            why.append(f"заряжаем накопитель {-dec['bess_mw']:.0f} МВт.")
-    else:
-        why.append(f"Энергия дорогая (теневая цена {sh / 1000:.0f} ₸/кВт·ч) — «выдыхаем»:")
-        if soft > 0.55 * feed:
-            why.append(f"мелем мягкую руду ({soft:.0f} т/ч), твёрдую копим на складе до ветра,")
-        if p80 and p80 > 160:
-            why.append(f"помол крупнее (P80 {p80:.0f} мкм) — меньше кВт·ч на тонну,")
-        if dec["charge_mw"] < 5:
-            why.append("самосвалы ездят на заряде, не заряжаем,")
-        if dec["bess_mw"] > 5:
-            why.append(f"накопитель отдаёт {dec['bess_mw']:.0f} МВт.")
+    why = [f"Энергия {'дешёвая' if cheap else 'дорогая'}: лишний МВт·ч сейчас стоит {sh / 1000:.0f} ₸/кВт·ч "
+           f"(ВИЭ {renew0:.0f} МВт) — {'«вдыхаем»' if cheap else '«выдыхаем»'}."]
+    if feed > 1:
+        dom = "твёрдую" if hard > 0.55 * feed else "мягкую" if soft > 0.55 * feed else "смесь"
+        why.append(f"Мелем {dom} руду: твёрдой {hard:.0f}, мягкой {soft:.0f} т/ч, крупность P80 {p80:.0f} мкм.")
+        if dom == "мягкую":
+            why.append("Твёрдую копим на складе до дешёвой энергии.")
+    why.append(f"Самосвалы заряжаются {dec['charge_mw']:.0f} МВт." if dec["charge_mw"] > 5 else "Самосвалы ездят на заряде батарей.")
+    if dec["bess_mw"] > 5:
+        why.append(f"Накопитель отдаёт {dec['bess_mw']:.0f} МВт.")
+    elif dec["bess_mw"] < -5:
+        why.append(f"Накопитель заряжается {-dec['bess_mw']:.0f} МВт.")
     if ren_next > renew0 * 1.5 and ren_next > 100:
         why.append(f"Через несколько часов ждём ветер/солнце ~{ren_next:.0f} МВт — готовимся.")
     elif ren_next < renew0 * 0.5 and renew0 > 100:
@@ -58,14 +49,15 @@ def explain(p, st, dec, plan, t):
         why.append(f"Через {h} ч сеть ограничена до {min(plan['grid_cap_mw']):.0f} МВт (KEGOC) — план учитывает.")
     if not any(st.line_lock) and sum(plan["lines_on"][l][0] for l in range(p.n_lines)) < p.n_lines:
         why.append("Одна линия остановлена: так дешевле, чем молоть на минимуме.")
-    return mode, " ".join(why).rstrip(",") 
+    return mode, " ".join(why)
 
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s coord %(message)s")
     wait_ditto()
     bus = Bus("tynys-coordinator")
-    ctl = V2Tynys(explain=True)
+    ctls = {"copper": V2Tynys(explain=True),
+            "green": V2Tynys(explain=True, grind_modes=(150, 200, 250))}   # не молоть тоньше обычного
     cache = {}
     last_t = None
     while True:
@@ -85,6 +77,8 @@ def main():
         p, env = cache[key]
         st = state_from_dict(json.loads(sj))
         t0 = time.time()
+        goal = prop(sc, "goal", "copper")
+        ctl = ctls.get(goal, ctls["copper"])
         dec = ctl.decide(p, env, st, t)
         plan = ctl.last_plan or {}
         ms = (time.time() - t0) * 1000
@@ -99,7 +93,7 @@ def main():
         sh0 = compact.get("shadow_kzt_kwh", [None])[0]
         bus.send("coordinator", {"for_t": t, "scenario_rev": rev, "x_json": dumps(dec["x"]),
                                  "charge_mw": round(dec["charge_mw"], 2), "bess_mw": round(dec["bess_mw"], 2),
-                                 "mode": mode, "why": why, "shadow_kzt_kwh": sh0 if sh0 is not None else 0.0,
+                                 "mode": mode, "why": why, "goal": goal, "shadow_kzt_kwh": sh0 if sh0 is not None else 0.0,
                                  "solve_ms": round(ms), "plan_json": dumps(compact),
                                  "feed_plan_tph": round(sum(map(sum, map(lambda l: map(sum, l), dec["x"]))))})
         log.info("t=%s %s %.0f ms  %s", t, mode, ms, why[:90])
