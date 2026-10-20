@@ -1,0 +1,65 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Тыныс — презентация</title>
+<style>
+@page{size:1280px 720px;margin:0}
+body{margin:0;font-family:"DejaVu Sans",system-ui,sans-serif;color:#e6edf3;background:#0f1720}
+.s{width:1280px;height:720px;box-sizing:border-box;padding:56px 72px;page-break-after:always;position:relative;background:#0f1720;overflow:hidden}
+h1{font-size:58px;margin:0 0 12px}h2{font-size:38px;margin:0 0 26px;color:#8ff0bd}
+p,li{font-size:24px;line-height:1.45}.m{color:#8aa0b4}.k{color:#8ff0bd;font-weight:700}
+.n{position:absolute;bottom:22px;right:40px;color:#8aa0b4;font-size:16px}
+table{border-collapse:collapse;font-size:22px;width:100%}td,th{border-bottom:1px solid #24364a;padding:9px 12px;text-align:right}td:first-child,th:first-child{text-align:left}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:36px}.box{background:#16212d;border:1px solid #24364a;border-radius:12px;padding:20px 24px}
+img{border-radius:10px;border:1px solid #24364a}
+</style></head><body>
+<div class="s"><p class="m" style="font-size:22px">Конкурс «Цифровой рудник на OpenEgiz» · команда «Суперкрошки»</p>
+<h1 style="margin-top:110px">Тыныс — дышащий рудник Актогай</h1>
+<p style="font-size:30px">Цифровой двойник реального медного рудника, который «дышит» вместе с ветром и солнцем: меньше угля — та же или больше меди.</p>
+<p class="m" style="margin-top:120px">shrailymadil-debug · liyaaal · yusubovanazik</p></div>
+
+<div class="s"><h2>Проблема</h2>
+<ul><li>Актогай потребляет <b>≈ 2 030 ГВт·ч</b> в год — <b>≈ 230 МВт</b> непрерывно, ≈ 35 кВт·ч на тонну руды (KAZ Minerals, 2024).</li>
+<li>Электроэнергия Казахстана на <b>66 % угольная</b>: ≈ 0,79 т CO₂ на МВт·ч → ≈ 1,6 млн т CO₂ в год.</li>
+<li>Ветер и солнце у рудника есть, но они непостоянны: когда ветер дует ночью, а мельницы уже загружены, энергию <b>сбрасывают</b>.</li>
+<li>Рудник работает «ровно» и не умеет подстраиваться под энергию.</li></ul>
+<p class="k" style="margin-top:30px">Вопрос: как руднику брать больше ветра и солнца, не теряя меди?</p><div class="n">2</div></div>
+
+<div class="s"><h2>Идея: вдох и выдох</h2><div class="g">
+<div class="box"><p class="k" style="font-size:30px;margin:0">ВДОХ — энергии много</p><ul><li>мелем твёрдую руду</li><li>мелем тоньше — больше меди</li><li>заряжаем электросамосвалы и накопитель</li></ul></div>
+<div class="box"><p style="font-size:30px;margin:0;color:#ffc59a;font-weight:700">ВЫДОХ — энергии мало</p><ul><li>мелем мягкую руду, твёрдую копим на складе</li><li>самосвалы ездят на заряде</li><li>накопитель отдаёт энергию</li><li>можем снизить нагрузку по просьбе KEGOC</li></ul></div></div>
+<p style="margin-top:28px">Решает <b>координатор</b>: каждый час строит план на 24 ч вперёд (смешанное целочисленное программирование, HiGHS) и объясняет решение словами.</p><div class="n">3</div></div>
+
+<div class="s"><h2>Реальный объект и реальные данные</h2>
+<table><tr><th>Величина</th><th>Модель (V0, без ВИЭ)</th><th>Отчёт KAZ Minerals 2024</th></tr>
+<tr><td>Медь, тыс. т/год</td><td>222</td><td>221</td></tr><tr><td>Электроэнергия, ГВт·ч/год</td><td>≈ 2 014</td><td>≈ 2 030</td></tr>
+<tr><td>Удельный расход, кВт·ч/т</td><td>≈ 35</td><td>≈ 35</td></tr><tr><td>Содержание / извлечение</td><td>0,43 % / ≈ 88 %</td><td>0,43 % / 87,9 %</td></tr></table>
+<ul style="margin-top:22px"><li>Погода: почасовой ветер на 100 м и радиация в точке рудника за 2024 г. — Open‑Meteo ERA5 (CC BY 4.0).</li>
+<li>Чего на Актогае пока нет (ВЭС 300 МВт, СЭС 250 МВт, накопитель, 42 электросамосвала) — помечено как <b>допущение</b>.</li></ul><div class="n">4</div></div>
+
+<div class="s"><h2>Как это построено на OpenEgiz</h2>
+<p style="font-size:26px;background:#16212d;border-radius:12px;padding:22px;border:1px solid #24364a">Модель рудника → <b>MQTT</b> telemetry/&lt;двойник&gt; → <b>Eclipse Ditto</b> (37 двойников kz.tynys:*) → Telegraf → InfluxDB → <b>Grafana</b><br><br>
+Координатор ⇄ Ditto: читает состояние и сценарий, пишет план и уставки<br>Экран :8095 ⇄ Ditto: показывает рудник, пишет сценарии «что если»</p>
+<ul><li>Иерархия: рудник → карьер / фабрика / энергия → экскаваторы, самосвалы, зарядки, склады, линии, флотация, ВЭС, СЭС, накопитель, подстанция.</li>
+<li>Запуск: <code>make tynys</code> — проверено на Ubuntu 24.04 с нуля.</li></ul><div class="n">5</div></div>
+
+<div class="s" style="padding:30px 40px"><h2 style="margin-bottom:12px">Экран рудника</h2><img src="screen_top.png" style="height:590px;display:block;margin:auto"><div class="n">6</div></div>
+
+<div class="s"><h2>Что показал двойник (год, реальная погода 2024)</h2>
+<table><tr><th>ВЭС 300 МВт + СЭС 250 МВт</th><th>CO₂, тыс. т</th><th>Медь, тыс. т</th><th>Сброс ВИЭ, ГВт·ч</th></tr>
+<tr><td>Сегодня (без ВИЭ)</td><td>1 591</td><td>222,1</td><td>0</td></tr>
+<tr><td>ВИЭ без координации</td><td>933</td><td>222,1</td><td>96</td></tr>
+<tr><td>ВИЭ + Тыныс, цель «медь»</td><td>983</td><td class="k">226,3</td><td class="k">50</td></tr>
+<tr><td>ВИЭ + Тыныс, цель «CO₂»</td><td class="k">924</td><td>222,0</td><td>74</td></tr></table>
+<ul style="margin-top:20px"><li><b>−41 % CO₂</b> даёт строительство ВИЭ — двойник показывает, сколько строить (25 вариантов).</li>
+<li>Координация: <b>вдвое меньше сброса</b> ветра и солнца и <b>+1,9 % меди</b>, или −1…4 % CO₂ без потери меди.</li></ul><div class="n">7</div></div>
+
+<div class="s"><h2>Кому и какие решения</h2><div class="g">
+<div class="box"><p class="k" style="margin:0">Энергетик и диспетчер — каждый час</p><ul><li>какую руду и как тонко молоть</li><li>когда заряжать самосвалы</li><li>сколько МВт можно отдать KEGOC и на сколько часов («Тыныс‑резерв»)</li></ul></div>
+<div class="box"><p class="k" style="margin:0">Руководство — раз в год</p><ul><li>сколько ВЭС и СЭС строить</li><li>цель: больше меди или меньше CO₂</li></ul></div></div>
+<p style="margin-top:24px">«Что если»: штиль, авария линии, запрос KEGOC −80 МВт, твёрдая руда, план +10 %, отказ накопителя — кнопкой и с отменой.</p><div class="n">8</div></div>
+
+<div class="s"><h2>Честно об ограничениях</h2><ul>
+<li>Модель часовая; движение самосвалов на карте — анимация цикла, а не реальная дорога карьера.</li>
+<li>Прогноз погоды — реальный ряд с модельной ошибкой. Это не архив настоящих прогнозов. ERA5 занижает ветер.</li>
+<li>Тонкий помол ради меди повышает CO₂ на тонну на 3 % — поэтому есть цель «CO₂».</li>
+<li>Накопитель 60 МВт почти не добавляет меди. Гипотеза «молоть крупнее, когда энергии мало» почти не подтвердилась.</li></ul>
+<p class="k" style="margin-top:40px">Польза для людей: меньше угля и чище воздух, а работники рудника понимают каждое решение — двойник объясняет его словами.</p><div class="n">9</div></div>
+</body></html>
