@@ -48,7 +48,7 @@ class Bus:
         self.c.loop_start()
 
     def send(self, name, features):
-        self.c.publish(f"telemetry/{name}", json.dumps(modify(name, features), ensure_ascii=False), qos=1)
+        self.c.publish(f"telemetry/{name}", json.dumps(modify(name, features), ensure_ascii=False, default=lambda o: o.item()), qos=1)
 
 
 def wait_ditto(tries=120):

@@ -28,7 +28,7 @@ def explain(p, st, dec, plan, t):
     p80 = plan["p80_um"][0] or 0
     cheap = sh is not None and not np.isnan(sh) and sh < 0.8 * tariff
     mode = "вдох" if cheap else "выдох"
-    why = [f"Энергия {'дешёвая' if cheap else 'дорогая'}: лишний МВт·ч сейчас стоит {sh / 1000:.0f} ₸/кВт·ч "
+    why = [f"Энергия {'дешёвая' if cheap else 'дорогая'}: лишний кВт·ч сейчас стоит {max(0.0, sh / 1000):.0f} ₸ "
            f"(ВИЭ {renew0:.0f} МВт) — {'«вдыхаем»' if cheap else '«выдыхаем»'}."]
     if feed > 1:
         dom = "твёрдую" if hard > 0.55 * feed else "мягкую" if soft > 0.55 * feed else "смесь"

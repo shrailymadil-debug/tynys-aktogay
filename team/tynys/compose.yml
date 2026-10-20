@@ -55,6 +55,7 @@ services:
       - ../../team/tynys/ui/3d.html:/usr/share/nginx/html/3d.html:ro
       - ../../team/tynys/ui/scene3d.js:/usr/share/nginx/html/scene3d.js:ro
       - ../../team/tynys/ui/vendor:/usr/share/nginx/html/vendor:ro
+      - ../../team/tynys/ui/trace.json:/usr/share/nginx/html/trace.json:ro
       - ../../team/tynys/ui/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
     depends_on:
       ditto-nginx:
