@@ -145,9 +145,14 @@ function E() {
 
 // ---------- рендер ----------
 const Q = new URLSearchParams(location.search);
-const LOW = Q.get('q') === 'low' || /Mobi|Android|iPhone/i.test(navigator.userAgent);
+// Программный WebGL (нет GPU: SwiftShader / llvmpipe) или телефон → облегчённый режим:
+// без теней, меньше пикселей, ~15 кадров/с — сцена остаётся живой и не душит процессор.
+const SOFT_GL = (() => { try { const g = document.createElement('canvas').getContext('webgl2') || document.createElement('canvas').getContext('webgl');
+  const e = g.getExtension('WEBGL_debug_renderer_info'); const r = e ? g.getParameter(e.UNMASKED_RENDERER_WEBGL) : g.getParameter(g.RENDERER);
+  return /swiftshader|llvmpipe|software|softpipe/i.test(r); } catch (e) { return false; } })();
+const LOW = Q.get('q') === 'low' || (Q.get('q') !== 'high' && (SOFT_GL || /Mobi|Android|iPhone/i.test(navigator.userAgent)));
 const renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: !LOW, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, LOW ? 1 : 2));
+renderer.setPixelRatio(SOFT_GL && Q.get('q') !== 'high' ? 0.6 : Math.min(devicePixelRatio, LOW ? 1 : 2));
 renderer.shadowMap.enabled = !LOW; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
 const labels = new CSS2DRenderer();
@@ -584,7 +589,10 @@ setView('tynys');
 
 // ---------- анимация ----------
 let last = performance.now(), rot = 0, smokeT = 0, fps = 60;
+let lastDraw = 0;
 function frame(now) {
+  if (LOW && now - lastDraw < 66) { requestAnimationFrame(frame); return; }
+  lastDraw = now;
   const dt = Math.min(0.1, (now - last) / 1000); last = now; fps = fps * 0.95 + (1 / Math.max(dt, 1e-3)) * 0.05;
   skyUpd();
   const e = E();
@@ -642,7 +650,7 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-window.__tynys = { scene, camera, controls, setView, startStory, get fps() { return fps; } };
+window.__tynys = { scene, camera, controls, setView, startStory, low: LOW, softGL: SOFT_GL, get fps() { return fps; } };
 
 </script>
 </body>
