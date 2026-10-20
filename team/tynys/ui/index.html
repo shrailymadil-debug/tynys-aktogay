@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тыныс · Актогай</title>
+<style>
+:root{--bg:#0f1720;--panel:#16212d;--line:#24364a;--ink:#e6edf3;--mute:#8aa0b4;--wind:#5ec8e5;--sun:#f2c14e;--grid:#9aa6b2;--soft:#7fbf7f;--hard:#c9785b;--v2:#4fd18b;--v0:#e0675a;--v1:#e0b25a;--accent:#4fd18b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;gap:16px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+h1{font-size:18px;margin:0}h1 small{color:var(--mute);font-weight:400}
+#mode{font-size:20px;font-weight:700;padding:4px 14px;border-radius:20px;background:#223;letter-spacing:.05em}
+#mode.inhale{background:#1d4a35;color:#8ff0bd}#mode.exhale{background:#4a2f1d;color:#ffc59a}
+#clock{color:var(--mute);margin-left:auto}#src{font-size:12px;color:var(--mute)}
+main{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px;padding:12px}
+@media(max-width:1000px){main{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+.card h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute);margin:0 0 8px}
+svg text{fill:var(--ink);font-size:12px}svg .lbl{fill:var(--mute);font-size:11px}
+#why{font-size:15px;min-height:44px}
+table{width:100%;border-collapse:collapse}td,th{padding:4px 6px;text-align:right;border-bottom:1px solid var(--line)}td:first-child,th:first-child{text-align:left;color:var(--mute)}
+th.v0{color:var(--v0)}th.v1{color:var(--v1)}th.v2{color:var(--v2)}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+button{background:#203041;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;cursor:pointer;font:inherit;text-align:left}
+button:hover{border-color:var(--accent)}
+#events div{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px dashed var(--line)}
+#events button{padding:2px 8px;font-size:12px}
+.legend span{display:inline-block;margin-right:10px;font-size:12px;color:var(--mute)}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.big{font-size:22px;font-weight:700}.mute{color:var(--mute)}
+.blade{transform-box:fill-box;transform-origin:50% 100%}
+</style>
+</head>
+<body>
+<header>
+  <h1>Тыныс <small>· дышащий рудник Актогай · цифровой двойник на OpenEgiz</small></h1>
+  <div id="mode">—</div>
+  <div id="clock">ожидание данных…</div>
+</header>
+<main>
+<section>
+  <div class="card">
+    <svg id="map" viewBox="0 0 1000 560" width="100%" role="img" aria-label="Схема рудника Актогай: карьер, дорога, склады, фабрика, ВЭС, СЭС, накопитель, подстанция">
+      <defs><radialGradient id="pitg"><stop offset="0" stop-color="#3a2a20"/><stop offset="1" stop-color="#5b4636"/></radialGradient></defs>
+      <!-- карьер -->
+      <g transform="translate(170,300)">
+        <ellipse rx="150" ry="110" fill="#4c3b2e"/><ellipse rx="122" ry="88" fill="#57443a"/><ellipse rx="94" ry="66" fill="#4a382d"/><ellipse rx="64" ry="44" fill="url(#pitg)"/>
+        <text x="0" y="135" text-anchor="middle">Карьер</text>
+        <g id="shovels"><circle cx="-30" cy="0" r="9" fill="#e9b949"/><circle cx="28" cy="10" r="9" fill="#e9b949"/></g>
+        <text id="t-pit" class="lbl" x="0" y="152" text-anchor="middle"></text>
+      </g>
+      <!-- дорога -->
+      <path id="road" d="M200,300 C300,260 330,180 430,170 S490,186 505,190" fill="none" stroke="#6b7785" stroke-width="10" stroke-linecap="round" opacity=".55"/>
+      <!-- зарядка -->
+      <g transform="translate(300,385)"><rect x="-55" y="-22" width="110" height="44" rx="6" fill="#203041" stroke="#3d5a78"/>
+        <text x="0" y="-4" text-anchor="middle">Зарядка</text><text id="t-charge" class="lbl" x="0" y="13" text-anchor="middle"></text></g>
+      <path d="M300,363 C290,340 260,320 240,310" stroke="#3d5a78" stroke-dasharray="4 4" fill="none"/>
+      <g id="trucks"></g>
+      <!-- склады -->
+      <g transform="translate(560,190)">
+        <g id="pile-soft" transform="translate(0,-55)"><path d="M-50,30 L0,-20 L50,30Z" fill="var(--soft)"/></g>
+        <g id="pile-hard" transform="translate(0,45)"><path d="M-50,30 L0,-20 L50,30Z" fill="var(--hard)"/></g>
+        <text x="0" y="-100" text-anchor="middle">Склады руды</text>
+        <text id="t-ps" class="lbl" x="0" y="-14" text-anchor="middle">мягкая</text><text id="t-ph" class="lbl" x="0" y="90" text-anchor="middle">твёрдая</text>
+      </g>
+      <!-- фабрика -->
+      <g transform="translate(720,140)">
+        <text x="70" y="-12" text-anchor="middle">Фабрика</text>
+        <g id="line0"><rect width="140" height="38" rx="6" fill="#203041" stroke="#3d5a78"/><circle cx="24" cy="19" r="14" fill="none" stroke="#9fb6cc" stroke-width="3" class="mill"/><text x="46" y="16">Линия 1</text><text class="lbl t" x="46" y="31"></text></g>
+        <g id="line1" transform="translate(0,52)"><rect width="140" height="38" rx="6" fill="#203041" stroke="#3d5a78"/><circle cx="24" cy="19" r="14" fill="none" stroke="#9fb6cc" stroke-width="3" class="mill"/><text x="46" y="16">Линия 2</text><text class="lbl t" x="46" y="31"></text></g>
+        <g transform="translate(0,104)"><rect width="140" height="38" rx="6" fill="#203041" stroke="#3d5a78"/><text x="10" y="16">Флотация → медь</text><text id="t-flot" class="lbl" x="10" y="31"></text></g>
+      </g>
+      <path d="M612,150 L718,158 M612,250 L718,210" stroke="#6b7785" stroke-width="4" opacity=".6"/>
+      <!-- энергия -->
+      <g id="windfarm" transform="translate(560,420)"></g>
+      <text x="610" y="545" text-anchor="middle">ВЭС</text><text id="t-wind" class="lbl" x="610" y="530" text-anchor="middle"></text>
+      <g id="pvfield" transform="translate(705,440)"></g>
+      <text x="745" y="545" text-anchor="middle">СЭС</text><text id="t-pv" class="lbl" x="745" y="530" text-anchor="middle"></text>
+      <g transform="translate(815,440)"><rect width="50" height="60" rx="5" fill="#203041" stroke="#3d5a78"/><rect id="bessbar" x="6" y="54" width="38" height="0" fill="var(--accent)"/>
+        <text x="25" y="105" text-anchor="middle">АКБ</text><text id="t-bess" class="lbl" x="25" y="-6" text-anchor="middle"></text></g>
+      <g transform="translate(930,330)"><rect x="-38" y="-26" width="76" height="52" rx="6" fill="#203041" stroke="#3d5a78"/><text x="0" y="-6" text-anchor="middle">Подстанция</text><text id="t-grid" class="lbl" x="0" y="12" text-anchor="middle"></text>
+        <path d="M0,-26 L0,-150 M-20,-150 L20,-150" stroke="var(--grid)" stroke-width="2"/><text x="0" y="-158" text-anchor="middle" class="lbl">KEGOC · уголь 66 %</text></g>
+      <path id="flow-grid" d="M930,304 C900,260 880,240 862,236" stroke="var(--grid)" stroke-width="3" fill="none" stroke-dasharray="6 6"/>
+      <path id="flow-ren" d="M650,440 C700,380 800,330 892,330" stroke="var(--wind)" stroke-width="3" fill="none" stroke-dasharray="6 6"/>
+      <text id="t-curt" x="660" y="400" class="lbl"></text>
+    </svg>
+    <div class="legend"><span><i style="background:#4fd18b"></i>самосвал гружёный</span><span><i style="background:#9aa6b2"></i>порожний</span><span><i style="background:#5ec8e5"></i>на зарядке</span><span><i style="background:var(--soft)"></i>мягкая руда</span><span><i style="background:var(--hard)"></i>твёрдая руда</span></div>
+  </div>
+  <div class="card" style="margin-top:12px"><h2>Почему так · решение координатора</h2><div id="why">—</div><div id="src"></div></div>
+  <div class="card" style="margin-top:12px"><h2>План на 24 часа</h2>
+    <svg id="plan" viewBox="0 0 640 190" width="100%" role="img" aria-label="План на сутки: ВИЭ, сеть, переработка, теневая цена"></svg>
+    <div class="legend"><span><i style="background:var(--wind)"></i>ВИЭ (прогноз), МВт</span><span><i style="background:var(--grid)"></i>сеть, МВт</span><span><i style="background:var(--hard)"></i>твёрдая руда в помол</span><span><i style="background:#fff"></i>теневая цена, ₸/кВт·ч</span></div>
+  </div>
+</section>
+<aside>
+  <div class="card"><h2>Итог с начала прогона</h2>
+    <table><thead><tr><th></th><th class="v0">V0 как сейчас</th><th class="v1">V1 правила</th><th class="v2">V2 Тыныс</th></tr></thead><tbody id="kpi"></tbody></table>
+    <p class="mute" style="font-size:12px;margin:8px 0 0">Одна и та же погода и руда. V0 и V1 — «теневые» рудники, V2 управляется координатором через двойники.</p>
+  </div>
+  <div class="card" style="margin-top:12px"><h2>Что если…</h2><div class="btns" id="btns"></div><div id="events" style="margin-top:8px"></div></div>
+  <div class="card" style="margin-top:12px"><h2>Тыныс‑резерв для KEGOC</h2>
+    <div>Можем снизить потребление на <span class="big" id="flex">—</span> МВт</div><div class="mute">и держать <b id="flexh">—</b> ч без потери добычи</div></div>
+  <div class="card" style="margin-top:12px"><h2>Сейчас</h2><table><tbody id="now"></tbody></table></div>
+</aside>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

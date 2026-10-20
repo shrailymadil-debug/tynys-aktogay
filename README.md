@@ -1,31 +1,29 @@
-# <Team name>: a digital mine on OpenEgiz
+# Суперкрошки: «Тыныс» — дышащий рудник Актогай на OpenEgiz
 
-> Team Repository of the contest “Digital Mine on OpenEgiz”. **Replace the contents of this file with the instructions for your Submission.** The AI Jury runs the Submission strictly by these instructions, from scratch, in the Judge Environment. Accepted languages: English, Kazakh, Russian.
+Цифровой двойник реального медного рудника **Актогай** (KAZ Minerals, обл. Абай). Рудник «дышит» вместе с ветром и солнцем: когда энергии много — мелет твёрдую руду и заряжает электросамосвалы («вдох»), когда мало — мелет мягкую, копит твёрдую на складе и ездит на заряде («выдох»). Решения каждый час принимает координатор с прогнозом на 24 ч. Подробно — [SUBMISSION.md](SUBMISSION.md).
 
-> **Start with the Concept**, the first section of [SUBMISSION.md](SUBMISSION.md): the Team writes it before any code. What AI agents build from this Template without a Concept is the Default Solution, published on the [contest site](https://openegiz-contest.github.io/) as the low bar: a Submission that does not go beyond it gets low levels in the Rubric. AI agents read [AGENTS.md](AGENTS.md).
-
-## Running
-
-Requirements (Docker, `make`, Windows/WSL2 setup) are in [OPENEGIZ.md](OPENEGIZ.md) / [OPENEGIZ.ru.md](OPENEGIZ.ru.md).
+## Запуск (Ubuntu 24.04, Docker)
 
 ```bash
-sudo apt install -y make   # if make is missing (clean Ubuntu)
-make up            # the OpenEgiz platform
-make example-mine  # the Example Mine: twins, simulator, dashboard
+sudo apt-get install -y make
+make tynys
 ```
 
-Replace these commands with the commands of your Submission. The Submission must start by following these instructions without manual intervention (Rules, clause 6.4); downloading datasets and models and building are also listed here.
+`make tynys` поднимает платформу OpenEgiz (`make up`), собирает и запускает рудник (двойники, модель рудника, координатор, экран, дашборд) и в конце выполняет проверку `SMOKE OK`. Первый запуск — около 10–15 минут (скачивание образов). Данные скачивать не нужно: все параметры в репозитории.
 
-## What to open
+## Что открыть
 
-- Grafana: the address and login are printed by `make up`.
-- <where to see the mine visualization, which dashboards>
+- **Экран рудника:** http://localhost:8095 — схема рудника, режим «вдох/выдох», «почему так», план на 24 ч, сравнение V0/V1/V2, кнопки «Что если…».
+- **Grafana:** адрес и пароль печатает `make up`; Dashboards → OpenEgiz Examples → «Тыныс · Актогай».
+- **Ditto:** двойники `kz.tynys:*`.
+
+Остановить: `make down`. Удалить всё: `make clean`.
 
 ## Repository contents
 
 | Path | Contents |
 |---|---|
-| `team/` | Directory for the Team's code. Using it is optional: any part may be changed, including the platform core |
+| `team/tynys/` | Рудник «Тыныс»: модель (`tynys/`), сервисы (`services/`), экран (`ui/`), дашборд (`grafana/`), `compose.yml` |
 | `SUBMISSION.md` | Description of the Submission: **required** |
 | `presentation.pdf` | Presentation: **required**, in the repository root |
 | `AGENTS.md`, `CLAUDE.md` | Instructions for your AI agents (Codex, Claude Code and others read them automatically) |
