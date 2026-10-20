@@ -194,4 +194,14 @@ async function loadSizing() {
   $('sz-w').onchange = $('sz-p').onchange = drawSizing; drawSizing();
 }
 loadSizing();
+async function loadFlex() {
+  try {
+    const F = await api('GET', `things/${NS}:substation/attributes/flex_stats`) || [];
+    const y = F.find(r => r.season.startsWith('весь год')); if (!y) return;
+    $('flexstat').textContent = `За год на реальной погоде 2024 (предрасчёт flex_stats.py, 4 × 14 суток): в среднем ${fmt(y.mw_mean)} МВт ` +
+      `(p10–p90: ${fmt(y.mw_p10)}–${fmt(y.mw_p90)}), держим ${fmt(y.h_mean, 1)} ч (p10–p90: ${fmt(y.h_p10, 1)}–${fmt(y.h_p90, 1)}). ` +
+      `Длительность ограничивает накопитель (65 % часов) или заряд самосвалов (35 %).`;
+  } catch (e) { setTimeout(loadFlex, 5000); }
+}
+loadFlex();
 poll(); setInterval(poll, 1000); requestAnimationFrame(animate);

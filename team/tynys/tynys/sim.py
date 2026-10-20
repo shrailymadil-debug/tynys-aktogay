@@ -351,12 +351,16 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
 
 
 def flexibility(p: Params, st: State, rec):
-    """«Тыныс-резерв»: на сколько МВт рудник может снизить потребление из сети
-    и сколько часов продержаться без потери добычи и без остановки мельниц.
+    """«Тыныс‑резерв»: на сколько МВт рудник может снизить потребление из сети
+    и сколько часов удержать это снижение целиком, не теряя добычу и не
+    останавливая мельницы.
 
     Снижение = зарядка самосвалов + разряд накопителя + сброс мельниц до минимума
-    (при грубом помоле). Длительность ограничена запасом батарей флота и
-    свободной ёмкостью складов (куда девать добытую, но не переработанную руду).
+    (при грубом помоле). Длительность — минимум из трёх запасов:
+      h_fleet — сколько часов самосвалы возят руду без зарядки;
+      h_pile  — сколько часов склады принимают добытую, но не переработанную руду;
+      h_bess  — сколько часов накопитель держит свою долю разряда.
+    Верхняя граница — 48 ч.
     """
     active = sum(1 for k in ("line0", "line1") if rec.get(k, 0) > 0)
     e_coarse = ph.bond_kwh_t(p, p.bwi["soft"], max(P80_MODES)) + p.flot_kwh_t
@@ -369,8 +373,8 @@ def flexibility(p: Params, st: State, rec):
     free = 2 * p.pile_cap_t - (st.pile["soft"] + st.pile["hard"])
     surplus_rate = max(1.0, rec["mine"] - p.n_lines * p.line_q_min)
     h_pile = free / surplus_rate
-    h_bess = (st.bess_e - p.bess_e_min) / max(bess_dis, 1e-6) if bess_dis > 0 else 99
-    return down_mw, float(min(h_fleet, h_pile, 48.0))
+    h_bess = (st.bess_e - p.bess_e_min) / bess_dis if bess_dis > 0 else 48.0
+    return down_mw, float(min(h_fleet, h_pile, h_bess, 48.0))
 
 
 def run(p: Params, sc: Scenario, controller, seed: int):
