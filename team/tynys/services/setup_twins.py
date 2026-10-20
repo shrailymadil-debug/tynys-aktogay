@@ -25,7 +25,7 @@ def twins():
         t("plant", "Обогатительные фабрики (Сульфидная‑1 и ‑2)", "plant", "site", {"feed_tph": 0.0}),
         t("energy", "Энергосистема рудника", "energy", "site", {"load_mw": 0.0}),
         t("coordinator", "Координатор «Тыныс» (MPC 24 ч)", "coordinator", "site", {"for_t": -1}),
-        t("scenario", "Сценарии what-if", "scenario", "site", {"events": "[]", "rev": 0}),
+        t("scenario", "Сценарии what-if", "scenario", "site", {"events": "[]", "rev": 0, "goal": "copper"}),
         t("shadow-v0", "Тень V0: как сейчас (без координации)", "shadow", "site", {"cu_t": 0.0}),
         t("shadow-v1", "Тень V1: простые правила", "shadow", "site", {"cu_t": 0.0}),
     ]
