@@ -149,11 +149,11 @@ function animate(ts) {
   for (let i = 0; i < 14; i++) {
     const n = `truck-${String(i + 1).padStart(2, '0')}`, r = trucksG.children[i], st = v(n, 'state', 'empty');
     let x, y;
-    if (st === 'charging') { x = 255 + (i % 7) * 13; y = 405 + Math.floor(i / 7) * 12; }
+    if (st === 'charging' || st === 'waiting') { x = 255 + (i % 7) * 13; y = 405 + Math.floor(i / 7) * 12; }
     else { const ph = (v(n, 'route_pos', 0) + (ts / 1000) * 0.02) % 1; const f = ph < 0.5 ? ph * 2 : 2 - ph * 2;
       const p = road.getPointAtLength(f * roadLen); x = p.x - 7; y = p.y - 4 + (ph < 0.5 ? -7 : 7); }
     r.setAttribute('x', x); r.setAttribute('y', y);
-    r.setAttribute('fill', st === 'charging' ? '#5ec8e5' : st === 'loaded' ? '#4fd18b' : '#9aa6b2');
+    r.setAttribute('fill', st === 'charging' ? '#5ec8e5' : st === 'waiting' ? '#e0b25a' : st === 'loaded' ? '#4fd18b' : '#9aa6b2');
   }
   requestAnimationFrame(animate);
 }
