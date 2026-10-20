@@ -492,12 +492,14 @@ function frame(now) {
   mills.forEach(m => m.drum.rotation.x += dt * 1.2 * (m.speed || 0));
   shovels.forEach((s, i) => s.rotation.y = Math.sin(now / 1500 + i * 2) * 0.9);
   const hf = v('pit', 'hard_frac', 0.5);
+  const slots = { c: 0, w: 0 };
   trucks.forEach((tr, i) => {
     const n = `truck-${String(i + 1).padStart(2, '0')}`; let st = v(n, 'state', 'empty');
-    if (view === 'now' && st === 'charging') st = i % 2 ? 'loaded' : 'empty';
+    if (view === 'now' && (st === 'charging' || st === 'waiting')) st = i % 2 ? 'loaded' : 'empty';
     tr.glow.intensity = st === 'charging' ? 5 : 0;
     for (let k = 0; k < 8; k++) setInst(dustIM, i * 8 + k, 0, -500, 0, 0, 0, 0);
-    if (st === 'charging') { const k = i % 4, row = Math.floor(i / 4) % 2; tr.g.position.set(CHARGE.x - 30 + k * 20, 0.4, CHARGE.z - 5 + row * 10); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
+    if (st === 'charging') { const k = slots.c++ % 4; tr.g.position.set(CHARGE.x - 30 + k * 20, 0.4, CHARGE.z - 5); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
+    if (st === 'waiting') { const k = slots.w++; tr.g.position.set(CHARGE.x - 34 + (k % 8) * 10, 0.4, CHARGE.z + 9 + Math.floor(k / 8) * 9); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
     const target = v(n, 'route_pos', tr.phase); let dd = target - tr.phase; dd -= Math.round(dd);
     tr.phase = (tr.phase + dt * 0.012 + dd * dt * 0.3 + 1) % 1;
     const up = tr.phase < 0.5, f = up ? tr.phase * 2 : 2 - tr.phase * 2;

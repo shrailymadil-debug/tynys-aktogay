@@ -16,8 +16,8 @@ done
 [[ "$h" =~ ^[0-9]+$ && "$h" -ge 3 ]] || { echo "SMOKE FAIL: рудник не публикует (sim_hour=$h)"; exit 1; }
 [[ "$c" =~ ^[0-9]+$ ]] || { echo "SMOKE FAIL: координатор молчит"; exit 1; }
 src=$(val plant decision_source)
-curl -fsS "$U/" | grep -q "Тыныс" || { echo "SMOKE FAIL: экран :8095 не отвечает"; exit 1; }
-curl -fsS "$U/3d.html" | grep -q "scene3d.js" || { echo "SMOKE FAIL: 3D-сцена"; exit 1; }
+[[ "$(curl -fsS "$U/")" == *"Тыныс"* ]] || { echo "SMOKE FAIL: экран :8095 не отвечает"; exit 1; }
+[[ "$(curl -fsS "$U/3d.html")" == *"scene3d.js"* ]] || { echo "SMOKE FAIL: 3D-сцена"; exit 1; }
 curl -fsS "$U/vendor/three.module.js" -o /dev/null || { echo "SMOKE FAIL: three.js"; exit 1; }
-curl -fsS "$U/ditto/api/2/things/kz.tynys:site" | grep -q sim_hour || { echo "SMOKE FAIL: прокси экрана к Ditto"; exit 1; }
+[[ "$(curl -fsS "$U/ditto/api/2/things/kz.tynys:site")" == *sim_hour* ]] || { echo "SMOKE FAIL: прокси экрана к Ditto"; exit 1; }
 echo "SMOKE OK: модельный час $h, координатор решил час $c, источник решений $src"
