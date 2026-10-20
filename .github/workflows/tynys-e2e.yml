@@ -14,24 +14,27 @@ jobs:
       - uses: actions/checkout@v4
       - name: Инструкция README
         run: |
-          lscpu | grep '^CPU(s)'; free -g | head -2; docker --version; docker compose version
+          set -o pipefail
+          { lscpu | grep '^CPU(s)'; free -g | head -2; lsb_release -d; docker --version; docker compose version; } | tee ci.log
           start=$(date +%s)
           sudo apt-get install -y make
-          make tynys
-          echo "Время запуска по README: $(( $(date +%s) - start )) с"
+          make tynys 2>&1 | tail -5 | tee -a ci.log
+          echo "Время запуска по README: $(( $(date +%s) - start )) с" | tee -a ci.log
       - name: What-if на стенде (включить → след в двойниках → отменить)
-        run: python3 team/tynys/scripts/whatif_check.py
+        run: |
+          set -o pipefail
+          python3 team/tynys/scripts/whatif_check.py | tee -a ci.log
       - name: Скриншот экрана
         if: always()
         run: |
           pip install playwright==1.48.0 && python -m playwright install --with-deps chromium
-          python team/tynys/scripts/check3d.py http://127.0.0.1:8095/3d.html screen3d.png
+          python team/tynys/scripts/check3d.py http://127.0.0.1:8095/3d.html screen3d.png 2>&1 | tee -a ci.log
           python team/tynys/scripts/screenshot.py http://127.0.0.1:8095 screen.png
       - name: Снимок в ветку ci-screens
         if: always()
         run: |
           git config user.name github-actions; git config user.email github-actions@users.noreply.github.com
-          git checkout --orphan ci-screens; git rm -rfq --cached . ; git add -f screen.png screen3d.png || git add -f screen.png
+          git checkout --orphan ci-screens; git rm -rfq --cached . ; git add -f screen.png screen3d.png ci.log || git add -f screen.png ci.log
           git commit -qm "screen ${GITHUB_SHA::7}"; git push -qf origin ci-screens
       - name: Логи
         if: failure()
