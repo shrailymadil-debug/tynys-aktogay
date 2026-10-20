@@ -174,10 +174,11 @@ function drawSizing() {
   const a = SZ.find(r => r.wind_mw == w && r.pv_mwp == p && r.variant == 'V0');
   const b = SZ.find(r => r.wind_mw == w && r.pv_mwp == p && r.variant == 'V2');
   const g = SZ.find(r => r.wind_mw == w && r.pv_mwp == p && r.variant == 'V2green');
+  const x = SZ.find(r => r.wind_mw == w && r.pv_mwp == p && r.variant == 'V2fixed');
   if (!base || !a || !b) return;
-  const cs = [base, a, b, ...(g ? [g] : [])];
+  const cs = [base, a, ...(x ? [x] : []), b, ...(g ? [g] : [])];
   const row = (lbl, f, k) => [lbl, ...cs.map(r => fmt(f(r), k))];
-  const rows = [['', 'Сегодня', 'ВИЭ', 'ВИЭ + Тыныс: медь', ...(g ? ['ВИЭ + Тыныс: CO₂'] : [])],
+  const rows = [['', 'Сегодня', 'ВИЭ', ...(x ? ['+ Тыныс, P80 150'] : []), '+ Тыныс: медь', ...(g ? ['+ Тыныс: CO₂'] : [])],
     row('CO₂ в год, тыс. т', r => r.co2_kt, 0),
     row('Медь в год, тыс. т', r => r.cu_adj_t / 1000, 1),
     row('CO₂ на т меди, т', r => r.co2_kt * 1000 / r.cu_adj_t, 2),
