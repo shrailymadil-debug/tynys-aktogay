@@ -1,0 +1,12 @@
+name: fetch-data
+# Скачивает реальную почасовую погоду в точке Актогая (Open-Meteo ERA5, CC BY 4.0).
+on: workflow_dispatch
+jobs:
+  fetch:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          curl -fsS "https://archive-api.open-meteo.com/v1/archive?latitude=46.95&longitude=79.86&start_date=2024-01-01&end_date=2024-12-31&hourly=wind_speed_100m,shortwave_radiation,temperature_2m&wind_speed_unit=ms&timezone=GMT&format=csv" -o openmeteo_aktogay_2024.csv
+          head -5 openmeteo_aktogay_2024.csv; wc -l openmeteo_aktogay_2024.csv
+      - uses: actions/upload-artifact@v4
+        with: {name: data, path: openmeteo_aktogay_2024.csv}
