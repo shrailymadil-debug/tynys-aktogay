@@ -59,7 +59,7 @@ tynys: up
 	@echo "Тыныс запущен: экран рудника -> http://localhost:$${TYNYS_UI_PORT:-8095}  ·  Grafana -> Dashboards -> Тыныс · Актогай"
 
 tynys-stop:
-	$(COMPOSE_BASE) -f $(TYNYS_COMPOSE) stop tynys-field tynys-coordinator
+	$(COMPOSE_BASE) -f $(TYNYS_COMPOSE) stop tynys-field tynys-coordinator tynys-futures
 
 tynys-smoke:
 	@bash team/tynys/scripts/smoke.sh

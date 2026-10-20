@@ -31,3 +31,5 @@ build/WebGL Build.wasm
 __pycache__/
 *.pyc
 team/tynys/results/
+.futures-test-output/
+futures-e2e-report.json
