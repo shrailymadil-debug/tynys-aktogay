@@ -49,8 +49,9 @@ def build_env(events, start_doy, seed, p=None):
 
 
 def state_to_dict(st: State):
-    return {"pile": st.pile, "fleet_e": st.fleet_e, "bess_e": st.bess_e,
-            "line_on": st.line_on, "line_lock": st.line_lock, "bwi_est": st.bwi_est}
+    return {"pile": {k: float(x) for k, x in st.pile.items()}, "fleet_e": float(st.fleet_e), "bess_e": float(st.bess_e),
+            "line_on": [bool(x) for x in st.line_on], "line_lock": [int(x) for x in st.line_lock],
+            "bwi_est": {k: float(x) for k, x in st.bwi_est.items()}}
 
 
 def state_from_dict(d):
@@ -59,5 +60,12 @@ def state_from_dict(d):
                  line_lock=[int(x) for x in d["line_lock"]], bwi_est={k: float(d["bwi_est"][k]) for k in DOMAINS})
 
 
+def _plain(o):
+    """numpy-скаляры → обычные числа Python (json их не знает)."""
+    if hasattr(o, "item"):
+        return o.item()
+    raise TypeError(type(o).__name__)
+
+
 def dumps(o):
-    return json.dumps(o, ensure_ascii=False, separators=(",", ":"))
+    return json.dumps(o, ensure_ascii=False, separators=(",", ":"), default=_plain)
