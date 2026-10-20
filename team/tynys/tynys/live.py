@@ -15,7 +15,7 @@ DAYS = 365
 EVENTS = {
     "lull":       {"title": "Штиль на сутки",          "lead": 3, "dur": 24},
     "line_trip":  {"title": "Авария линии 2",          "lead": 0, "dur": 8},
-    "kegoc":      {"title": "Запрос KEGOC: −60 МВт",   "lead": 2, "dur": 4},
+    "kegoc":      {"title": "Запрос KEGOC: −80 МВт",   "lead": 2, "dur": 4},
     "hard_ore":   {"title": "Пошла твёрдая руда",      "lead": 0, "dur": 72},
     "plan_up":    {"title": "План добычи +10 %",       "lead": 0, "dur": 48},
     "bess_fault": {"title": "Отказ накопителя",        "lead": 0, "dur": 12},
@@ -32,7 +32,7 @@ def scenario_from_events(p, events, start_doy):
         elif k == "line_trip":
             sc.line_down[1] = (a, b)
         elif k == "kegoc":
-            sc.grid_cap[(a, b)] = p.grid_cap_mw - 60.0
+            sc.grid_cap[(a, b)] = p.grid_cap_mw - 80.0
         elif k == "hard_ore":
             sc.hard_frac_shift[a] = 0.8
             sc.hard_frac_shift[b] = p.hard_frac_base
