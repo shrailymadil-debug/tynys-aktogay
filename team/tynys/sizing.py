@@ -1,7 +1,12 @@
 """Решение руководства: сколько ВЭС и СЭС строить у Актогая.
 
-Для каждой комбинации мощностей прогоняется координатор V2 на реальной погоде
-2024 г. (4 сезона × 14 суток) и V0 (как сейчас) для сравнения. Результат —
+Для каждой комбинации мощностей прогоняются на реальной погоде 2024 г.
+(4 сезона × 14 суток) четыре варианта управления:
+  V0      — как сейчас (без координации), P80 150 мкм;
+  V2      — координатор, цель «медь» (P80 120–250 мкм);
+  V2green — координатор, цель «CO₂» (P80 не тоньше 150 мкм);
+  V2fixed — координатор с P80 = 150 мкм, как у V0: отделяет эффект
+            адаптации к ВИЭ от эффекта более тонкого помола. Результат —
 data/sizing.csv, его показывает экран (блок «Сколько строить»).
 """
 import itertools, os, sys
@@ -35,7 +40,8 @@ def main():
     winds, pvs = (0, 150, 300, 450, 600), (0, 125, 250, 375, 500)
     for w, s in itertools.product(winds, pvs):
         p = replace(aktogay(), wind_mw=w, pv_mwp=s)
-        for name, ctl in (("V0", V0Traditional()), ("V2", V2Tynys()), ("V2green", V2Tynys(grind_modes=GREEN))):
+        for name, ctl in (("V0", V0Traditional()), ("V2", V2Tynys()), ("V2green", V2Tynys(grind_modes=GREEN)),
+                          ("V2fixed", V2Tynys(elastic_grind=False))):   # тот же MPC, P80 = 150 мкм как у V0
             if only and name not in only:
                 continue
             a = evaluate(p, ctl)
