@@ -77,7 +77,7 @@ body[data-view=now] .g.co2 b{color:var(--bad)}body[data-view=tynys] .g.ren b{col
 <div class="hud glass" id="why"><div id="whyt">—</div></div>
 <div class="hud" id="caption"></div>
 <div class="hud" id="dots"></div>
-<div class="hud" id="ctrl"><button class="btn primary" id="tour">▶ История: проблема → решение</button><button class="btn" id="reset">Камера на место</button></div>
+<div class="hud" id="ctrl"><button class="btn primary" id="tour">▶ История: проблема → решение</button><button class="btn" id="reset">Камера на место</button><a class="btn" href="futures.html">Два будущих →</a></div>
 
 <div id="intro">
   <div class="card">
@@ -86,8 +86,8 @@ body[data-view=now] .g.co2 b{color:var(--bad)}body[data-view=tynys] .g.ren b{col
     <div class="pr">
       <div class="glass" style="border-color:#7a3a30"><h2 class="bad">Проблема</h2><div class="big">≈ 1,6 млн т CO₂</div>
         <p>в год: рудник круглосуточно берёт ≈ 230 МВт из сети, где 66 % — уголь. Ветер и солнце непостоянны, и рудник, работающий «ровно», не может их использовать — энергию сбрасывают.</p></div>
-      <div class="glass" style="border-color:#2f7a55"><h2 class="good">Решение</h2><div class="big">−42 % CO₂</div>
-        <p>с ВЭС + СЭС и координатором «Тыныс»: мелем твёрдую руду и заряжаем самосвалы, когда есть ветер и солнце, и экономим, когда их нет. Меди — столько же или больше.</p></div>
+      <div class="glass" style="border-color:#2f7a55"><h2 class="good">Решение</h2><div class="big">−41 % CO₂</div>
+        <p>дают ВЭС 300 + СЭС 250 МВт — двойник помогает выбрать мощности. Координатор «Тыныс» сверху сокращает сброс ветра и солнца на 23 % и CO₂ ещё на 1 % (режим «CO₂») — или даёт +1,9 % меди тонким помолом (режим «медь», CO₂ +5 %).</p></div>
     </div>
     <div class="row"><button class="btn primary" id="go">▶ Смотреть историю (1 мин)</button><button class="btn" id="skip">Сразу к руднику</button></div>
     <div class="fine">Мышь: вращать · колесо: приближать · пробел/→ в истории: дальше. Цифры: KAZ Minerals 2024, погода Open‑Meteo ERA5 2024, модель команды «Суперкрошки».</div>
@@ -548,11 +548,11 @@ $('vnow').onclick = () => setView('now'); $('vtyn').onclick = () => setView('tyn
 const STORY = [
   { v: 'now', p: [1150, 300, -620], t: [1500, 120, -1100], h: 'Проблема', s: 'Актогай круглосуточно берёт из сети ≈ 230 МВт. Две трети электроэнергии Казахстана — уголь: ≈ 1,6 млн т CO₂ в год только из‑за этого рудника.' },
   { v: 'now', p: [330, 200, -60], t: [130, 80, -400], h: 'Ветер и солнце есть — но их выбрасывают', s: 'Ветряки дают энергию не тогда, когда она нужна. Рудник работает «ровно», и лишнюю энергию сбрасывают — часть ветряков просто стоит.' },
-  { v: 'now', p: [-30, 100, 190], t: [-130, -40, 10], h: 'Руда бывает мягкая и твёрдая', s: 'Твёрдую молоть в полтора раза дороже по энергии. Сегодня её мелют вперемешку — в любой час, даже когда энергия самая «угольная».' },
+  { v: 'now', p: [-30, 100, 190], t: [-130, -40, 10], h: 'Руда бывает мягкая и твёрдая', s: 'Твёрдую молоть в ≈ 1,4 раза дороже по энергии (BWi 16 против 11,5 кВт·ч/т). Сегодня её мелют вперемешку — в любой час, даже когда энергия самая «угольная».' },
   { v: 'tynys', p: [-40, 120, -190], t: [70, 0, 0], h: 'Решение: рудник «дышит»', s: 'ВДОХ — энергии много: мелем твёрдую руду и тоньше, заряжаем самосвалы. ВЫДОХ — мало: мелем мягкую, твёрдую копим на складе.' },
   { v: 'tynys', p: [80, 55, 200], t: [10, 0, 110], h: 'Электросамосвалы — тоже батарея', s: 'Самосвалы заряжаются, когда дует ветер, и возят руду на заряде, когда ветра нет.' },
-  { v: 'tynys', p: [360, 130, 140], t: [250, 10, -20], h: 'Мозг считает на сутки вперёд', s: 'Каждый час — план на 24 ч по прогнозу погоды и объяснение словами. По запросу KEGOC рудник может снизить нагрузку на ~170 МВт.' },
-  { v: 'tynys', p: [300, 280, 460], t: [20, -20, -20], h: 'Итог за год на реальной погоде 2024', s: 'ВЭС + СЭС + Тыныс: CO₂ 1 591 → 924 тыс. т в год (−42 %) без потери меди. Или +1,9 % меди в режиме «медь». Сброс ветра и солнца — вдвое меньше.' },
+  { v: 'tynys', p: [360, 130, 140], t: [250, 10, -20], h: 'Мозг считает на сутки вперёд', s: 'Каждый час — план на 24 ч по прогнозу погоды и объяснение словами. В «Двух будущих» можно проверить ограничение сети, последствия для производства и восстановление запасов.' },
+  { v: 'tynys', p: [300, 280, 460], t: [20, -20, -20], h: 'Итог за год на реальной погоде 2024', s: 'ВЭС 300 + СЭС 250 МВт: CO₂ 1 591 → 933 тыс. т в год (−41 %). «Тыныс» сверху: сброс ветра и солнца −23 % и CO₂ ещё −1 % — или +1,9 % меди тонким помолом, но тогда CO₂ +5 %.' },
 ];
 let tour = null;
 function startStory() { tour = { i: 0, t0: performance.now(), from: { p: camera.position.clone(), t: controls.target.clone() } }; setView(STORY[0].v); }
@@ -594,12 +594,14 @@ function frame(now) {
   mills.forEach(m => m.drum.rotation.x += dt * 1.2 * (m.speed || 0));
   shovels.forEach((s, i) => s.rotation.y = Math.sin(now / 1500 + i * 2) * 0.9);
   const hf = v('pit', 'hard_frac', 0.5);
+  const slots = { c: 0, w: 0 };
   trucks.forEach((tr, i) => {
     const n = `truck-${String(i + 1).padStart(2, '0')}`; let st = v(n, 'state', 'empty');
-    if (view === 'now' && st === 'charging') st = i % 2 ? 'loaded' : 'empty';
+    if (view === 'now' && (st === 'charging' || st === 'waiting')) st = i % 2 ? 'loaded' : 'empty';
     tr.glow.intensity = st === 'charging' ? 5 : 0;
     for (let k = 0; k < 8; k++) setInst(dustIM, i * 8 + k, 0, -500, 0, 0, 0, 0);
-    if (st === 'charging') { const k = i % 4, row = Math.floor(i / 4) % 2; tr.g.position.set(CHARGE.x - 30 + k * 20, 0.4, CHARGE.z - 5 + row * 10); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
+    if (st === 'charging') { const k = slots.c++ % 4; tr.g.position.set(CHARGE.x - 30 + k * 20, 0.4, CHARGE.z - 5); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
+    if (st === 'waiting') { const k = slots.w++; tr.g.position.set(CHARGE.x - 34 + (k % 8) * 10, 0.4, CHARGE.z + 9 + Math.floor(k / 8) * 9); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
     const target = v(n, 'route_pos', tr.phase); let dd = target - tr.phase; dd -= Math.round(dd);
     tr.phase = (tr.phase + dt * 0.012 + dd * dt * 0.3 + 1) % 1;
     const up = tr.phase < 0.5, f = up ? tr.phase * 2 : 2 - tr.phase * 2;
