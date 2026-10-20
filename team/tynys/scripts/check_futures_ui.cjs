@@ -18,6 +18,13 @@ fs.mkdirSync(output, {recursive: true});
     checks.push('desktop layout and scene import');
     await page.locator('#reduction').fill('80');
     await page.locator('#duration').fill('4');
+    // The stand may contain a report from another user or the API smoke test.
+    // Explicitly set the whole scenario instead of relying on form defaults.
+    await page.locator('#lead').fill('2');
+    await page.locator('#recovery').fill('24');
+    await page.locator('#loss').fill('2');
+    await page.locator('#bess-fault').uncheck();
+    await page.locator('#hard-ore').uncheck();
     await page.locator('#lull').check();
     await page.locator('#submit').click();
     await page.waitForFunction(()=>!document.querySelector('#submit').disabled && !document.querySelector('#export').disabled,{},{timeout:240000});
