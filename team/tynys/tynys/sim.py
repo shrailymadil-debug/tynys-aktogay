@@ -336,7 +336,7 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
                    for di in range(len(DOMAINS)) for gi in range(len(P80_MODES))) / q_tot) if q_tot > 0 else float("nan")
     rec.update(
         hod=hod, wind=wind, pv=pv, renew=renew, grid=grid, grid_cap=gcap, curtail=curtail,
-        bess=bess_set, bess_e=st.bess_e, charge=charge, shed_charge=shed_charge,
+        bess=bess_set, bess_e=st.bess_e, bess_available=bool(bess_ok), charge=charge, shed_charge=shed_charge,
         fleet_e=st.fleet_e, mine=mine_eff, mine_plan=mine_plan, spilled=spilled,
         feed=q_tot, feed_soft=fed["soft"], feed_hard=fed["hard"],
         pile_soft=st.pile["soft"], pile_hard=st.pile["hard"],
@@ -366,15 +366,20 @@ def flexibility(p: Params, st: State, rec):
     e_coarse = ph.bond_kwh_t(p, p.bwi["soft"], max(P80_MODES)) + p.flot_kwh_t
     mills_now = rec["mill_mw"] + p.flot_kwh_t * rec["feed"] / 1000.0
     mills_to_min = max(0.0, mills_now - active * p.line_q_min * e_coarse / 1000.0)
-    bess_dis = min(p.bess_mw, max(0.0, st.bess_e - p.bess_e_min))
+    eta = math.sqrt(p.bess_eta_rt)
+    bess_available = rec.get("bess_available", True)
+    bess_usable = max(0.0, st.bess_e - p.bess_e_min) * eta if bess_available else 0.0
+    bess_dis = min(p.bess_mw, bess_usable)
     down_mw = rec["charge"] + bess_dis + mills_to_min
     haul_e = ph.haul_mwh_per_t_ore(p) * max(rec["mine"], 1.0)
     h_fleet = max(0.0, st.fleet_e - p.fleet_e_min) / max(haul_e, 1e-6)
     free = 2 * p.pile_cap_t - (st.pile["soft"] + st.pile["hard"])
     surplus_rate = max(1.0, rec["mine"] - p.n_lines * p.line_q_min)
     h_pile = free / surplus_rate
-    h_bess = (st.bess_e - p.bess_e_min) / bess_dis if bess_dis > 0 else 48.0
-    return down_mw, float(min(h_fleet, h_pile, h_bess, 48.0))
+    h_bess = bess_usable / bess_dis if bess_dis > 0 else 48.0
+    # Это мгновенная оценка, не обещание: совместно заявленная мощность
+    # заканчивается, когда исчерпан хотя бы один из использованных резервов.
+    return down_mw, float(min(h_fleet if rec["charge"] > 0 else 48.0, h_pile, h_bess, 48.0))
 
 
 def run(p: Params, sc: Scenario, controller, seed: int):

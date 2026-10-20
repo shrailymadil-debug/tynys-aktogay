@@ -61,7 +61,8 @@ class V1Reactive:
         lines = [l for l in range(p.n_lines) if _line_ok(env, st, l, t)]
         q_nom = p.line_q_nom * len(lines)
         q_max = min(p.line_q_max, p.line_p_max_mw / (e / 1000.0)) * len(lines)
-        bess_dis = min(p.bess_mw, max(0.0, st.bess_e - p.bess_e_min))
+        bess_dis = (min(p.bess_mw, max(0.0, st.bess_e - p.bess_e_min) * np.sqrt(p.bess_eta_rt))
+                    if env.bess_avail[t] else 0.0)
         d_nom = other + q_nom * e_t
         surplus = renew - d_nom
         fill = tot / (2 * p.pile_cap_t)
@@ -100,7 +101,7 @@ class _VarIndex:
 class V2Tynys:
     """Скользящий горизонт: каждый час решается MILP на H часов вперёд, применяется первый шаг."""
 
-    def __init__(self, segregation=True, elastic_grind=True, use_forecast=True, name=None, explain=False, grind_modes=None):
+    def __init__(self, segregation=True, elastic_grind=True, use_forecast=True, name=None, explain=False, grind_modes=None, solver_options=None):
         # grind_modes: допустимые P80 (мкм); «зелёный» режим = не тоньше 150 мкм
         self.grind_modes = grind_modes
         self.explain = explain
@@ -110,9 +111,18 @@ class V2Tynys:
         self.use_forecast = use_forecast
         self.name = name or "V2 Тыныс"
         self.solve_times = []
+        self.fallback_count = 0
+        self.limited_count = 0
+        self.last_fallback = False
+        self.solver_options = {"time_limit": 10, "mip_rel_gap": 2e-3, "disp": False}
+        if solver_options is not None:
+            self.solver_options.update(solver_options)
+            self.solver_options = {k: v for k, v in self.solver_options.items() if v is not None}
 
     def decide(self, p, env, st, t):
         import time
+        self.last_plan = None
+        self.last_fallback = False
         H = min(p.mpc_horizon_h, env.sc.n() - t)
         H = max(H, 1)
         # ---- прогнозы ----
@@ -281,12 +291,26 @@ class V2Tynys:
         t0 = time.time()
         res = milp(c=np.array(vi.c), constraints=LinearConstraint(A, lo, hi),
                    integrality=np.array(vi.integ), bounds=Bounds(vi.lb, vi.ub),
-                   options={"time_limit": 10, "mip_rel_gap": 2e-3, "disp": False})
+                   options=self.solver_options)
         self.solve_times.append(time.time() - t0)
+        if res.status == 1:
+            self.limited_count += 1
         x = _empty_x(p)
         if res.x is None:
             # запасной вариант — правило V1
-            return V1Reactive().decide(p, env, st, t)
+            self.fallback_count += 1
+            self.last_fallback = True
+            fallback = V1Reactive().decide(p, env, st, t)
+            if self.segregated:
+                # V1 кодирует общий поток в soft; при применении к раздельным
+                # складам раскладываем его по реальному составу, как sim.step.
+                total = sum(st.pile.values())
+                soft = st.pile["soft"] / total if total > 0 else 0.5
+                for line in fallback["x"]:
+                    for g in range(NG):
+                        q = sum(domain[g] for domain in line)
+                        line[0][g], line[1][g] = q * soft, q * (1 - soft)
+            return fallback
         s = res.x
         for l in range(p.n_lines):
             for di, d in enumerate(DOMAINS):

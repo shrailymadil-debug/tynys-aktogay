@@ -2,6 +2,7 @@
 Координатор V2 (цель «медь», как на стенде по умолчанию), параметры aktogay(),
 реальная погода 2024, 4 сезона × 14 суток. Результат — data/flex.csv.
 Запуск: PYTHONPATH=. python flex_stats.py"""
+import math
 import pandas as pd
 from tynys.params import aktogay
 from tynys.sim import Scenario, Env, init_state, step
@@ -16,10 +17,16 @@ for doy, name in SEASONS.items():
     for t in range(14 * 24):
         r = step(p, env, st, t, c.decide(p, env, st, t), True)
         # какой запас ограничил длительность (те же формулы, что в sim.flexibility)
-        bess_dis = min(p.bess_mw, max(0.0, st.bess_e - p.bess_e_min))
-        h = {"самосвалы": max(0.0, st.fleet_e - p.fleet_e_min) / (ph.haul_mwh_per_t_ore(p) * max(r["mine"], 1.0)),
+        bess_usable = (max(0.0, st.bess_e - p.bess_e_min) * math.sqrt(p.bess_eta_rt)
+                       if r.get("bess_available", True) else 0.0)
+        bess_dis = min(p.bess_mw, bess_usable)
+        h_fleet = max(0.0, st.fleet_e - p.fleet_e_min) / max(
+            ph.haul_mwh_per_t_ore(p) * max(r["mine"], 1.0), 1e-6)
+        h = {"самосвалы": h_fleet if r["charge"] > 0 else 48.0,
              "склады": (2 * p.pile_cap_t - sum(st.pile.values())) / max(1.0, r["mine"] - p.n_lines * p.line_q_min),
-             "накопитель": (st.bess_e - p.bess_e_min) / bess_dis if bess_dis > 0 else 48.0, "предел 48 ч": 48.0}
+             "накопитель": bess_usable / bess_dis if bess_dis > 0 else 48.0, "предел 48 ч": 48.0}
+        if not math.isclose(min(h.values()), r["flex_down_h"], rel_tol=1e-10, abs_tol=1e-10):
+            raise AssertionError("Расчёт ограничивающего запаса разошёлся с sim.flexibility")
         r["limit"] = min(h, key=h.get); recs.append(r)
     r = pd.DataFrame(recs); r["season"] = name; frames.append(r)
 df = pd.concat(frames)

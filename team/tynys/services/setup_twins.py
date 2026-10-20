@@ -26,6 +26,11 @@ def twins():
         t("energy", "Энергосистема рудника", "energy", "site", {"load_mw": 0.0}),
         t("coordinator", "Координатор «Тыныс» (MPC 24 ч)", "coordinator", "site", {"for_t": -1}),
         t("scenario", "Сценарии what-if", "scenario", "site", {"events": "[]", "rev": 0, "goal": "copper"}),
+        t("future-request", "Запрос проверки обещания", "experiment_request", "site",
+          {"request_json": ""}),
+        t("future-result", "Два будущих: результат расчёта", "experiment_result", "site",
+          {"status": "idle", "request_id": "", "progress": 0, "stage": "",
+           "result_json": "", "error": "", "updated_at": ""}),
         t("shadow-v0", "Тень V0: как сейчас (без координации)", "shadow", "site", {"cu_t": 0.0}),
         t("shadow-v1", "Тень V1: простые правила", "shadow", "site", {"cu_t": 0.0}),
     ]
