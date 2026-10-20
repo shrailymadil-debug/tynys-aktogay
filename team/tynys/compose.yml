@@ -16,6 +16,13 @@ services:
     environment: *experiment_limits
   gateway:
     environment: *experiment_limits
+  # When adding Tynys to an existing base stand, gateway is recreated. Reload
+  # nginx too so its static upstream resolves the gateway's new container IP.
+  ditto-nginx:
+    depends_on:
+      gateway:
+        condition: service_started
+        restart: true
 
   tynys-setup:
     build: ../../team/tynys
