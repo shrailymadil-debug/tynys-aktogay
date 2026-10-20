@@ -1,0 +1,519 @@
+using System.Globalization;
+using UnityEngine;
+
+namespace Tynys
+{
+    /// <summary>Russian runtime UI. All demo values are explicitly illustrative.</summary>
+    public sealed class MineHUD : MonoBehaviour
+    {
+        public MineData data;
+        public MineCamera cameraRig;
+        public string SelectedId = "substation";
+        public bool Visible = true;
+        public static bool IsTyping { get; private set; }
+
+        private readonly Color background = Hex(0x0C1822);
+        private readonly Color surface = Hex(0x142630);
+        private readonly Color raised = Hex(0x1C333D);
+        private readonly Color teal = Hex(0x66DFCB);
+        private readonly Color sand = Hex(0xE7C595);
+        private readonly Color ink = Hex(0xEDF4F3);
+        private readonly Color muted = Hex(0x9DB4BA);
+        private readonly Color orange = Hex(0xF3A67A);
+        private GUIStyle panel, small, body, title, number, eyebrow, button, field, badge;
+        private Texture2D rounded;
+        private Font font;
+        private string endpoint = "";
+        private bool endpointInitialized;
+        private bool fast;
+        private bool initialized;
+        private float uiWidth, uiHeight;
+        private bool HasSnapshot
+        {
+            get
+            {
+                return data != null && data.State != null && data.HasSnapshot;
+            }
+        }
+        private readonly string[] objectIds = {
+            "pit", "pile-soft", "pile-hard", "line-1", "line-2", "wind", "pv", "bess", "substation"
+        };
+        private readonly string[] objectNames = {
+            "Карьер", "Мягкая руда", "Твёрдая руда", "Линия 1", "Линия 2", "ВЭС", "СЭС", "BESS", "Подстанция"
+        };
+        private readonly string[] eventNames = {
+            "1  БАЗОВЫЙ", "2  ШТИЛЬ", "3  СТОП ЛИНИИ", "4  ЛИМИТ СЕТИ",
+            "5  ТВЁРДАЯ РУДА", "6  ПЛАН +", "7  СБОЙ BESS"
+        };
+        private readonly DemoScenario[] events = {
+            DemoScenario.Normal, DemoScenario.Lull, DemoScenario.LineTrip,
+            DemoScenario.Kegoc, DemoScenario.HardOre, DemoScenario.PlanUp, DemoScenario.BessFault
+        };
+
+        private void Awake()
+        {
+            if (cameraRig == null) cameraRig = FindFirstObjectByType<MineCamera>();
+            if (data == null) data = FindFirstObjectByType<MineData>();
+            if (cameraRig != null) cameraRig.hud = this;
+        }
+
+        private void Update()
+        {
+            if (IsTyping) return;
+            if (Input.GetKeyDown(KeyCode.H)) Visible = !Visible;
+            if (data == null) return;
+            if (!data.LiveMode)
+            {
+                if (Input.GetKeyDown(KeyCode.Space)) data.Paused = !data.Paused;
+                for (int i = 0; i < events.Length; i++)
+                {
+                    if (Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha1 + i)))
+                        data.SetScenario(events[i]);
+                }
+            }
+        }
+
+        public void Select(string id)
+        {
+            if (!string.IsNullOrEmpty(id)) SelectedId = id;
+        }
+
+        public bool ContainsScreenPoint(Vector3 point)
+        {
+            float scale = Mathf.Min(Screen.width / 1600f, Screen.height / 900f);
+            float w = Screen.width / scale, h = Screen.height / scale;
+            Vector2 p = new Vector2(point.x / scale, (Screen.height - point.y) / scale);
+            return p.y <= 104f || p.y >= h - 126f || p.x >= w - 344f
+                || new Rect(24f, h - 180f, w - 384f, 44f).Contains(p)
+                || new Rect(24f, h - 265f, 365f, 74f).Contains(p)
+                || new Rect(402f, h - 247f, 600f, 56f).Contains(p)
+                || new Rect(24f, 112f, 325f, 40f).Contains(p);
+        }
+
+        private void SetupStyles()
+        {
+            if (initialized) return;
+            initialized = true;
+            font = Font.CreateDynamicFontFromOSFont(new[] { "Segoe UI", "Arial", "DejaVu Sans" }, 20);
+            if (font == null) font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            rounded = new Texture2D(24, 24, TextureFormat.RGBA32, false);
+            rounded.name = "Tynys UI corners";
+            rounded.hideFlags = HideFlags.HideAndDontSave;
+            rounded.filterMode = FilterMode.Bilinear;
+            for (int y = 0; y < 24; y++)
+                for (int x = 0; x < 24; x++)
+                {
+                    float dx = Mathf.Max(7.5f - x, x - 15.5f, 0f);
+                    float dy = Mathf.Max(7.5f - y, y - 15.5f, 0f);
+                    float a = Mathf.Clamp01(8f - Mathf.Sqrt(dx * dx + dy * dy));
+                    rounded.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+                }
+            rounded.Apply();
+            panel = new GUIStyle { border = new RectOffset(8, 8, 8, 8) };
+            panel.normal.background = rounded;
+            small = TextStyle(13, muted);
+            body = TextStyle(16, ink);
+            title = TextStyle(29, ink, FontStyle.Bold);
+            number = TextStyle(27, ink, FontStyle.Bold);
+            eyebrow = TextStyle(11, muted, FontStyle.Bold);
+            button = TextStyle(12, ink, FontStyle.Bold);
+            button.alignment = TextAnchor.MiddleCenter;
+            button.normal.background = rounded;
+            button.hover.background = rounded;
+            button.active.background = rounded;
+            button.border = new RectOffset(8, 8, 8, 8);
+            button.padding = new RectOffset(6, 6, 2, 2);
+            field = TextStyle(12, ink);
+            field.normal.background = rounded;
+            field.focused.background = rounded;
+            field.border = new RectOffset(8, 8, 8, 8);
+            field.padding = new RectOffset(9, 9, 6, 4);
+            field.clipping = TextClipping.Clip;
+            badge = TextStyle(11, teal, FontStyle.Bold);
+            badge.alignment = TextAnchor.MiddleCenter;
+        }
+
+        private GUIStyle TextStyle(int size, Color color, FontStyle weight = FontStyle.Normal)
+        {
+            var style = new GUIStyle(GUI.skin.label)
+            {
+                font = font, fontSize = size, fontStyle = weight,
+                wordWrap = false, padding = new RectOffset(0, 0, 0, 0),
+                margin = new RectOffset(0, 0, 0, 0), richText = false
+            };
+            style.normal.textColor = color;
+            style.hover.textColor = color;
+            style.active.textColor = color;
+            style.focused.textColor = color;
+            return style;
+        }
+
+        private void OnGUI()
+        {
+            SetupStyles();
+            if (!Visible)
+            {
+                GUI.Label(new Rect(16f, 14f, 320f, 22f), "H — показать панель • Home — общий вид", small);
+                IsTyping = false;
+                return;
+            }
+            float scale = Mathf.Min(Screen.width / 1600f, Screen.height / 900f);
+            uiWidth = Screen.width / scale;
+            uiHeight = Screen.height / scale;
+            Matrix4x4 oldMatrix = GUI.matrix;
+            Color oldColor = GUI.color;
+            GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, Vector3.one * scale);
+            GUI.color = Color.white;
+
+            if (data == null)
+            {
+                Box(new Rect(20, 20, 620, 90), background);
+                Label(40, 38, 560, 24, "ТЫНЫС / подготовка цифрового двойника", body);
+                GUI.matrix = oldMatrix;
+                GUI.color = oldColor;
+                return;
+            }
+            if (!endpointInitialized)
+            {
+                endpoint = data.Endpoint ?? "";
+                endpointInitialized = true;
+            }
+            DrawHeader();
+            DrawSceneTools();
+            DrawInspector();
+            DrawScenarios();
+            IsTyping = GUI.GetNameOfFocusedControl() == "tynys-endpoint";
+            GUI.matrix = oldMatrix;
+            GUI.color = oldColor;
+        }
+
+        private void DrawHeader()
+        {
+            var s = data.State;
+            bool hasSnapshot = HasSnapshot;
+            Box(new Rect(16, 16, uiWidth - 32, 80), background);
+            Label(36, 24, 225, 37, "ТЫНЫС", title);
+            Label(38, 65, 440, 16, "АКТОГАЙ  /  ЭНЕРГИЯ · РУДА · МЕДЬ", eyebrow);
+            bool live = data.LiveMode;
+            bool healthy = live && data.IsConnected && !data.IsStale;
+            Color stateColor = healthy ? teal : live ? orange : sand;
+            Chip(new Rect(208, 33, 96, 25), live ? "LIVE" : "ДЕМО", stateColor);
+            Label(320, 29, 200, 21, hasSnapshot ? s.simTime ?? "—" : "—", body);
+            Label(320, 57, 200, 18, live ? (!hasSnapshot ? "ожидание данных" :
+                data.IsStale ? "данные устарели" : "данные веб-панели") : "учебная симуляция", small);
+
+            float kpiX = 532f, gap = 12f;
+            float width = (uiWidth - kpiX - 36f - 2f * gap) / 3f;
+            Kpi(new Rect(kpiX, 24, width, 64), "НАГРУЗКА", hasSnapshot ? F(s.loadMW) + " МВт" : "—",
+                hasSnapshot ? "сеть " + F(s.gridMW) + " / " + F(s.gridCapMW) + " МВт" : "нет снимка", sand);
+            Kpi(new Rect(kpiX + width + gap, 24, width, 64), "ДОЛЯ ВИЭ", hasSnapshot ? Percent(s.renewShare) : "—",
+                hasSnapshot ? "ветер " + F(s.windMW) + " · солнце " + F(s.pvMW) + " МВт" : "нет снимка", teal);
+            Kpi(new Rect(kpiX + (width + gap) * 2f, 24, width, 64), "ВЫХОД МЕДИ", hasSnapshot ? F(s.cuTPH) + " т/ч" : "—",
+                hasSnapshot ? "подача " + F(s.feedTPH, "0") + " т/ч" : "нет снимка", sand);
+        }
+
+        private void Kpi(Rect r, string caption, string value, string note, Color accent)
+        {
+            Box(r, surface);
+            Fill(new Rect(r.x + 12, r.y + 12, 3, 40), accent);
+            Label(r.x + 26, r.y + 8, r.width - 34, 15, caption, eyebrow);
+            Label(r.x + 26, r.y + 27, r.width - 34, 34, value, number);
+            // Place the operational detail to the right when room permits.
+            float noteWidth = Mathf.Max(110f, r.width - 202f);
+            Label(r.xMax - noteWidth - 12, r.y + 11, noteWidth, 40, note, small, true, TextAnchor.MiddleRight);
+        }
+
+        private void DrawSceneTools()
+        {
+            Box(new Rect(24, 112, 325, 36), background, 0.92f);
+            Label(38, 122, 295, 16, "ПРОИЗВОДСТВЕННЫЙ КОНТУР  /  3D", eyebrow);
+            float y = uiHeight - 265;
+            Box(new Rect(24, y, 365, 74), background, 0.94f);
+            Dot(43, y + 20, teal);
+            Label(56, y + 10, 155, 20, "Энергия", small);
+            Dot(202, y + 20, sand);
+            Label(215, y + 10, 155, 20, "Поток руды", small);
+            Dot(43, y + 49, orange);
+            Label(56, y + 39, 155, 20, "Ограничение", small);
+            Dot(202, y + 49, muted);
+            Label(215, y + 39, 155, 20, "Инфраструктура", small);
+            Box(new Rect(402, y + 18, 600, 56), background, 0.96f);
+            Label(418, y + 28, 568, 38,
+                "ПКМ — вращать   ·   колёсико — масштаб   ·   СКМ — сдвиг\nHome — общий вид   ·   H — скрыть панели",
+                TextWithColor(small, ink), true);
+
+            float available = uiWidth - 384f;
+            float width = (available - 8f * 8f) / 9f;
+            for (int i = 0; i < objectIds.Length; i++)
+            {
+                Rect r = new Rect(24 + (width + 8f) * i, uiHeight - 178, width, 35);
+                bool selected = SelectedId == objectIds[i];
+                if (Button(r, objectNames[i], selected ? teal : surface, selected ? background : ink))
+                {
+                    Select(objectIds[i]);
+                    GUI.FocusControl(null);
+                }
+            }
+        }
+
+        private void DrawInspector()
+        {
+            var s = data.State;
+            float x = uiWidth - 328f, y = 112f, w = 312f;
+            float h = uiHeight - 250f;
+            Box(new Rect(x, y, w, h), background);
+            Label(x + 20, y + 17, w - 40, 16, "ВЫБРАННЫЙ ОБЪЕКТ", eyebrow);
+            Label(x + 20, y + 42, w - 40, 29, ObjectName(SelectedId), TextWithSize(title, 23));
+            Fill(new Rect(x + 20, y + 84, w - 40, 1), raised);
+            DrawSelectedDetails(x + 20, y + 100, w - 40);
+
+            float lineY = y + 315;
+            Fill(new Rect(x + 20, lineY, w - 40, 1), raised);
+            Label(x + 20, lineY + 15, w - 40, 17, "РЕШЕНИЕ ДИСПЕТЧЕРА", eyebrow);
+            Label(x + 20, lineY + 40, w - 40, 28, HasSnapshot ? s.mode ?? "—" : "Ожидание LIVE", TextWithColor(body, teal), true);
+            Label(x + 20, lineY + 73, w - 40, 62, HasSnapshot ? s.why ?? "" :
+                "После получения корректного снимка здесь появится решение диспетчера.", small, true);
+            float connectY = y + h - 187;
+            Fill(new Rect(x + 20, connectY - 12, w - 40, 1), raised);
+            Label(x + 20, connectY, w - 40, 17, "ИСТОЧНИК ДАННЫХ", eyebrow);
+            Label(x + 20, connectY + 25, w - 40, 29,
+                data.LiveMode ? "LIVE / " + (!HasSnapshot ? "ожидание первого снимка" :
+                data.IsStale ? "нет свежих данных" : data.IsConnected ? "подключено" : "ожидание") :
+                "ДЕМО / иллюстративная модель",
+                TextWithColor(small, data.LiveMode && data.IsStale ? orange : muted), true);
+            GUI.SetNextControlName("tynys-endpoint");
+            Color saved = GUI.backgroundColor;
+            GUI.backgroundColor = raised;
+            endpoint = GUI.TextField(new Rect(x + 20, connectY + 58, w - 40, 31), endpoint, field);
+            GUI.backgroundColor = saved;
+            if (Button(new Rect(x + 20, connectY + 98, w - 40, 32),
+                data.LiveMode ? "ОТКЛЮЧИТЬ LIVE" : "ПОДКЛЮЧИТЬ LIVE API", data.LiveMode ? raised : teal,
+                data.LiveMode ? ink : background))
+            {
+                data.Endpoint = endpoint.Trim();
+                data.SetLive(!data.LiveMode);
+                GUI.FocusControl(null);
+            }
+            Label(x + 20, connectY + 140, w - 40, 35,
+                string.IsNullOrEmpty(data.Status) ? "JSON endpoint из веб-проекта" : data.Status, small, true);
+        }
+
+        private void DrawSelectedDetails(float x, float y, float w)
+        {
+            if (!HasSnapshot)
+            {
+                Chip(new Rect(x, y, w, 28), "ДАННЫЕ ЕЩЁ НЕ ПОЛУЧЕНЫ", orange);
+                Label(x, y + 48, w, 104,
+                    "Показатели появятся после подключения к API проекта. Проверьте адрес ниже. Можно отключить LIVE и вернуться в демонстрацию.",
+                    small, true);
+                return;
+            }
+            var s = data.State;
+            switch (SelectedId)
+            {
+                case "pit":
+                    Row(x, y, w, "Подача в переработку", F(s.feedTPH, "0") + " т/ч");
+                    Row(x, y + 35, w, "Выход меди", F(s.cuTPH) + " т/ч", sand);
+                    Label(x, y + 87, w, 78, "Самосвалы показывают движение руды от карьера к складам. Два типа сырья питают обогатительные линии.", small, true);
+                    break;
+                case "pile-soft":
+                    Row(x, y, w, "Запас мягкой руды", F(s.pileSoftTonnes, "0") + " т", sand);
+                    Progress(x, y + 48, w, s.pileSoftPct, "Заполнение", sand);
+                    Label(x, y + 98, w, 80, "Буфер сырья позволяет менять темп переработки в течение суток и учитывать доступность энергии.", small, true);
+                    break;
+                case "pile-hard":
+                    Row(x, y, w, "Запас твёрдой руды", F(s.pileHardTonnes, "0") + " т", sand);
+                    Progress(x, y + 48, w, s.pileHardPct, "Заполнение", sand);
+                    Label(x, y + 98, w, 80, "Твёрдая руда увеличивает нагрузку на измельчение. Смешивание сырья связывает энергетику и выпуск меди.", small, true);
+                    break;
+                case "line-1":
+                case "line-2":
+                    bool first = SelectedId == "line-1";
+                    bool available = first ? s.line1Available : s.line2Available;
+                    Chip(new Rect(x, y, w, 28), available ? "В РАБОТЕ" : "ЛИНИЯ ОСТАНОВЛЕНА", available ? teal : orange);
+                    Row(x, y + 48, w, "Подача", F(first ? s.line1Feed : s.line2Feed, "0") + " т/ч");
+                    Row(x, y + 84, w, "P80", F(s.p80, "0") + " мкм");
+                    Label(x, y + 128, w, 60, "Цвет и движение потока отражают доступность линии. P80 — общий показатель крупности продукта.", small, true);
+                    break;
+                case "wind":
+                    Row(x, y, w, "Выработка ВЭС", F(s.windMW) + " МВт", teal);
+                    Row(x, y + 35, w, "Доля всех ВИЭ", Percent(s.renewShare));
+                    Label(x, y + 87, w, 86, "Ветровая генерация меняется во времени. Диспетчер согласует потребление, запас руды и доступную мощность сети.", small, true);
+                    break;
+                case "pv":
+                    Row(x, y, w, "Выработка СЭС", F(s.pvMW) + " МВт", teal);
+                    Row(x, y + 35, w, "Солнечное время", F(s.hour, "00.0") + " ч");
+                    Label(x, y + 87, w, 80, "Солнечная генерация следует суточному профилю. Избыток энергии можно направить в BESS или переработку.", small, true);
+                    break;
+                case "bess":
+                    Chip(new Rect(x, y, w, 28), s.bessAvailable ? "НАКОПИТЕЛЬ ДОСТУПЕН" : "НАКОПИТЕЛЬ НЕДОСТУПЕН", s.bessAvailable ? teal : orange);
+                    Progress(x, y + 45, w, s.bessSoc, "Заряд / SoC", teal);
+                    Row(x, y + 95, w, s.bessMW > 0.01f ? "Разряд накопителя" :
+                        s.bessMW < -0.01f ? "Заряд накопителя" : "Мощность BESS",
+                        F(Mathf.Abs(s.bessMW)) + " МВт", teal);
+                    Label(x, y + 139, w, 56, "Накопитель сглаживает изменения доступной генерации и помогает удерживать лимит сети.", small, true);
+                    break;
+                default:
+                    Row(x, y, w, "Импорт из сети", F(s.gridMW) + " МВт", sand);
+                    Row(x, y + 35, w, "Лимит KEGOC", F(s.gridCapMW) + " МВт");
+                    if (data.LiveMode)
+                    {
+                        Row(x, y + 70, w, "Гибкость нагрузки", F(s.flexMW) + " МВт", teal);
+                        Row(x, y + 105, w, "Горизонт гибкости", F(s.flexHours) + " ч");
+                        Label(x, y + 153, w, 42, "Медь, т: V0 " + F(s.cuV0) + "  ·  V1 " + F(s.cuV1) + "  ·  V2 " + F(s.cuV2), small, true);
+                    }
+                    else
+                        Label(x, y + 89, w, 95, "Резерв гибкости и сравнение V0 / V1 / V2 доступны с данными LIVE. Демо иллюстрирует контур и не является расчётом ТЭО.", small, true);
+                    break;
+            }
+        }
+
+        private void DrawScenarios()
+        {
+            float y = uiHeight - 118;
+            Box(new Rect(16, y, uiWidth - 32, 102), background);
+            Label(34, y + 13, 310, 17, data.LiveMode ? "LIVE / УПРАВЛЕНИЕ В ВЕБ-ПАНЕЛИ" : "СЦЕНАРИИ ДЕМОНСТРАЦИИ", eyebrow);
+            Label(352, y + 12, uiWidth - 820, 18,
+                data.LiveMode ? "События задаются в существующей веб-панели проекта." :
+                "Демонстрационные значения • выбор события меняет работу контура", small);
+
+            bool wasEnabled = GUI.enabled;
+            GUI.enabled = !data.LiveMode;
+            float resetW = 78f, pauseW = 92f, speedW = 58f, rightMargin = 34f, gap = 7f;
+            float controlsWidth = resetW + pauseW + speedW + gap * 3f;
+            float eventsWidth = uiWidth - 68f - controlsWidth - 12f;
+            float eventW = (eventsWidth - gap * 6f) / 7f;
+            for (int i = 0; i < events.Length; i++)
+            {
+                bool current = data.Scenario == events[i] && !data.LiveMode;
+                if (Button(new Rect(34f + (eventW + gap) * i, y + 43, eventW, 40),
+                    eventNames[i], current ? sand : surface, current ? background : ink))
+                {
+                    data.SetScenario(events[i]);
+                    GUI.FocusControl(null);
+                }
+            }
+            float cx = uiWidth - rightMargin - controlsWidth;
+            if (Button(new Rect(cx, y + 43, resetW, 40), "СБРОС", raised, ink))
+            {
+                data.ResetDemo();
+                fast = false;
+                data.SecondsPerHour = 10f;
+                GUI.FocusControl(null);
+            }
+            cx += resetW + gap;
+            if (Button(new Rect(cx, y + 43, pauseW, 40), data.Paused ? "ПУСК" : "ПАУЗА", raised, ink))
+            {
+                data.Paused = !data.Paused;
+                GUI.FocusControl(null);
+            }
+            cx += pauseW + gap;
+            if (Button(new Rect(cx, y + 43, speedW, 40), fast ? "4×" : "1×", raised, teal))
+            {
+                fast = !fast;
+                data.SecondsPerHour = fast ? 2.5f : 10f;
+                GUI.FocusControl(null);
+            }
+            GUI.enabled = wasEnabled;
+            Label(uiWidth - 270, y + 12, 235, 18, "ПРОТОТИП КОНЦЕПЦИИ / OpenEgiz", eyebrow, false, TextAnchor.MiddleRight);
+        }
+
+        private void Row(float x, float y, float w, string key, string value, Color? accent = null)
+        {
+            Label(x, y + 3, w * 0.64f, 25, key, small);
+            Label(x + w * 0.53f, y, w * 0.47f, 28, value,
+                TextWithColor(body, accent ?? ink), false, TextAnchor.MiddleRight);
+        }
+
+        private void Progress(float x, float y, float w, float value, string caption, Color accent)
+        {
+            float pct = Normalized(value);
+            Label(x, y, w * 0.7f, 22, caption, small);
+            Label(x + w * 0.7f, y, w * 0.3f, 22, F(pct * 100f, "0") + "%", body, false, TextAnchor.MiddleRight);
+            Box(new Rect(x, y + 29, w, 7), raised);
+            if (pct > 0f) Box(new Rect(x, y + 29, Mathf.Max(5f, w * pct), 7), accent);
+        }
+
+        private void Chip(Rect r, string text, Color color)
+        {
+            Box(r, new Color(color.r * 0.18f, color.g * 0.18f, color.b * 0.18f, 1f));
+            Label(r.x + 6, r.y, r.width - 12, r.height, text, TextWithColor(badge, color));
+        }
+
+        private bool Button(Rect r, string text, Color fill, Color foreground)
+        {
+            Color saved = GUI.backgroundColor;
+            GUI.backgroundColor = fill;
+            var style = new GUIStyle(button);
+            style.normal.textColor = foreground;
+            style.hover.textColor = foreground;
+            style.active.textColor = foreground;
+            bool clicked = GUI.Button(r, text, style);
+            GUI.backgroundColor = saved;
+            return clicked;
+        }
+
+        private void Label(float x, float y, float width, float height, string text,
+            GUIStyle style, bool wrap = false, TextAnchor alignment = TextAnchor.UpperLeft)
+        {
+            GUIStyle use = new GUIStyle(style) { wordWrap = wrap };
+            if (alignment != TextAnchor.UpperLeft) use.alignment = alignment;
+            GUI.Label(new Rect(x, y, width, height), text ?? "", use);
+        }
+
+        private void Box(Rect r, Color color, float alpha = 1f)
+        {
+            Color saved = GUI.color;
+            GUI.color = new Color(color.r, color.g, color.b, alpha);
+            GUI.Box(r, GUIContent.none, panel);
+            GUI.color = saved;
+        }
+
+        private static void Fill(Rect r, Color color)
+        {
+            Color saved = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(r, Texture2D.whiteTexture);
+            GUI.color = saved;
+        }
+
+        private void Dot(float x, float y, Color color) { Box(new Rect(x - 4, y - 4, 8, 8), color); }
+        private static GUIStyle TextWithColor(GUIStyle original, Color color)
+        {
+            var style = new GUIStyle(original);
+            style.normal.textColor = color;
+            return style;
+        }
+        private static GUIStyle TextWithSize(GUIStyle original, int size)
+        {
+            return new GUIStyle(original) { fontSize = size };
+        }
+        private static string ObjectName(string id)
+        {
+            switch (id)
+            {
+                case "pit": return "Открытый карьер";
+                case "pile-soft": return "Склад мягкой руды";
+                case "pile-hard": return "Склад твёрдой руды";
+                case "line-1": return "Переработка / линия 1";
+                case "line-2": return "Переработка / линия 2";
+                case "wind": return "Ветровая станция";
+                case "pv": return "Солнечная станция";
+                case "bess": return "Накопитель BESS";
+                default: return "Подстанция / сеть";
+            }
+        }
+        private static float Normalized(float value) { return Mathf.Clamp01(value / 100f); }
+        private static string Percent(float value) { return F(Normalized(value) * 100f, "0") + "%"; }
+        private static string F(float value, string format = "0.0") { return value.ToString(format, CultureInfo.InvariantCulture); }
+        private static Color Hex(uint rgb)
+        {
+            return new Color(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f, 1f);
+        }
+        private void OnDestroy()
+        {
+            IsTyping = false;
+            if (rounded != null) Destroy(rounded);
+        }
+    }
+}
