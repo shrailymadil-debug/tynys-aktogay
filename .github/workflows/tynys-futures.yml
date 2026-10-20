@@ -1,7 +1,7 @@
 name: Tynys two futures
 on:
   push:
-    branches: [codex/two-futures]
+    branches: [main]
   pull_request:
     paths:
       - 'team/tynys/**'
@@ -10,7 +10,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: futures-${{ github.ref }}
+  group: futures-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 jobs:
   validate:
