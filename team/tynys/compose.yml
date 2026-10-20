@@ -1,0 +1,67 @@
+# Рудник «Тыныс» (Актогай): надстройка над deploy/compose/docker-compose.yml.
+# Запускается командой `make tynys` из корня репозитория.
+services:
+  tynys-setup:
+    build: ../../team/tynys
+    image: tynys/aktogay:local
+    restart: "no"
+    command: ["python", "setup_twins.py"]
+    environment:
+      DITTO_URL: http://ditto-nginx:80
+      DITTO_PASSWORD: ${DITTO_PASSWORD}
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  tynys-coordinator:
+    image: tynys/aktogay:local
+    pull_policy: never
+    restart: unless-stopped
+    mem_limit: 768m
+    command: ["python", "coordinator.py"]
+    environment: &env
+      DITTO_URL: http://ditto-nginx:80
+      DITTO_PASSWORD: ${DITTO_PASSWORD}
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      HOUR_SECONDS: ${TYNYS_HOUR_SECONDS:-6}
+    depends_on:
+      tynys-setup:
+        condition: service_completed_successfully
+
+  tynys-field:
+    image: tynys/aktogay:local
+    pull_policy: never
+    restart: unless-stopped
+    mem_limit: 512m
+    command: ["python", "field.py"]
+    environment: *env
+    depends_on:
+      tynys-setup:
+        condition: service_completed_successfully
+
+  tynys-ui:
+    image: docker.io/library/nginx:1.25-alpine
+    restart: unless-stopped
+    mem_limit: 64m
+    environment:
+      DITTO_BASIC_AUTH: ${DITTO_BASIC_AUTH}
+      NGINX_ENVSUBST_FILTER: DITTO_
+    ports:
+      - "${OPENEGIZ_BIND:-127.0.0.1}:${TYNYS_UI_PORT:-8095}:8095"
+    volumes:
+      - ../../team/tynys/ui/index.html:/usr/share/nginx/html/index.html:ro
+      - ../../team/tynys/ui/app.js:/usr/share/nginx/html/app.js:ro
+      - ../../team/tynys/ui/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+    depends_on:
+      ditto-nginx:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8095/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  grafana:
+    volumes:
+      - ../../team/tynys/grafana/tynys.json:/var/lib/grafana/example-dashboards/tynys.json:ro
