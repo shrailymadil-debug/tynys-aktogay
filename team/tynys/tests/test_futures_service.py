@@ -60,7 +60,8 @@ class ServiceTests(unittest.TestCase):
         try:
             jobs.submit({"id": "bad", "mode": "evaluate"}, {})
             jobs.future.result(timeout=2)
-            jobs.poll()
+            with self.assertLogs("futures", level="ERROR"):
+                jobs.poll()
             self.assertEqual(writes[-1]["status"], "error")
             self.assertEqual(writes[-1]["result_json"], "")
         finally:

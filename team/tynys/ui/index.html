@@ -87,7 +87,7 @@ button.on{background:#1d4a35;border-color:var(--accent)}
       <path id="flow-ren" d="M650,440 C700,380 800,330 892,330" stroke="var(--wind)" stroke-width="3" fill="none" stroke-dasharray="6 6"/>
       <text id="t-curt" x="660" y="400" class="lbl"></text>
     </svg>
-    <div class="legend"><span><i style="background:#4fd18b"></i>самосвал гружёный</span><span><i style="background:#9aa6b2"></i>порожний</span><span><i style="background:#5ec8e5"></i>на зарядке</span><span><i style="background:var(--soft)"></i>мягкая руда</span><span><i style="background:var(--hard)"></i>твёрдая руда</span></div>
+    <div class="legend"><span><i style="background:#4fd18b"></i>самосвал гружёный</span><span><i style="background:#9aa6b2"></i>порожний</span><span><i style="background:#5ec8e5"></i>на зарядке</span><span><i style="background:#e0b25a"></i>ждёт зарядки</span><span><i style="background:var(--soft)"></i>мягкая руда</span><span><i style="background:var(--hard)"></i>твёрдая руда</span></div>
   </div>
   <div class="card" style="margin-top:12px"><h2>Почему так · решение координатора</h2><div id="why">—</div><div id="src"></div></div>
   <div class="card" style="margin-top:12px"><h2>План на 24 часа</h2>
@@ -105,7 +105,8 @@ button.on{background:#1d4a35;border-color:var(--accent)}
     <p class="mute" style="font-size:12px;margin:6px 0 0" id="g-note"></p></div>
   <div class="card" style="margin-top:12px"><h2>Что если…</h2><div class="btns" id="btns"></div><div id="events" style="margin-top:8px"></div></div>
   <div class="card" style="margin-top:12px"><h2>Оценка гибкости</h2>
-    <div>Мгновенный потенциал: <span class="big" id="flex">—</span> МВт</div><div class="mute">Оценка запаса времени: <b id="flexh">—</b> ч. Требует проверки производства и восстановления.</div><a href="futures.html" style="color:#8ff0bd">Проверить обещание →</a></div>
+    <div>Мгновенный потенциал: <span class="big" id="flex">—</span> МВт</div><div class="mute">Оценка запаса времени: <b id="flexh">—</b> ч. Требует проверки производства и восстановления.</div><a href="futures.html" style="color:#8ff0bd">Проверить обещание →</a>
+    <p class="mute" style="font-size:12px;margin:8px 0 0" id="flexstat"></p></div>
   <div class="card" style="margin-top:12px"><h2>Сколько строить ВЭС и СЭС</h2>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       <label>ВЭС <select id="sz-w"></select> МВт</label><label>СЭС <select id="sz-p"></select> МВт</label></div>

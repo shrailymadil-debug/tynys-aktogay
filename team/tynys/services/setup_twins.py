@@ -49,7 +49,16 @@ def twins():
             t("substation", "Подстанция 220 кВ — связь с KEGOC", "substation", "energy", {"grid_mw": 0.0})]
     d = dict(out)
     d["energy"]["attributes"]["sizing"] = sizing()   # атрибут: поле не перезаписывает его
+    d["substation"]["attributes"]["flex_stats"] = csv_rows("flex.csv")   # предрасчёт flex_stats.py
     return d
+
+
+def csv_rows(name):
+    import csv, os
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", name)
+    if not os.path.exists(path):
+        return []
+    return [{k: (float(v) if k not in ("variant", "season") else v) for k, v in r.items()} for r in csv.DictReader(open(path))]
 
 
 def sizing():
