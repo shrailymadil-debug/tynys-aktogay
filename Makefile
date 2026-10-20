@@ -11,7 +11,9 @@ MINE_MARKER  := deploy/compose/.example-mine
 MINE_COMPOSE := examples/mine/compose.yml
 TYNYS_MARKER  := deploy/compose/.tynys
 TYNYS_COMPOSE := team/tynys/compose.yml
-COMPOSE := $(COMPOSE_BASE)$(if $(wildcard $(MINE_MARKER)), -f $(MINE_COMPOSE))$(if $(wildcard $(TYNYS_MARKER)), -f $(TYNYS_COMPOSE))
+# Include Tynys on its very first start too: applying it after a base-only up
+# would recreate the Ditto cluster immediately after bootstrap.
+COMPOSE := $(COMPOSE_BASE)$(if $(wildcard $(MINE_MARKER)), -f $(MINE_COMPOSE))$(if $(or $(wildcard $(TYNYS_MARKER)),$(filter tynys,$(MAKECMDGOALS))), -f $(TYNYS_COMPOSE))
 
 ## Start the whole platform with Docker Compose (first run: generates credentials)
 up:
@@ -53,7 +55,6 @@ example-mine-stop:
 
 ## Рудник «Тыныс» (Актогай): двойники, поле, координатор MPC, экран :8095, дашборд Grafana
 tynys: up
-	$(COMPOSE_BASE) -f $(TYNYS_COMPOSE) up -d --build --wait --wait-timeout 600
 	@touch $(TYNYS_MARKER)
 	@bash team/tynys/scripts/smoke.sh
 	@echo "Тыныс запущен: экран рудника -> http://localhost:$${TYNYS_UI_PORT:-8095}  ·  Grafana -> Dashboards -> Тыныс · Актогай"
