@@ -10,6 +10,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0b1118;color:var(--in
 #c{position:fixed;inset:0;width:100%;height:100%;display:block}
 .hud{position:fixed;z-index:5}
 .glass{background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:14px}
+.low-render .glass{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(12,20,30,.92)}
 .good{color:var(--good)}.bad{color:var(--bad)}.mute{color:var(--mute)}
 #top{top:14px;left:16px;right:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;pointer-events:none}
 #top>*{pointer-events:auto}

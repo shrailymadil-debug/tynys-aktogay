@@ -36,6 +36,7 @@ jobs:
           npm install --prefix /tmp/tynys-browser playwright@1.48.0
           node /tmp/tynys-browser/node_modules/playwright/cli.js install --with-deps chromium
           export NODE_PATH=/tmp/tynys-browser/node_modules
+          node --experimental-vm-modules team/tynys/scripts/check_scene_geometry.cjs
           node team/tynys/scripts/check_futures_ui.cjs
           node team/tynys/scripts/check_futures_tabs.cjs
       - name: 3D scene with software WebGL
@@ -43,6 +44,8 @@ jobs:
           TYNYS_3D_ARTIFACT_DIR: .scene-test-output
         run: |
           pip install playwright==1.48.0
+          free -m
+          docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}'
           python team/tynys/scripts/check3d.py http://127.0.0.1:8095/3d.html scene.png
       - name: Service logs
         if: failure()
