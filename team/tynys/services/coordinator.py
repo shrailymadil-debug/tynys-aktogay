@@ -57,7 +57,7 @@ def main():
     wait_ditto()
     bus = Bus("tynys-coordinator")
     ctls = {"copper": V2Tynys(explain=True),
-            "green": V2Tynys(explain=True, grind_modes=(150, 200, 250))}   # не молоть тоньше обычного
+            "green": V2Tynys(explain=True, grind_modes=(150, 200, 250), flat_price=True)}   # не тоньше обычного; минимум МВт·ч из сети
     cache = {}
     last_t = None
     while True:

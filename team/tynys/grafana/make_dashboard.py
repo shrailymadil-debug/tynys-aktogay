@@ -21,8 +21,8 @@ def panel(i, title, series, x, y, w=12, h=8, unit="none", kind="timeseries"):
 P = [
     panel(1, "Энергобаланс, МВт", [("energy", "load_mw", "нагрузка"), ("energy", "renew_mw", "ВИЭ"),
                                    ("energy", "grid_mw", "сеть"), ("energy", "curtail_mw", "сброс ВИЭ")], 0, 0),
-    panel(2, "CO₂ с начала прогона, т: V0 / V1 / V2", [("shadow-v0", "co2_t", "V0 как сейчас"), ("shadow-v1", "co2_t", "V1 правила"),
-                                                     ("site", "co2_t", "V2 Тыныс")], 12, 0),
+    panel(2, "CO₂ с учётом запасов, т: V0 / V1 / V2", [("shadow-v0", "co2_adj_t", "V0 как сейчас"), ("shadow-v1", "co2_adj_t", "V1 правила"),
+                                                     ("site", "co2_adj_t", "V2 Тыныс")], 12, 0),
     panel(3, "Медь с учётом склада, т", [("shadow-v0", "cu_adj_t", "V0"), ("shadow-v1", "cu_adj_t", "V1"), ("site", "cu_adj_t", "V2")], 0, 8),
     panel(4, "Склады руды, % заполнения", [("pile-soft", "fill_pct", "мягкая"), ("pile-hard", "fill_pct", "твёрдая")], 12, 8, unit="percent"),
     panel(5, "Помол: питание, т/ч", [("plant", "feed_soft_tph", "мягкая"), ("plant", "feed_hard_tph", "твёрдая")], 0, 16),

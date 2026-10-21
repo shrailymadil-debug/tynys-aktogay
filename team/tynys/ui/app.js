@@ -54,9 +54,9 @@ function renderComparisonContext() {
   const emissions = $('comparison-emissions');
   const delta = co0 !== null && co2 !== null ? co2 - co0 : null;
   emissions.dataset.direction = delta === null ? 'unknown' : delta > 0 ? 'higher' : delta < 0 ? 'lower' : 'equal';
-  emissions.textContent = delta === null ? 'Сравнение CO₂ ожидает данных обоих вариантов.'
-    : delta === 0 ? 'Накопленный CO₂ Тыныс и V0 совпадает в переданных данных.'
-      : `Накопленный CO₂ Тыныс на ${fmt(Math.abs(delta), 1)} т ${delta > 0 ? 'выше' : 'ниже'} V0 за показанный период.`;
+  emissions.textContent = delta === null ? 'Сравнение CO₂ из сети ожидает данных обоих вариантов.'
+    : delta === 0 ? 'Накопленный CO₂ из сети у Тыныс и V0 совпадает в переданных данных.'
+      : `Накопленный CO₂ из сети у Тыныс на ${fmt(Math.abs(delta), 1)} т ${delta > 0 ? 'выше' : 'ниже'} V0 за показанный период.`;
   for (const [id, goal] of [['g-copper', 'copper'], ['g-green', 'green']]) {
     $(id).className = selected === goal ? 'on' : '';
     $(id).setAttribute('aria-pressed', String(selected === goal));
@@ -154,7 +154,7 @@ function render() {
   $('flow-ren').setAttribute('stroke-width', 1 + (v('wind', 'power_mw', 0) + v('pv', 'power_mw', 0)) / 50);
   // KPI
   const cols = ['shadow-v0', 'shadow-v1', 'site'];
-  const rows = [['Медь, т', 'cu_t', 0], ['Медь с учётом склада, т', 'cu_adj_t', 0], ['Из сети, МВт·ч', 'grid_mwh', 0], ['CO₂, т', 'co2_t', 0], ['CO₂ на т меди', 'co2_per_t_cu', 2],
+  const rows = [['Медь, т', 'cu_t', 0], ['Медь с учётом склада, т', 'cu_adj_t', 0], ['Из сети, МВт·ч', 'grid_mwh', 0], ['CO₂ из сети, т', 'co2_t', 0], ['CO₂ с учётом запасов, т', 'co2_adj_t', 0], ['CO₂ на т меди (с учётом запасов)', 'co2_per_t_cu', 2],
     ['Сброс ВИЭ, МВт·ч', 'curtail_mwh', 0], ['Оплата сети, млн ₸', 'grid_cost_mkzt', 0]];
   const CU_MKZT = 9500 * 480 * 0.85 / 1e6;   // оплачиваемая медь, млн ₸/т (допущение, params.py)
   const margin = c => {
@@ -162,10 +162,14 @@ function render() {
     return copper !== null && cost !== null ? copper * CU_MKZT - cost : null;
   };
   const best = Math.max(...cols.map(margin).filter(x => x !== null));
+  // Older field services used the same intensity key for gross CO₂. Do not
+  // label that value as inventory-adjusted without the new companion metric.
+  const metric = (c, f) => f === 'co2_per_t_cu' && numeric(v(c, 'co2_adj_t', null)) === null
+    ? null : v(c, f, null);
   rows.push(['<b>Медь − энергия, млн ₸</b>', null, 0]);
   $('kt').innerHTML = rows.map(([lbl, f, k]) => f === null
     ? `<tr><td>${lbl}</td>${cols.map(c => `<td style="${margin(c) === best ? 'color:var(--v2);font-weight:700' : ''}">${fmt(margin(c))}</td>`).join('')}</tr>`
-    : `<tr><td>${lbl}</td>${cols.map(c => `<td>${fmt(v(c, f, null), k)}</td>`).join('')}</tr>`).join('');
+    : `<tr><td>${lbl}</td>${cols.map(c => `<td>${fmt(metric(c, f), k)}</td>`).join('')}</tr>`).join('');
   renderComparisonContext();
   $('flex').textContent = fmt(v('substation', 'flex_down_mw', null)); $('flexh').textContent = fmt(v('substation', 'flex_down_h', null), 1);
   const now = [['Нагрузка', fmt(v('energy', 'load_mw')) + ' МВт'], ['ВИЭ', fmt(v('energy', 'renew_mw')) + ' МВт'],
@@ -217,7 +221,8 @@ function animate(ts) {
     const n = `truck-${String(i + 1).padStart(2, '0')}`, r = trucksG.children[i], st = v(n, 'state', 'empty');
     let x, y;
     if (st === 'charging' || st === 'waiting') { const k = st === 'charging' ? slotC++ : 7 + (slotW++ % 7); x = 304 + (k % 7) * 19; y = st === 'charging' ? 474 : 496; }
-    else { const ph = (v(n, 'route_pos', 0) + (ts / 1000) * 0.02) % 1; const f = ph < 0.5 ? ph * 2 : 2 - ph * 2;
+    else { const ph = (i / 14 + ts / 1000 / 90) % 1;   // анимация: полный рейс за 90 с
+      const f = ph < 0.5 ? ph * 2 : 2 - ph * 2;
       const p = road.getPointAtLength(f * roadLen); x = p.x - 7; y = p.y - 4 + (ph < 0.5 ? -7 : 7); }
     r.setAttribute('x', x); r.setAttribute('y', y);
     r.setAttribute('fill', st === 'charging' ? '#5ec8e5' : st === 'waiting' ? '#ebcb88' : st === 'loaded' ? '#6ce0cc' : '#9aa6b2');
@@ -246,10 +251,15 @@ function drawSizing() {
   if (!base || !a || !b) return;
   const cs = [base, a, ...(x ? [x] : []), b, ...(g ? [g] : [])];
   const row = (lbl, f, k) => [lbl, ...cs.map(r => fmt(f(r), k))];
+  const adjustedIntensity = r => {
+    const co2 = numeric(r.co2_adj_kt), copper = numeric(r.cu_adj_t);
+    return co2 !== null && copper !== null && copper > 0 ? co2 * 1000 / copper : null;
+  };
   const rows = [['', 'Сегодня', 'ВИЭ', ...(x ? ['+ Тыныс, P80 150'] : []), '+ Тыныс: медь', ...(g ? ['+ Тыныс: CO₂'] : [])],
-    row('CO₂ в год, тыс. т', r => r.co2_kt, 0),
+    row('CO₂ из сети в год, тыс. т', r => r.co2_kt, 0),
+    row('CO₂ с учётом запасов*, тыс. т/год', r => r.co2_adj_kt, 0),
     row('Медь в год, тыс. т', r => r.cu_adj_t / 1000, 1),
-    row('CO₂ на т меди, т', r => r.co2_kt * 1000 / r.cu_adj_t, 2),
+    row('CO₂ на т меди с учётом запасов*, т', adjustedIntensity, 2),
     row('Доля ВИЭ, %', r => r.renew_share_pct, 0),
     row('Сброс ВИЭ, ГВт·ч', r => r.curtail_mwh / 1000, 0)];
   $('sizing').innerHTML = rows.map((r, i) => `<tr>${r.map(c => i ? `<td>${c}</td>` : `<th>${c}</th>`).join('')}</tr>`).join('');
