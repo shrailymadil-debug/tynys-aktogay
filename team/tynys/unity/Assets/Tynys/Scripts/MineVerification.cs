@@ -31,7 +31,7 @@ namespace Tynys
             var data=FindFirstObjectByType<MineData>();
             var world=FindFirstObjectByType<MineWorld>();
             var hud=FindFirstObjectByType<MineHUD>();
-            data.ResetDemo();data.Paused=true;
+            data.SetLive(false);data.ResetDemo();data.Paused=true;
             if(Debug.isDebugBuild)errors.Add("Expected release player without Development Build");
             if(Mathf.Abs(data.State.hour-9)>0.001f)errors.Add("Demo must start at 09:00");
             if(world.steam.Length!=2||world.truckHeadlights.Length!=28)errors.Add("Missing steam or headlights");

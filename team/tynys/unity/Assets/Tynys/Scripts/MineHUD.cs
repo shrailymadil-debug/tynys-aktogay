@@ -102,8 +102,7 @@ namespace Tynys
         {
             if (initialized) return;
             initialized = true;
-            font = Font.CreateDynamicFontFromOSFont(new[] { "Segoe UI", "Arial", "DejaVu Sans" }, 20);
-            if (font == null) font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            font = MinePlatform.UiFont;
             rounded = new Texture2D(24, 24, TextureFormat.RGBA32, false);
             rounded.name = "Tynys UI corners";
             rounded.hideFlags = HideFlags.HideAndDontSave;
@@ -295,7 +294,7 @@ namespace Tynys
             endpoint = GUI.TextField(new Rect(x + 20, connectY + 58, w - 40, 31), endpoint, field);
             GUI.backgroundColor = saved;
             if (Button(new Rect(x + 20, connectY + 98, w - 40, 32),
-                data.LiveMode ? "ОТКЛЮЧИТЬ LIVE" : "ПОДКЛЮЧИТЬ LIVE API", data.LiveMode ? raised : teal,
+                data.LiveMode ? "ВКЛЮЧИТЬ ДЕМО · ИЛЛЮСТРАЦИЯ" : "ВЕРНУТЬСЯ В LIVE", data.LiveMode ? raised : teal,
                 data.LiveMode ? ink : background))
             {
                 data.Endpoint = endpoint.Trim();
@@ -312,7 +311,7 @@ namespace Tynys
             {
                 Chip(new Rect(x, y, w, 28), "ДАННЫЕ ЕЩЁ НЕ ПОЛУЧЕНЫ", orange);
                 Label(x, y + 48, w, 104,
-                    "Показатели появятся после подключения к API проекта. Проверьте адрес ниже. Можно отключить LIVE и вернуться в демонстрацию.",
+                    "Ожидаем API проекта; подключение повторяется автоматически. Показатели пока не известны. Иллюстративное демо включается отдельно кнопкой ниже.",
                     small, true);
                 return;
             }

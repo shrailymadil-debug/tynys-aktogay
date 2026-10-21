@@ -26,8 +26,7 @@ namespace Tynys
             if(world==null||world.data==null||world.hud==null||!world.hud.Visible||world.viewCamera==null)return;
             if(style==null)
             {
-                var font=Font.CreateDynamicFontFromOSFont(new[]{"Segoe UI","Arial","DejaVu Sans"},18);
-                if(font==null)font=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                var font=MinePlatform.UiFont;
                 style=new GUIStyle(GUI.skin.label){font=font,fontSize=13,alignment=TextAnchor.MiddleCenter,fontStyle=FontStyle.Bold,richText=false,wordWrap=false};
                 style.normal.textColor=new Color(.9f,.98f,.97f);
             }

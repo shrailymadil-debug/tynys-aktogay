@@ -8,7 +8,61 @@ const $ = id => document.getElementById(id);
 const SVGNS = 'http://www.w3.org/2000/svg';
 let T = {};
 const v = (n, f, d = 0) => { try { return T[n].features[f].properties.value; } catch (e) { return d; } };
-const fmt = (x, k = 0) => (x == null || isNaN(x)) ? '—' : Number(x).toLocaleString('ru-RU', {maximumFractionDigits: k, minimumFractionDigits: k});
+const numeric = x => (typeof x === 'number' || (typeof x === 'string' && x.trim() !== '')) && Number.isFinite(Number(x)) ? Number(x) : null;
+const fmt = (x, k = 0) => numeric(x) === null ? '—' : Number(x).toLocaleString('ru-RU', {maximumFractionDigits: k, minimumFractionDigits: k});
+const GOALS = {copper: 'Больше меди', green: 'Меньше CO₂'};
+const goalNote = goal => goal === 'copper'
+  ? 'Приоритет ценности меди: разрешён более тонкий помол. Выпуск может вырасти вместе с энергопотреблением и CO₂ относительно V0.'
+  : goal === 'green'
+    ? 'Выбрана цель снижения CO₂. Результат зависит от доступных ВИЭ, выпуска и запасов; снижение относительно V0 в каждом периоде не гарантировано.'
+    : 'Выбранная цель не получена из Ditto; режим по умолчанию не подставляется.';
+
+function describeFlexStats(row) {
+  if (!row) return 'Статистика резерва не передана в Ditto. Оценка текущего часа показана выше.';
+  const value = key => { const n = numeric(row[key]); return n !== null && n >= 0 ? n : null; };
+  const median = (key, unit) => value(key) === null ? 'медиана не передана' : `медиана ${fmt(value(key), 1)} ${unit}`;
+  const interval = (prefix, unit) => {
+    const low = value(prefix + '_p10'), high = value(prefix + '_p90');
+    return low !== null && high !== null && low <= high
+      ? `p10–p90: ${fmt(low, 1)}–${fmt(high, 1)} ${unit}` : 'интервал p10–p90 не передан или некорректен';
+  };
+  const mean = (key, unit) => value(key) === null ? 'не передано' : `${fmt(value(key), 1)} ${unit}`;
+  return [
+    'Предрасчёт: 4 сезона × 14 суток на погоде 2024.',
+    `Мощность: ${median('mw_median', 'МВт')}; ${interval('mw', 'МВт')}.`,
+    `Длительность: ${median('h_median', 'ч')}; ${interval('h', 'ч')}.`,
+    `Среднее мощности: ${mean('mw_mean', 'МВт')}; среднее длительности: ${mean('h_mean', 'ч')}.`,
+    'Редкие длительные оценки до 48 ч повышают среднее. Медианы мощности и длительности рассчитаны отдельно и не задают проверенное сочетание МВт и часов. Это статистика мгновенных оценок модели, а не гарантия помощи сети.'
+  ].join('\n\n');
+}
+
+function renderComparisonContext() {
+  const selected = v('scenario', 'goal', null), decision = v('coordinator', 'goal', null);
+  const source = v('plant', 'decision_source', null);
+  const chosen = Object.hasOwn(GOALS, selected) ? `Выбрано: «${GOALS[selected]}».` : 'Выбранная цель не передана в Ditto.';
+  const last = source === 'fallback_v1' ? 'Последний час отработан по резервному правилу V1.'
+    : source === 'coordinator' && Object.hasOwn(GOALS, decision)
+      ? `Цель последнего решения координатора: «${GOALS[decision]}».`
+      : 'Цель последнего применённого решения не подтверждена.';
+  $('comparison-goal').textContent = chosen + ' ' + last;
+  const elapsed = numeric(v('site', 'elapsed_hours', null));
+  const time = v('site', 'sim_time', null);
+  $('comparison-period').textContent = elapsed !== null && elapsed >= 0
+    ? `Накоплено за ${fmt(elapsed)} завершённых модельных ч${typeof time === 'string' && time ? ' к ' + time : ''}.`
+    : 'Итоги с начала прогона; точная длительность накопления не передана.';
+  const co0 = numeric(v('shadow-v0', 'co2_t', null)), co2 = numeric(v('site', 'co2_t', null));
+  const emissions = $('comparison-emissions');
+  const delta = co0 !== null && co2 !== null ? co2 - co0 : null;
+  emissions.dataset.direction = delta === null ? 'unknown' : delta > 0 ? 'higher' : delta < 0 ? 'lower' : 'equal';
+  emissions.textContent = delta === null ? 'Сравнение CO₂ ожидает данных обоих вариантов.'
+    : delta === 0 ? 'Накопленный CO₂ Тыныс и V0 совпадает в переданных данных.'
+      : `Накопленный CO₂ Тыныс на ${fmt(Math.abs(delta), 1)} т ${delta > 0 ? 'выше' : 'ниже'} V0 за показанный период.`;
+  for (const [id, goal] of [['g-copper', 'copper'], ['g-green', 'green']]) {
+    $(id).className = selected === goal ? 'on' : '';
+    $(id).setAttribute('aria-pressed', String(selected === goal));
+  }
+  $('g-note').textContent = goalNote(selected);
+}
 
 async function api(method, path, body) {
   const r = await fetch('ditto/api/2/' + path, {method, headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
@@ -34,9 +88,14 @@ for (const [k, [title]] of Object.entries(EVENTS)) {
 
 // ---------- what-if через двойник scenario ----------
 async function writeScenario(events, goal) {
+  const retainedGoal = goal ?? v('scenario', 'goal', null);
+  if (!Object.hasOwn(GOALS, retainedGoal)) {
+    $('g-note').textContent = 'Изменение не отправлено: текущая цель ещё не получена. Дождитесь данных или выберите цель явно.';
+    return;
+  }
   const rev = (v('scenario', 'rev', 0) || 0) + 1;
   await api('PUT', `things/${NS}:scenario/features`, {events: {properties: {value: JSON.stringify(events)}},
-    rev: {properties: {value: rev}}, goal: {properties: {value: goal || v('scenario', 'goal', 'copper')}}});
+    rev: {properties: {value: rev}}, goal: {properties: {value: retainedGoal}}});
   await poll();
 }
 function curEvents() { try { return JSON.parse(v('scenario', 'events', '[]') || '[]'); } catch (e) { return []; } }
@@ -59,12 +118,12 @@ function render() {
   $('mode').className = 'mode ' + (mode === 'вдох' ? 'inhale' : 'exhale');
   $('whybox').className = 'panel why ' + (mode === 'вдох' ? '' : 'exhale');
   // главные показатели
-  const cu0 = v('shadow-v0', 'cu_adj_t'), cu2 = v('site', 'cu_adj_t');
-  $('k-co2').textContent = fmt(v('substation', 'co2_t_h'));
-  $('k-ren').textContent = fmt(v('energy', 'renew_share_pct')) + ' %';
-  $('k-cur').textContent = fmt(v('energy', 'curtail_mw'));
-  $('k-cu').textContent = cu0 > 0 ? (cu2 >= cu0 ? '+' : '') + fmt(100 * (cu2 - cu0) / cu0, 1) + ' %' : '—';
-  $('k-res').textContent = fmt(v('substation', 'flex_down_mw'));
+  const cu0 = numeric(v('shadow-v0', 'cu_adj_t', null)), cu2 = numeric(v('site', 'cu_adj_t', null));
+  $('k-co2').textContent = fmt(v('substation', 'co2_t_h', null));
+  $('k-ren').textContent = fmt(v('energy', 'renew_share_pct', null)) + ' %';
+  $('k-cur').textContent = fmt(v('energy', 'curtail_mw', null));
+  $('k-cu').textContent = cu0 > 0 && cu2 !== null ? (cu2 >= cu0 ? '+' : '') + fmt(100 * (cu2 - cu0) / cu0, 1) + ' %' : '—';
+  $('k-res').textContent = fmt(v('substation', 'flex_down_mw', null));
   $('why').textContent = v('coordinator', 'why', '—');
   $('src').textContent = v('plant', 'decision_source') === 'coordinator'
     ? `решение MPC за ${v('coordinator', 'solve_ms', 0)} мс · теневая цена энергии ${fmt(v('coordinator', 'shadow_kzt_kwh'), 1)} ₸/кВт·ч`
@@ -98,23 +157,22 @@ function render() {
   const rows = [['Медь, т', 'cu_t', 0], ['Медь с учётом склада, т', 'cu_adj_t', 0], ['Из сети, МВт·ч', 'grid_mwh', 0], ['CO₂, т', 'co2_t', 0], ['CO₂ на т меди', 'co2_per_t_cu', 2],
     ['Сброс ВИЭ, МВт·ч', 'curtail_mwh', 0], ['Оплата сети, млн ₸', 'grid_cost_mkzt', 0]];
   const CU_MKZT = 9500 * 480 * 0.85 / 1e6;   // оплачиваемая медь, млн ₸/т (допущение, params.py)
-  const margin = c => v(c, 'cu_adj_t') * CU_MKZT - v(c, 'grid_cost_mkzt');
-  const best = Math.max(...cols.map(margin));
+  const margin = c => {
+    const copper = numeric(v(c, 'cu_adj_t', null)), cost = numeric(v(c, 'grid_cost_mkzt', null));
+    return copper !== null && cost !== null ? copper * CU_MKZT - cost : null;
+  };
+  const best = Math.max(...cols.map(margin).filter(x => x !== null));
   rows.push(['<b>Медь − энергия, млн ₸</b>', null, 0]);
   $('kt').innerHTML = rows.map(([lbl, f, k]) => f === null
     ? `<tr><td>${lbl}</td>${cols.map(c => `<td style="${margin(c) === best ? 'color:var(--v2);font-weight:700' : ''}">${fmt(margin(c))}</td>`).join('')}</tr>`
-    : `<tr><td>${lbl}</td>${cols.map(c => `<td>${fmt(v(c, f), k)}</td>`).join('')}</tr>`).join('');
-  $('flex').textContent = fmt(v('substation', 'flex_down_mw')); $('flexh').textContent = fmt(v('substation', 'flex_down_h'), 1);
+    : `<tr><td>${lbl}</td>${cols.map(c => `<td>${fmt(v(c, f, null), k)}</td>`).join('')}</tr>`).join('');
+  renderComparisonContext();
+  $('flex').textContent = fmt(v('substation', 'flex_down_mw', null)); $('flexh').textContent = fmt(v('substation', 'flex_down_h', null), 1);
   const now = [['Нагрузка', fmt(v('energy', 'load_mw')) + ' МВт'], ['ВИЭ', fmt(v('energy', 'renew_mw')) + ' МВт'],
     ['Доля ВИЭ', fmt(v('energy', 'renew_share_pct')) + ' %'], ['Сеть', fmt(v('energy', 'grid_mw')) + ' МВт'],
     ['CO₂ сейчас', fmt(v('substation', 'co2_t_h')) + ' т/ч'], ['Переработка', fmt(v('plant', 'feed_tph')) + ' т/ч'],
     ['Твёрдость (оценка)', `${fmt(v('pile-soft', 'bwi_est'), 1)} / ${fmt(v('pile-hard', 'bwi_est'), 1)} кВт·ч/т`]];
   $('now').innerHTML = now.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
-  const goal = v('scenario', 'goal', 'copper');
-  $('g-copper').className = goal === 'copper' ? 'on' : ''; $('g-green').className = goal === 'green' ? 'on' : '';
-  $('g-note').textContent = goal === 'green'
-    ? 'Мелем не тоньше 150 мкм: энергия идёт на то, чтобы не сбрасывать ветер и солнце, а не на лишнюю медь.'
-    : 'Мелем тоньше, когда это окупается медью: больше меди, но и больше энергии.';
   // события
   const evs = curEvents();
   $('events').innerHTML = evs.length ? '' : '<span class="mute">Сценариев нет — обычная работа.</span>';
@@ -208,11 +266,12 @@ loadSizing();
 async function loadFlex() {
   try {
     const F = await api('GET', `things/${NS}:substation/attributes/flex_stats`) || [];
-    const y = F.find(r => r.season.startsWith('весь год')); if (!y) return;
-    $('flexstat').textContent = `За год на реальной погоде 2024 (предрасчёт flex_stats.py, 4 × 14 суток): медиана ${fmt(y.mw_median ?? y.mw_mean)} МВт ` +
-      `(p10–p90: ${fmt(y.mw_p10)}–${fmt(y.mw_p90)}) на ${fmt(y.h_median ?? y.h_mean, 1)} ч (p10–p90: ${fmt(y.h_p10, 1)}–${fmt(y.h_p90, 1)}). ` +
-      `Чаще всего длительность ограничивает накопитель (69 % часов), реже — заряд самосвалов (31 %).`;
-  } catch (e) { setTimeout(loadFlex, 5000); }
+    const y = Array.isArray(F) ? F.find(r => typeof r?.season === 'string' && r.season.startsWith('весь год')) : null;
+    $('flexstat').textContent = describeFlexStats(y);
+  } catch (e) {
+    $('flexstat').textContent = 'Статистика резерва недоступна: нет ответа от Ditto. Повторяем подключение…';
+    setTimeout(loadFlex, 5000);
+  }
 }
 loadFlex();
 poll(); setInterval(poll, 1000); requestAnimationFrame(animate);

@@ -569,7 +569,7 @@ namespace Tynys
                 UpdateTruckPose(i,tr??new TruckState{state="empty",routePos=(motionTime*.014f+i/14f)%1},animate,Time.deltaTime);
                 truckLoads[i].gameObject.SetActive(tr!=null&&tr.state=="loaded");
                 if(truckHeadlights!=null&&truckHeadlights.Length>i*2+1)
-                    for(int side=0;side<2;side++)truckHeadlights[i*2+side].enabled=tr!=null&&(tr.state=="loaded"||tr.state=="empty");
+                    for(int side=0;side<2;side++)truckHeadlights[i*2+side].enabled=MinePlatform.AllowTruckLights&&tr!=null&&(tr.state=="loaded"||tr.state=="empty");
             }
             float[] amounts={s.windMW,s.pvMW,s.gridMW,s.loadMW,s.bessAvailable?Mathf.Abs(s.bessMW):0,s.chargeMW};
             for(int i=0;i<energyFlows.Length;i++)
