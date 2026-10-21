@@ -42,6 +42,17 @@ body[data-view=now] .g.co2 b{color:var(--bad)}body[data-view=tynys] .g.ren b{col
 .lbl{color:#fff;font-size:12px;background:rgba(10,16,24,.72);border:1px solid rgba(140,180,220,.3);padding:3px 8px;border-radius:7px;white-space:nowrap;text-align:center;line-height:1.3;font-variant-numeric:tabular-nums}
 .lbl b{display:block;color:#a4f7cb}
 .lbl .bad{color:var(--bad)}
+.mini-bar{height:4px;margin-top:4px;background:#ffffff24;border-radius:3px;overflow:hidden;min-width:64px}.mini-bar>i{height:100%;display:block;background:#65d8a1;transition:width .35s}.mini-bar[data-warning=true]>i{background:#ff8a6b}
+.mini-bar[data-caution=true]>i{background:#f3bd64}
+.mini-bar[data-status=unavailable]{outline:1px solid #ff8a6b80;background:#ff8a6b66}.mini-bar[data-status=unavailable]>i{background:#ff8a6b}
+.lbl[data-object=plant]{max-width:225px;white-space:normal}
+.event-badge{display:block;color:#ffd09b;font-size:10px;margin-top:3px}.lbl.event-on{border-color:#ffae57;background:#382519e8}.lbl.selected{border-color:#83e7ff;box-shadow:0 0 0 2px #83e7ff66}
+#source-line{position:fixed;left:18px;top:139px;z-index:6;font-size:11px;color:#c1d1dc;text-shadow:0 1px 3px #000;max-width:620px}
+#scenario-banner{top:164px;left:16px;max-width:410px;padding:9px 12px;border-color:#d89a53;font-size:12px}
+#scenario-banner[hidden],#selection-panel[hidden]{display:none}.scenario-row{display:flex;align-items:center;gap:8px;margin:4px 0}.scenario-row span{flex:1}.scenario-cancel{background:none;border:1px solid #b98a50;color:#ffdaaa;border-radius:5px;padding:3px 7px;cursor:pointer}.scenario-cancel:disabled{opacity:.45;cursor:default}#scenario-note{color:#bac5ce;font-size:10px}
+#selection-panel{right:16px;top:310px;width:292px;max-height:calc(100vh - 430px);overflow:auto;padding:12px 14px;border-color:#65bdd4}#selection-panel h3{margin:0 30px 4px 0;font-size:15px}#selection-close{position:absolute;right:9px;top:8px;background:none;border:0;color:#aac6d8;font-size:22px;cursor:pointer}#selection-values{display:grid;grid-template-columns:1fr auto;gap:5px 12px;font-size:12px}#selection-values dt{color:#adc2d0}#selection-values dd{margin:0;text-align:right;max-width:160px;overflow-wrap:anywhere}#selection-source{font-size:10px;color:#a9bccb;margin:4px 0 8px}
+#lighting{right:16px;bottom:118px;display:flex;align-items:center;gap:8px;padding:7px 11px;font-size:11px}#light-hour{width:120px;accent-color:#71ccbc}#light-auto{border:1px solid #4e6c83;background:#162b3b;color:#c7dce8;border-radius:5px;padding:3px 6px;cursor:pointer}#light-auto.on{border-color:#65d8a1;color:#96e9bb}#light-value{min-width:99px;font-variant-numeric:tabular-nums;white-space:nowrap}
+#compass{position:fixed;right:21px;top:256px;width:40px;height:40px;z-index:5;border:1px solid #6c8b9e75;border-radius:50%;background:#0c1827c9;text-align:center;font-size:11px;pointer-events:none}#compass-arrow{display:block;transform-origin:50% 20px;color:#dbe8ec;line-height:16px;padding-top:2px}#compass-arrow:after{content:'▲';display:block;font-size:13px;color:#ffac82}
 /* заставка */
 #intro{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 40%,rgba(10,18,28,.55),rgba(5,9,14,.92));transition:opacity .9s;padding:16px;box-sizing:border-box}
 #intro.hide{opacity:0;pointer-events:none}
@@ -56,6 +67,7 @@ body[data-view=now] .g.co2 b{color:var(--bad)}body[data-view=tynys] .g.ren b{col
 #intro .btn{font-size:17px;padding:12px 20px}
 #intro .fine{color:var(--mute);font-size:12px;margin-top:14px}
 @media(max-width:900px){#kpi{display:none}#gauges{top:auto;bottom:150px}.g{min-width:0;padding:8px 10px}.g b{font-size:19px}#why{max-width:calc(100% - 32px);bottom:70px;font-size:13px}#caption{font-size:22px}#caption small{font-size:15px}.pr{grid-template-columns:1fr}#intro h1{font-size:30px}#brand small{display:none}}
+@media(max-width:900px){#top{display:grid;grid-template-columns:1fr auto;gap:6px;left:12px;right:12px}#brand{font-size:15px;padding:7px 10px}#seg button{font-size:11px;padding:6px 10px}#mode{grid-column:1/-1;font-size:11px;padding:7px 10px}#clock{grid-column:1/-1;padding:4px 8px;font-size:11px}#source-line{top:140px;left:14px;max-width:calc(100% - 28px);font-size:9px}#scenario-banner{top:205px;left:12px;max-width:calc(100% - 50px);max-height:155px;overflow:auto}#lighting{top:165px;bottom:auto;left:12px;right:12px;justify-content:space-between;gap:4px;padding:6px;font-size:9px}#light-hour{width:65px;min-width:40px}#light-value{min-width:82px}#light-auto{max-width:91px;font-size:9px}#compass{top:215px;right:13px}#selection-panel{top:375px;right:12px;max-height:220px;width:248px}#ctrl{max-width:calc(100% - 24px);right:12px;bottom:12px;gap:6px}#ctrl .btn{font-size:10px;padding:7px 8px}#why{left:12px;bottom:86px;max-width:calc(100% - 58px);max-height:58px;overflow:auto;font-size:11px}#gauges{left:12px;right:12px;bottom:164px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.g{min-width:0;padding:7px 8px}.g b{font-size:18px}.g span{display:block;font-size:9px}#caption{top:30%}.lbl{font-size:10px;padding:3px 5px}}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
 </head>
@@ -74,6 +86,11 @@ body[data-view=now] .g.co2 b{color:var(--bad)}body[data-view=tynys] .g.ren b{col
   <div class="glass g"><b id="g-cur">—</b><span>МВт ветра и солнца выбрасывается</span></div>
 </div>
 <div class="hud glass" id="kpi"><h3>С начала работы · та же погода и руда</h3><table><tbody id="kt"></tbody></table><div id="src"></div></div>
+<div id="source-line" aria-live="polite">Подключение к двойникам…</div>
+<div class="hud glass" id="scenario-banner" hidden><div id="scenario-list"></div><div id="scenario-note"></div></div>
+<aside class="hud glass" id="selection-panel" hidden aria-live="polite"><button id="selection-close" aria-label="Закрыть информацию">×</button><h3 id="selection-name"></h3><div id="selection-source"></div><dl id="selection-values"></dl></aside>
+<div class="hud glass" id="lighting"><label for="light-hour">Освещение</label><input id="light-hour" type="range" min="0" max="23.99" value="9" step="0.25"><output id="light-value" for="light-hour">09:00 · просмотр</output><button id="light-auto" title="Следовать модельному времени">По времени модели</button></div>
+<div id="compass" aria-label="Компас: север"><span id="compass-arrow">С</span></div>
 <div class="hud glass" id="why"><div id="whyt">—</div></div>
 <div class="hud" id="caption"></div>
 <div class="hud" id="dots"></div>
@@ -107,16 +124,228 @@ body[data-view=now] .g.co2 b{color:var(--bad)}body[data-view=tynys] .g.ren b{col
 import * as THREE from 'three';
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/renderers/CSS2DRenderer.js';
+import { mergeGeometries } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js';
+const { installSceneDetails, mergeStaticMeshes } = (() => {
+// Rendering-only details. Twin values and event state are never modified here.
+
+
+
+const clamp = (n, a = 0, b = 1) => Math.max(a, Math.min(b, n));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = n => typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString('ru-RU',{maximumFractionDigits:1}) : '—';
+const TITLES = {pit:'Карьер',plant:'Фабрика',flotation:'Флотация','pile-soft':'Склад мягкой руды','pile-hard':'Склад твёрдой руды',wind:'Ветровая станция',pv:'Солнечная станция',bess:'Накопитель',substation:'Подстанция','line-1':'Линия 1','line-2':'Линия 2'};
+const FIELDS = {soc:['Заряд','%'],power_mw:['Мощность','МВт'],capacity_mw:['Установлено','МВт'],grid_mw:['Из сети','МВт'],grid_cap_mw:['Предел сети','МВт'],feed_tph:['Подача','т/ч'],ore_tph:['Добыча','т/ч'],ore_plan_tph:['План добычи','т/ч'],load_pct:['Загрузка','%'],tonnes:['Руды на складе','т'],fill_pct:['Заполнение','%'],bwi_est:['Оценка твёрдости','кВт·ч/т'],bwi_true:['Твёрдость','кВт·ч/т'],available:['Доступен',''],running:['Работает',''],lock_h:['До перезапуска','ч'],hard_frac:['Доля твёрдой руды',''],cu_tph:['Медь','т/ч'],recovery:['Извлечение','%'],cf_pct:['Мощность / установленная','%'],energy_mwh:['Энергия','МВт·ч'],payload_t:['Груз звена','т'],state:['Состояние',''],feed_soft_tph:['Мягкая руда','т/ч'],feed_hard_tph:['Твёрдая руда','т/ч'],mill_mw:['Мельницы','МВт'],p80_um:['P80','мкм'],spilled_tph:['Переполнение','т/ч']};
+const STATES = {charging:'заряжается',waiting:'ожидает зарядки',loaded:'с грузом',empty:'порожний',digging:'добыча',idle:'остановлен'};
+const EVENT_NAMES = {lull:'Штиль',line_trip:'Авария линии 2',kegoc:'Ограничение KEGOC',hard_ore:'Твёрдая руда',plan_up:'План добычи +10 %',bess_fault:'Отказ накопителя'};
+
+function scenarioEvents(data) {
+  const raw = data.scenario?.events;
+  try { const events = Array.isArray(raw) ? raw : JSON.parse(raw || '[]');
+    const hour = Number(data.site?.sim_hour ?? 0);
+    return Array.isArray(events) ? events.filter(e => e && Number.isFinite(e.t0) && Number.isFinite(e.dur) && e.dur > 0 && e.t0 + e.dur > hour)
+      .map(e => ({...e,active:hour >= e.t0,remaining:Math.max(0,e.t0 + e.dur - hour),startsIn:Math.max(0,e.t0 - hour)})) : [];
+  } catch { return []; }
+}
+
+// Only immutable meshes are folded into world-space batches. Matching both the
+// material settings and attribute schema prevents loss of UVs, normals or colours.
+function mergeStaticMeshes(scene, dynamicRoots = []) {
+  const excluded = new Set(dynamicRoots.filter(Boolean)), buckets = new Map();
+  scene.updateMatrixWorld(true);
+  let before = 0;
+  scene.traverse(o => { if (o.isMesh) before++; });
+  scene.traverse(o => {
+    if (!o.isMesh || o.isInstancedMesh || Array.isArray(o.material) || o.userData.noMerge) return;
+    for (let p=o;p;p=p.parent) if(excluded.has(p)||p.userData.noMerge) return;
+    const m=o.material;
+    if(!m || m.transparent || !(m.isMeshStandardMaterial||m.isMeshBasicMaterial))return;
+    const attributes=Object.keys(o.geometry.attributes).sort().map(k=>`${k}:${o.geometry.attributes[k].itemSize}:${o.geometry.attributes[k].normalized}`).join('|');
+    const key=JSON.stringify([m.userData.batchKey,m.type,m.color?.getHex(),m.emissive?.getHex(),m.emissiveIntensity,m.roughness,m.metalness,m.side,m.vertexColors,m.flatShading,m.wireframe,m.opacity,m.depthWrite,m.depthTest,m.fog,m.map?.uuid,m.normalMap?.uuid,m.roughnessMap?.uuid,m.metalnessMap?.uuid,m.alphaMap?.uuid,m.envMap?.uuid,o.castShadow,o.receiveShadow,attributes]);
+    if(!buckets.has(key))buckets.set(key,[]);buckets.get(key).push(o);
+  });
+  let mergedMeshes=0,batches=0;
+  for(const items of buckets.values()) {
+    if(items.length<2)continue;
+    const geos=items.map(o=>{const g=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();g.applyMatrix4(o.matrixWorld);return g;});
+    const merged=mergeGeometries(geos,false);geos.forEach(g=>g.dispose());
+    if(!merged)continue;
+    merged.computeBoundingSphere();const m=new THREE.Mesh(merged,items[0].material);
+    m.name='static-batch';m.castShadow=items[0].castShadow;m.receiveShadow=items[0].receiveShadow;
+    scene.add(m);items.forEach(o=>o.removeFromParent());mergedMeshes+=items.length;batches++;
+  }
+  let after=0;scene.traverse(o=>{if(o.isMesh)after++;});
+  return {before,after,batches,mergedMeshes};
+}
+
+function installSceneDetails(ctx) {
+  const {scene,camera,renderer,label,mesh,M,road,terrainH,PLANT,PILES,CHARGE,BESS,SUB,WIND,PV,PIT,trucks,mills,turbines,piles,bessLights,chargers,windows,shovels,flows,getData,getSource,cancelEvent}=ctx;
+  const $=id=>document.getElementById(id);
+  const dynamicRoots=[...trucks.map(t=>t.g),...mills.flatMap(m=>[m.drum,m.lamp]),...turbines,...Object.values(piles),...bessLights,...chargers,...windows,...shovels];
+  let selected=null, events=[], bannerKey='', lastData={};
+  const targets=new Map(),proxies=[], bars=[];
+  const proxyMaterial=new THREE.MeshBasicMaterial({visible:false});
+  const outline=new THREE.Box3Helper(new THREE.Box3(),0x86e7ff);outline.visible=false;outline.material.depthTest=false;outline.renderOrder=10;scene.add(outline);
+  function target(id,title,center,size,follow=null) {
+    const proxy=new THREE.Mesh(new THREE.BoxGeometry(...size),proxyMaterial);proxy.position.set(...center);proxy.userData.noMerge=true;proxy.userData.objectId=id;scene.add(proxy);
+    targets.set(id,{id,title,proxy,follow,size});proxies.push(proxy);
+  }
+  target('pit','Карьер Актогай',[PIT.x,-36,PIT.z],[195,80,195]);
+  target('plant','Фабрика',[PLANT.x+10,15,PLANT.z],[67,30,72]);
+  target('flotation','Флотация',[PLANT.x+50,5,PLANT.z+2],[10,11,54]);
+  target('pile-soft',TITLES['pile-soft'],[PILES.x,10,PILES.z-20],[43,24,38]);
+  target('pile-hard',TITLES['pile-hard'],[PILES.x,10,PILES.z+20],[43,24,38]);
+  target('bess',TITLES.bess,[BESS.x+14,4,BESS.z+9],[39,9,37]);
+  target('substation',TITLES.substation,[SUB.x,9,SUB.z],[48,20,44]);
+  target('wind',TITLES.wind,[WIND.x+245,50,WIND.z-45],[535,145,165]);
+  target('pv',TITLES.pv,[PV.x+125,3,PV.z+50],[268,10,110]);
+  mills.forEach((m,i)=>target(`line-${i+1}`,TITLES[`line-${i+1}`],[PLANT.x-34,12,PLANT.z+(i?-14:14)*-1],[25,25,23]));
+  chargers.forEach((m,i)=>target(`charger-${i+1}`,`Зарядная станция ${i+1}`,[CHARGE.x-30+i*20,5,CHARGE.z-12],[16,12,16]));
+  trucks.forEach((t,i)=>target(`truck-${String(i+1).padStart(2,'0')}`,`Звено самосвалов ${String(i+1).padStart(2,'0')}`,[0,3,0],[12,7,8],t.g));
+
+  function makeBar(id,spanId,read,caption) {
+    const parent=$(spanId)?.closest('.lbl');if(!parent)return;
+    parent.dataset.object=id;parent.style.pointerEvents='auto';parent.style.cursor='pointer';
+    parent.addEventListener('click',e=>{e.stopPropagation();selectObject(id);});
+    const maximum=id.startsWith('line-')?125:100;
+    const bar=document.createElement('div');bar.className='mini-bar';bar.setAttribute('role','meter');bar.setAttribute('aria-label',caption);bar.setAttribute('aria-valuemin','0');bar.setAttribute('aria-valuemax',String(maximum));bar.innerHTML='<i></i>';parent.appendChild(bar);
+    const badge=document.createElement('span');badge.className='event-badge';badge.hidden=true;parent.appendChild(badge);
+    bars.push({id,parent,bar,fill:bar.firstChild,badge,read,caption,maximum});
+  }
+  for(let i=0;i<2;i++)label(`<b>Линия ${i+1}</b><span id="l-line${i+1}">—</span>`,PLANT.x-35,30,PLANT.z+(i?25:-25));
+  makeBar('pile-soft','l-ps',d=>d['pile-soft']?.fill_pct,'Заполнение склада мягкой руды');
+  makeBar('pile-hard','l-ph',d=>d['pile-hard']?.fill_pct,'Заполнение склада твёрдой руды');
+  makeBar('bess','l-bess',d=>d.bess?.soc,'Заряд накопителя');
+  makeBar('wind','l-wind',d=>d.wind?.cf_pct,'Мощность ветра к установленной');
+  makeBar('pv','l-pv',d=>d.pv?.capacity_mw?100*d.pv.power_mw/d.pv.capacity_mw:null,'Мощность солнца к установленной');
+  makeBar('substation','l-grid',d=>d.substation?.grid_cap_mw?100*d.substation.grid_mw/d.substation.grid_cap_mw:null,'Использование предела сети');
+  makeBar('line-1','l-line1',d=>d['line-1']?.load_pct,'Загрузка линии 1');
+  makeBar('line-2','l-line2',d=>d['line-2']?.load_pct,'Загрузка линии 2');
+  for(const [spanId,id]of[['l-pit','pit'],['l-pl','plant'],['l-fl','flotation'],['l-ch','charger-1']]) {
+    const el=$(spanId)?.closest('.lbl');if(el){el.dataset.object=id;el.style.pointerEvents='auto';el.style.cursor='pointer';el.onclick=()=>selectObject(id);}
+  }
+  const truckLabels=[];
+  trucks.forEach((t,i)=>{const id=`truck-${String(i+1).padStart(2,'0')}`;const el=label(`<b>Звено ${i+1}</b><span id="l-${id}">—</span>`,0,11,0,t.g);makeBar(id,`l-${id}`,d=>d[id]?.soc,'Заряд звена самосвалов');truckLabels.push({el,id,truck:t.g});});
+
+  const trackMaterial=M(0x665e52,{roughness:1});
+  function ribbon(offset,width,color) {
+    const pos=[],idx=[],count=240;
+    for(let i=0;i<=count;i++){const p=road.getPointAt(i/count),t=road.getTangentAt(i/count),n=new THREE.Vector3(-t.z,0,t.x).normalize();
+      for(const side of[-1,1])pos.push(p.x+n.x*(offset+side*width/2),p.y+0.43,p.z+n.z*(offset+side*width/2));
+      if(i<count)idx.push(2*i,2*i+1,2*i+2,2*i+1,2*i+3,2*i+2);}
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();mesh(g,color,0,0,0,scene,false);
+  }
+  for(const offset of[-3.1,-1.5,1.5,3.1])ribbon(offset,0.36,trackMaterial);
+  const stripe=M(0xd1c8ab,{roughness:1,side:THREE.DoubleSide});
+  for(let i=4;i<130;i+=3){const p=road.getPointAt(i/130),t=road.getTangentAt(i/130);const mark=mesh(new THREE.BoxGeometry(3,0.06,0.25),stripe,p.x,p.y+0.49,p.z,scene,false);mark.rotation.y=-Math.atan2(t.z,t.x);}
+  const gravelMat=M(0x857b68,{map:ctx.gravel,roughness:1});
+  for(const [x,z,w,d]of[[PILES.x,PILES.z,65,88],[PLANT.x+17,PLANT.z+15,130,132],[BESS.x+14,BESS.z+9,49,44],[CHARGE.x,CHARGE.z,94,42]])mesh(new THREE.BoxGeometry(w,0.12,d),gravelMat,x,0.08,z,scene,false);
+  // Conveyor trestles and sparse handrails, all eligible for batching.
+  const steel=M(0x8293a0,{metalness:.45,roughness:.6});
+  for(const b of ctx.belts)for(const f of[.15,.5,.85]){const p=b.a.clone().lerp(b.b,f);for(const dz of[-2,2])mesh(new THREE.BoxGeometry(.5,p.y,.5),steel,p.x,p.y/2,p.z+dz);mesh(new THREE.BoxGeometry(.5,.5,5),steel,p.x,p.y-.3,p.z);}
+  function fence(x,z,w,d) {
+    const points=[[-w/2,-d/2],[w/2,-d/2],[w/2,d/2],[-w/2,d/2],[-w/2,-d/2]];
+    for(let e=0;e<4;e++){const a=points[e],b=points[e+1],len=Math.hypot(b[0]-a[0],b[1]-a[1]);
+      for(let k=0;k<=Math.ceil(len/9);k++){const f=k/Math.ceil(len/9);mesh(new THREE.BoxGeometry(.35,3.3,.35),steel,x+a[0]+(b[0]-a[0])*f,1.65,z+a[1]+(b[1]-a[1])*f);}
+      for(const y of[1.1,2.6])mesh(new THREE.BoxGeometry(e%2?.18:len,.16,e%2?len:.18),steel,x+(a[0]+b[0])/2,y,z+(a[1]+b[1])/2);}
+  }
+  fence(SUB.x,SUB.z,55,50);fence(BESS.x+14,BESS.z+9,47,43);
+  function glowTexture(){const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d'),r=g.createRadialGradient(32,32,1,32,32,31);r.addColorStop(0,'rgba(255,255,255,1)');r.addColorStop(.18,'rgba(255,255,255,.8)');r.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=r;g.fillRect(0,0,64,64);return new THREE.CanvasTexture(c);}
+  const glowMap=glowTexture(),lightMat=new THREE.SpriteMaterial({map:glowMap,color:0xffedbe,transparent:true,depthWrite:false,opacity:0});
+  const headlights=[];
+  trucks.forEach(t=>{const s=new THREE.Sprite(lightMat.clone());s.position.set(5.8,3,0);s.scale.set(10,5,1);t.g.add(s);headlights.push(s);});
+  const lampMat=M(0xaeb8ba,{emissive:0xffd99b,emissiveIntensity:0}),lampSprites=[];
+  for(const[x,z]of[[-40,95],[55,95],[74,-68],[178,-65],[188,74],[217,95],[290,-29],[287,92]]){
+    mesh(new THREE.BoxGeometry(.55,17,.55),steel,x,8.5,z);mesh(new THREE.BoxGeometry(5,.4,.4),steel,x+2.2,17,z);mesh(new THREE.BoxGeometry(2.8,.5,1.3),lampMat,x+4,16.8,z);
+    const s=new THREE.Sprite(lightMat.clone());s.position.set(x+4,16.4,z);s.scale.set(12,12,1);scene.add(s);lampSprites.push(s);
+  }
+  // One inexpensive instanced blob-shadow draw, even when shadow maps are off.
+  const fixedShadows=[[PLANT.x+10,.21,PLANT.z,81,84],[PILES.x,.23,PILES.z-20,48,48],[PILES.x,.23,PILES.z+20,48,48],[BESS.x+14,.22,BESS.z+9,46,42],[CHARGE.x,.45,CHARGE.z,84,32],...turbines.map(t=>[t.position.x,.22+Math.max(0,terrainH(t.position.x,t.position.z)),t.position.z,28,14])];
+  const shadowMaterial=new THREE.MeshBasicMaterial({map:glowMap,color:0x141a22,transparent:true,opacity:.27,depthWrite:false,side:THREE.DoubleSide});
+  const shadowIM=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2),shadowMaterial,fixedShadows.length+trucks.length);scene.add(shadowIM);const shadowDummy=new THREE.Object3D();
+  function shadowAt(i,x,y,z,w,d,ry=0){shadowDummy.position.set(x,y,z);shadowDummy.scale.set(w,1,d);shadowDummy.rotation.set(0,ry,0);shadowDummy.updateMatrix();shadowIM.setMatrixAt(i,shadowDummy.matrix);}
+  fixedShadows.forEach((p,i)=>shadowAt(i,...p));
+  const hardHalo=mesh(new THREE.RingGeometry(20,22,40).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffa94b,transparent:true,opacity:.8,side:THREE.DoubleSide,depthWrite:false}),PILES.x,.3,PILES.z+20,scene,false);hardHalo.visible=false;hardHalo.userData.noMerge=true;
+  const gridBeacon=mesh(new THREE.SphereGeometry(2.2,10,8),M(0xffa34e,{emissive:0xff8b32,emissiveIntensity:0}),SUB.x,20,SUB.z,scene,false);gridBeacon.userData.noMerge=true;dynamicRoots.push(gridBeacon);
+  const steamMaterial=new THREE.SpriteMaterial({map:glowMap,color:0xd8e8f2,transparent:true,opacity:.13,depthWrite:false});
+  const steam= mills.map((m,i)=>{const s=new THREE.Sprite(steamMaterial.clone());s.position.set(PLANT.x-30,25,PLANT.z+(i?14:-14));s.scale.set(11,18,1);scene.add(s);return s;});
+
+  function refreshSelection() {
+    if(!selected)return;const entry=targets.get(selected),data=lastData[selected];
+    $('selection-name').textContent=entry.title;$('selection-source').textContent=`kz.tynys:${selected} · ${getSource()==='live'?'данные Ditto':getSource()==='stale'?'последний снимок · связь потеряна':'запись стенда'}${ctx.getView()==='now'?' · детали оборудования относятся к основному двойнику «Тыныс»':''}`;
+    const rows=Object.entries(data||{}).filter(([k])=>FIELDS[k]);
+    $('selection-values').innerHTML=rows.length?rows.map(([k,value])=>{const[name,unit]=FIELDS[k];const text=typeof value==='boolean'?(value?'да':'нет'):typeof value==='number'?fmt(value):STATES[value]||String(value);return`<dt>${esc(name)}</dt><dd>${esc(text)} ${esc(unit)}</dd>`;}).join(''):'<dt>Данные</dt><dd>В снимке отсутствуют</dd>';
+  }
+  function selectObject(id){if(!targets.has(id))return false;selected=id;$('selection-panel').hidden=false;outline.visible=true;refreshSelection();document.querySelectorAll('.lbl[data-object]').forEach(el=>el.classList.toggle('selected',el.dataset.object===id));return true;}
+  function clearSelection(){selected=null;outline.visible=false;$('selection-panel').hidden=true;document.querySelectorAll('.lbl.selected').forEach(el=>el.classList.remove('selected'));}
+  $('selection-close').onclick=clearSelection;
+  const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();let press=null;
+  renderer.domElement.addEventListener('pointerdown',e=>{press={x:e.clientX,y:e.clientY,button:e.button};});
+  renderer.domElement.addEventListener('pointerup',e=>{if(!press||press.button!==0||Math.hypot(e.clientX-press.x,e.clientY-press.y)>5)return;const rect=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);scene.updateMatrixWorld(true);raycaster.setFromCamera(pointer,camera);const hit=raycaster.intersectObjects(proxies,false)[0];if(hit)selectObject(hit.object.userData.objectId);else clearSelection();press=null;});
+  function update(data) {
+    lastData=data;events=scenarioEvents(data);const active=events.filter(e=>e.active),kinds=new Set(active.map(e=>e.kind));
+    const readable=getSource()==='live';const key=JSON.stringify([events,readable,getSource()]);
+    if(key!==bannerKey){bannerKey=key;$('scenario-banner').hidden=!events.length;$('scenario-list').replaceChildren();
+      for(const e of events){const row=document.createElement('div');row.className='scenario-row';row.dataset.kind=e.kind;const title=document.createElement('span');title.textContent=`${EVENT_NAMES[e.kind]||e.kind} · ${e.active?'ещё '+fmt(e.remaining)+' ч':'через '+fmt(e.startsIn)+' ч'}`;const b=document.createElement('button');b.className='scenario-cancel';b.dataset.id=String(e.id);b.textContent='отменить';b.disabled=!readable;b.onclick=async()=>{b.disabled=true;try{await cancelEvent(e.id);}catch(err){$('scenario-note').textContent='Не удалось отменить: '+err.message;b.disabled=getSource()!=='live';}};row.append(title,b);$('scenario-list').appendChild(row);}
+      $('scenario-note').textContent=readable?'Из сценария двойника · отмена изменяет сценарий стенда':getSource()==='stale'?'Связь потеряна. Снимок сохранён; отмена недоступна.':'События из записи. Отмена доступна на подключённом стенде.';
+    }
+    for(const b of bars){const raw=b.read(data),valid=typeof raw==='number'&&Number.isFinite(raw),value=valid?clamp(raw,0,b.maximum):0;b.fill.style.width=`${100*value/b.maximum}%`;if(valid)b.bar.setAttribute('aria-valuenow',String(value));else b.bar.removeAttribute('aria-valuenow');b.bar.setAttribute('aria-valuetext',valid?`${fmt(raw)} %`:'нет данных');
+      const unavailable=data[b.id]?.available===false,energyBar=b.id==='bess'||b.id.startsWith('truck-'),lowEnergy=energyBar&&value<20,highFill=b.id.startsWith('pile-')&&value>95;
+      const warning=unavailable||(valid&&(lowEnergy||highFill)),caution=!warning&&valid&&((energyBar&&value>=20&&value<40)||(!energyBar&&value>=85));
+      b.bar.dataset.warning=String(warning);b.bar.dataset.caution=String(caution);b.bar.dataset.status=unavailable?'unavailable':!valid?'unknown':warning?'warning':caution?'caution':'normal';
+      if(unavailable)b.bar.setAttribute('aria-valuetext',`${valid?fmt(raw)+' % · ':''}оборудование недоступно`);
+      const kind=({'wind':'lull','substation':'kegoc','line-2':'line_trip','bess':'bess_fault','pile-hard':'hard_ore'})[b.id],ev=active.find(e=>e.kind===kind);b.badge.hidden=!ev;b.badge.textContent=ev?`${EVENT_NAMES[ev.kind]} · ${fmt(ev.remaining)} ч`:'';b.parent.classList.toggle('event-on',!!ev);
+    }
+    for(let i=0;i<2;i++){const d=data[`line-${i+1}`];$(`l-line${i+1}`).textContent=d?`${fmt(d.feed_tph)} т/ч · ${d.available?'доступна':'авария'}`:'—';}
+    for(let i=0;i<trucks.length;i++){const id=`truck-${String(i+1).padStart(2,'0')}`;$(`l-${id}`).textContent=data[id]?`${fmt(data[id].soc)} %`:'—';}
+    hardHalo.visible=kinds.has('hard_ore');
+    hardHalo.scale.setScalar(Math.max(1,piles.hard.scale.x*1.15));
+    bessLights.forEach(l=>l.material.emissive.set(data.bess?.available===false?0xff3d31:0x4fd18b));
+    ctx.bessBodyMat.color.set(data.bess?.available===false?0xbc493f:0xeef1f3);
+    refreshSelection();
+  }
+  function tick(now,dayK) {
+    const kinds=new Set(events.filter(e=>e.active).map(e=>e.kind));
+    const gridLimited=kinds.has('kegoc');gridBeacon.material.emissiveIntensity=gridLimited?(Math.sin(now/160)>0?3:.15):0;gridBeacon.visible=gridLimited;
+    flows.grid.im.material.color.set(gridLimited?(Math.sin(now/220)>0?0xffa23d:0xb77a35):0x9a9a9a);
+    mills.forEach((m,i)=>{const unavailable=lastData[`line-${i+1}`]?.available===false;if(unavailable){m.lamp.material.color.set(0xff4036);m.lamp.material.emissive.set(0xff4036);m.lamp.material.emissiveIntensity=Math.sin(now/190)>0?3:.2;m.speed=0;}
+      steam[i].visible=!unavailable&&Number(lastData[`line-${i+1}`]?.feed_tph)>0;steam[i].position.y=25+((now/1500+i*.5)%1)*8;steam[i].material.opacity=.09*(1-((now/1500+i*.5)%1));});
+    const night=clamp((.55-dayK)/.55);lampMat.emissiveIntensity=night*2.5;lampSprites.forEach(s=>{s.visible=night>.02;s.material.opacity=night*.6;});
+    headlights.forEach((s,i)=>{s.visible=night>.02;s.material.opacity=night*.82;const t=trucks[i].g;shadowAt(fixedShadows.length+i,t.position.x,t.position.y+.12,t.position.z,12,8,t.rotation.y);});shadowIM.instanceMatrix.needsUpdate=true;
+    for(const t of targets.values())if(t.follow){t.proxy.position.copy(t.follow.position);t.proxy.position.y+=3;t.proxy.quaternion.copy(t.follow.quaternion);}
+    if(selected){const t=targets.get(selected);t.proxy.updateMatrixWorld(true);outline.box.setFromObject(t.proxy);outline.updateMatrixWorld(true);}
+    for(const t of truckLabels)t.el.style.visibility=selected===t.id||camera.position.distanceTo(t.truck.position)<230?'visible':'hidden';
+    for(const b of bars.filter(b=>b.id.startsWith('line-'))){const t=targets.get(b.id);b.parent.style.visibility=selected===b.id||camera.position.distanceTo(t.proxy.position)<260?'visible':'hidden';}
+    const angle=THREE.MathUtils.radToDeg(Math.atan2(camera.position.x-ctx.controls.target.x,camera.position.z-ctx.controls.target.z));$('compass-arrow').style.transform=`rotate(${-angle}deg)`;
+  }
+  // CSS2DRenderer owns transform; independent CSS translate separates nearby
+  // captions after projection without modifying world positions or picking.
+  function layoutLabels(){
+    const elements=[...document.querySelectorAll('.lbl')];for(const el of elements)el.style.translate='0px 0px';
+    const rects=elements.filter(el=>el.style.visibility!=='hidden'&&el.style.display!=='none').map(el=>({el,r:el.getBoundingClientRect()}))
+      .filter(({r})=>r.width&&r.height&&r.right>0&&r.left<innerWidth&&r.bottom>0&&r.top<innerHeight)
+      .sort((a,b)=>(a.el.dataset.object===selected?-1:b.el.dataset.object===selected?1:a.r.top-b.r.top));
+    const placed=[],offsets=[[0,0],[0,-18],[0,18],[-24,0],[24,0],[0,-36],[0,36],[-42,-18],[42,-18],[-42,18],[42,18],[0,-58],[0,58]];
+    for(const {el,r}of rects){let best=[0,0],least=Infinity;for(const [dx,dy]of offsets){const x=r.left+dx,y=r.top+dy;let overlap=0;
+        for(const p of placed)overlap+=Math.max(0,Math.min(x+r.width+4,p.right)-Math.max(x-4,p.left))*Math.max(0,Math.min(y+r.height+4,p.bottom)-Math.max(y-4,p.top));
+        if(x<3||y<3||x+r.width>innerWidth-3||y+r.height>innerHeight-3)overlap+=100000;
+        if(overlap<least){least=overlap;best=[dx,dy];}if(overlap===0)break;}
+      el.style.translate=`${best[0]}px ${best[1]}px`;placed.push({left:r.left+best[0],right:r.right+best[0],top:r.top+best[1],bottom:r.bottom+best[1]});}
+  }
+  return {update,tick,layoutLabels,selectObject,clearSelection,dynamicRoots,targets,get selected(){return selected;},get events(){return events;},get headlights(){return headlights;},get visuals(){return{hardOreHighlighted:hardHalo.visible,gridLimited:gridBeacon.visible,capMw:lastData.substation?.grid_cap_mw,lineSteam:steam.map(s=>s.visible)};}};
+}
+
+return { installSceneDetails, mergeStaticMeshes };
+})();
 
 const NS = 'kz.tynys';
 const NAMES = ['site', 'pit', 'plant', 'energy', 'coordinator', 'scenario', 'shadow-v0', 'shadow-v1', 'pile-soft', 'pile-hard', 'line-1', 'line-2',
-  'flotation', 'wind', 'pv', 'bess', 'substation', ...Array.from({ length: 14 }, (_, i) => `truck-${String(i + 1).padStart(2, '0')}`)];
+  'flotation', 'wind', 'pv', 'bess', 'substation', ...Array.from({ length: 4 }, (_, i) => `charger-${i+1}`), ...Array.from({ length: 14 }, (_, i) => `truck-${String(i + 1).padStart(2, '0')}`)];
 const $ = id => document.getElementById(id);
 const fmt = (x, k = 0) => (x == null || isNaN(x)) ? '—' : Number(x).toLocaleString('ru-RU', { maximumFractionDigits: k, minimumFractionDigits: k });
 
 // ---------- источник данных ----------
 let D = {};
-let source = 'live';
+let source = 'connecting', lastLiveAt = null;
 let view = 'tynys';         // 'now' — как сейчас (V0), 'tynys' — с координатором (V2)
 const v = (n, f, d = 0) => { const x = D[n] && D[n][f]; return x ?? d; };
 async function pollLive() {
@@ -124,15 +353,23 @@ async function pollLive() {
   if (!r.ok) throw new Error(r.status);
   const data = await r.json(); if (!Array.isArray(data) || !data.length) throw new Error('empty');
   const o = {}; for (const t of data) { const f = {}; for (const [k, x] of Object.entries(t.features || {})) f[k] = x.properties && x.properties.value; o[t.thingId.split(':')[1]] = f; }
-  D = o;
+  if(!o.site)throw new Error('В ответе нет двойника site');
+  D = o; source = 'live'; lastLiveAt = Date.now(); sourceLabel();
 }
 let TRACE = null, tStart = 0;
 async function loadTrace() { if (window.TYNYS_TRACE) return window.TYNYS_TRACE; const r = await fetch('trace.json'); return r.json(); }
 function pollTrace() { const k = ((performance.now() - tStart) / 1000 / 4.0) % TRACE.length; D = TRACE[Math.floor(k)]; }
 async function start() {
-  try { if (window.TYNYS_TRACE) throw 0; await pollLive(); setInterval(() => pollLive().catch(() => {}), 1000); }
-  catch (e) { source = 'replay'; TRACE = await loadTrace(); tStart = performance.now(); pollTrace(); setInterval(pollTrace, 250); }
-  $('src').textContent = source === 'live' ? '● живые данные двойников OpenEgiz' : '● запись 96 ч работы стенда OpenEgiz';
+  try { if (window.TYNYS_TRACE) throw 0; await pollLive(); setInterval(() => pollLive().catch(() => {source='stale';sourceLabel();}), 1500); }
+  catch (e) { try { TRACE = await loadTrace(); if(!Array.isArray(TRACE)||!TRACE.length)throw new Error('Нет записи');source='replay';tStart=performance.now();pollTrace();setInterval(pollTrace,250); }
+    catch {source='unavailable';} sourceLabel(); }
+}
+function sourceLabel(){const text=source==='live'?'● живые двойники OpenEgiz':source==='replay'?'● запись стенда · не живые данные':source==='stale'?`● связь потеряна · снимок ${new Date(lastLiveAt).toLocaleTimeString('ru-RU')}`:source==='unavailable'?'● данные недоступны':'подключение…';$('src').textContent=text;$('source-line').textContent=text+' · движение транспорта схематическое';}
+async function cancelScenarioEvent(id){
+  if(source!=='live')throw new Error('Отмена доступна только при связи с Ditto');
+  await pollLive();let events;try{const raw=v('scenario','events','[]');events=Array.isArray(raw)?raw:JSON.parse(raw);}catch{throw new Error('Некорректный сценарий');}
+  const body={events:{properties:{value:JSON.stringify(events.filter(e=>String(e.id)!==String(id)))}},rev:{properties:{value:Number(v('scenario','rev',0))+1}},goal:{properties:{value:v('scenario','goal','copper')}}};
+  const r=await fetch(`ditto/api/2/things/${NS}:scenario/features`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error(`Ditto: ${r.status}`);await pollLive();hud();
 }
 start();
 
@@ -152,7 +389,7 @@ const SOFT_GL = (() => { try { const g = document.createElement('canvas').getCon
   return /swiftshader|llvmpipe|software|softpipe/i.test(r); } catch (e) { return false; } })();
 const LOW = Q.get('q') === 'low' || (Q.get('q') !== 'high' && (SOFT_GL || /Mobi|Android|iPhone/i.test(navigator.userAgent)));
 const renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: !LOW, powerPreference: 'high-performance' });
-renderer.setPixelRatio(SOFT_GL && Q.get('q') !== 'high' ? 0.6 : Math.min(devicePixelRatio, LOW ? 1 : 2));
+renderer.setPixelRatio(LOW ? 0.9 : Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = !LOW; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
 const labels = new CSS2DRenderer();
@@ -169,11 +406,12 @@ controls.target.copy(HOME.tgt); controls.enableDamping = true; controls.maxPolar
 controls.minDistance = 30; controls.maxDistance = 2200;
 
 const hemi = new THREE.HemisphereLight(0xcfe3ff, 0x8a7458, 0.9); scene.add(hemi);
+const nightAmbient=new THREE.AmbientLight(0x88a8d4,0);scene.add(nightAmbient);
 const sun = new THREE.DirectionalLight(0xfff1d6, 2.6);
 sun.castShadow = true; sun.shadow.mapSize.set(LOW ? 1024 : 4096, LOW ? 1024 : 4096); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.8;
 Object.assign(sun.shadow.camera, { left: -480, right: 480, top: 480, bottom: -480, near: 10, far: 2500 });
 scene.add(sun, sun.target);
-function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); labels.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); labels.setSize(w, h); camera.aspect = w / h;camera.fov=THREE.MathUtils.radToDeg(2*Math.atan(Math.tan(THREE.MathUtils.degToRad(42)/2)/Math.min(1,w/h)));camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 
 // ---------- процедурные текстуры ----------
@@ -200,7 +438,7 @@ function mesh(geo, mat, x = 0, y = 0, z = 0, parent = scene, shadow = true) {
 }
 function label(html, x, y, z, parent = scene) {
   const d = document.createElement('div'); d.className = 'lbl'; d.innerHTML = html;
-  const o = new CSS2DObject(d); o.position.set(x, y, z); parent.add(o); return d;
+  const o = new CSS2DObject(d); o.position.set(x, y, z); parent.add(o); labels.domElement.appendChild(d); return d;
 }
 function setInst(im, i, x, y, z, sx = 1, sy = 1, sz = 1, rx = 0, ry = 0) { const o = setInst.o || (setInst.o = new THREE.Object3D()); o.position.set(x, y, z); o.rotation.set(rx, ry, 0); o.scale.set(sx, sy, sz); o.updateMatrix(); im.setMatrixAt(i, o.matrix); }
 
@@ -326,7 +564,8 @@ for (let i = 0; i < 14; i++) {
   mesh(new THREE.BoxGeometry(1.6, 2.6, 4.6), M(0x2f6fb0, { metalness: 0.4 }), 4.6, 3.1, -0.6, g);
   const load = mesh(new THREE.SphereGeometry(3, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), oreMat.hard, -1.2, 4.6, 0, g); load.scale.set(1.2, 0.75, 0.9);
   for (const [x, z] of [[3.6, 2.5], [3.6, -2.5], [-2.8, 2.5], [-2.8, -2.5], [-2.8, 3.6], [-2.8, -3.6]]) mesh(new THREE.CylinderGeometry(1.6, 1.6, 1.2, 16).rotateX(Math.PI / 2), dark, x, 1.6, z, g);
-  const glow = new THREE.PointLight(0x4cc3ff, 0, 24); glow.position.y = 9; g.add(glow);
+  // Charging is indicated by emissive panels; avoid fourteen dynamic point lights.
+  const glow = new THREE.Object3D(); glow.intensity=0; glow.position.y = 9; g.add(glow);
   g.scale.setScalar(0.8);
   trucks.push({ g, load, glow, phase: i / 14 });
 }
@@ -398,16 +637,17 @@ const PV = new THREE.Vector3(60, 0, 180);
 const panelMat = new THREE.MeshStandardMaterial({ color: 0x1b2f52, metalness: 0.85, roughness: 0.18, emissive: 0x1e5aa8, emissiveIntensity: 0 });
 const panels = new THREE.InstancedMesh(new THREE.BoxGeometry(12, 0.35, 5), panelMat, 240);
 const legs = new THREE.InstancedMesh(new THREE.BoxGeometry(0.4, 3, 0.4), M(0x9aa3ab, { metalness: 0.6 }), 240);
-{ let k = 0; for (let r = 0; r < 12; r++) for (let c = 0; c < 20; c++) { setInst(panels, k, PV.x + c * 13, 3, PV.z + r * 9, 1, 1, 1, -0.8); setInst(legs, k, PV.x + c * 13, 1.5, PV.z + r * 9); k++; }
+{ let k = 0; for (let r = 0; r < 12; r++) for (let c = 0; c < 20; c++) { setInst(panels, k, PV.x + c * 13, 3, PV.z + r * 9, 1, 1, 1, 0.48); setInst(legs, k, PV.x + c * 13, 1.5, PV.z + r * 9); k++; }
   panels.castShadow = !LOW; panels.receiveShadow = true; scene.add(panels, legs); }
 label('<b>СЭС 250 МВт</b><span id="l-pv">—</span>', PV.x + 125, 18, PV.z + 50);
 
 // ---------- накопитель, подстанция ----------
 const BESS = new THREE.Vector3(230, 0, 60);
 const bessLights = [];
+const bessBodyMat=M(0xeef1f3,{metalness:0.2});bessBodyMat.userData.batchKey='bess-enclosures';
 for (let i = 0; i < 8; i++) {
   const x = BESS.x + (i % 4) * 9, z = BESS.z + Math.floor(i / 4) * 18;
-  mesh(new THREE.BoxGeometry(7, 7, 15), M(0xeef1f3, { metalness: 0.2 }), x, 3.5, z);
+  mesh(new THREE.BoxGeometry(7, 7, 15), bessBodyMat, x, 3.5, z);
   bessLights.push(mesh(new THREE.BoxGeometry(0.3, 5, 11), M(0x111111, { emissive: 0x4fd18b, emissiveIntensity: 1.2 }), x + 3.6, 3.5, z));
 }
 label('<b>Накопитель 60 МВт</b><span id="l-bess">—</span>', BESS.x + 14, 18, BESS.z + 9);
@@ -481,6 +721,9 @@ function updFlow(f, dt) {
   f.im.instanceMatrix.needsUpdate = true;
 }
 
+const details = installSceneDetails({scene,camera,controls,renderer,label,mesh,M,road,terrainH,gravel,PLANT,PILES,CHARGE,BESS,SUB,WIND,PV,PIT,trucks,mills,turbines,piles,bessLights,bessBodyMat,chargers,windows,shovels,flows,belts,getData:()=>D,getSource:()=>source,getView:()=>view,cancelEvent:cancelScenarioEvent});
+const mergeStats = mergeStaticMeshes(scene,details.dynamicRoots);
+
 // ---------- HUD ----------
 const set = (id, h) => { const e = document.getElementById(id); if (e) e.innerHTML = h; };
 function hud() {
@@ -491,16 +734,19 @@ function hud() {
   $('clock').textContent = v('site', 'sim_time', '');
   $('whyt').innerHTML = view === 'now'
     ? `<b class="bad">Проблема.</b> Рудник работает «ровно» и не слушает ветер и солнце: из угольной сети ${fmt(e.grid)} МВт${e.curtail > 1 ? `, а <b class="bad">${fmt(e.curtail)} МВт ветра и солнца сейчас выбрасывается</b>` : ''}. Твёрдая руда мелется в любой час.`
-    : `<b class="good">Почему так.</b> ${v('coordinator', 'why', '—')}`;
+    : '<b class="good">Почему так.</b> ';
+  if(view!=='now')$('whyt').appendChild(document.createTextNode(v('coordinator','why','—')));
   set('l-pit', `${fmt(v('pit', 'ore_tph'))} т/ч · твёрдой ${fmt(100 * v('pit', 'hard_frac'))} %`);
   set('l-ps', `${fmt(v('pile-soft', 'tonnes') / 1000)} тыс. т · ${fmt(v('pile-soft', 'fill_pct'))} %`);
   set('l-ph', `${fmt(v('pile-hard', 'tonnes') / 1000)} тыс. т · ${fmt(v('pile-hard', 'fill_pct'))} %`);
-  set('l-pl', view === 'now' ? '6 660 т/ч · смесь · P80 150 мкм' : `твёрдой ${fmt(v('plant', 'feed_hard_tph'))} · мягкой ${fmt(v('plant', 'feed_soft_tph'))} т/ч · P80 ${fmt(v('plant', 'p80_um'))} мкм`);
+  set('l-pl', `${view==='now'?'основной двойник · ':''}твёрдой ${fmt(v('plant', 'feed_hard_tph'))} · мягкой ${fmt(v('plant', 'feed_soft_tph'))} т/ч · P80 ${fmt(v('plant', 'p80_um'))} мкм`);
   set('l-fl', `${fmt(v('flotation', 'cu_tph'), 1)} т меди/ч`);
   set('l-wind', `${fmt(v('wind', 'power_mw'))} МВт${e.curtail > 1 ? ` · <span class="bad">сброс ${fmt(e.curtail)}</span>` : ''}`);
   set('l-pv', `${fmt(v('pv', 'power_mw'))} МВт`);
   set('l-bess', view === 'now' ? 'не управляется' : v('bess', 'available', true) ? `заряд ${fmt(v('bess', 'soc'))} %` : 'ОТКАЗ');
-  set('l-grid', `из сети ${fmt(e.grid)} МВт`);
+  const gridCap=v('substation','grid_cap_mw',null),gridNominal=v('substation','grid_nominal_mw',null);
+  set('l-grid', gridNominal===null ? `${fmt(e.grid)} / ${fmt(gridCap)} МВт · предел`
+    : `Предел ${fmt(gridCap)} / ${fmt(gridNominal)} МВт · из сети ${fmt(e.grid)}`);
   set('l-coal', `<span class="bad">${fmt(e.co2)} т CO₂ в час</span> — из‑за рудника`);
   set('l-ch', view === 'now' ? 'по графику смен' : `${fmt(e.charge)} МВт`);
   const a = { cu: v('shadow-v0', 'cu_adj_t'), co2: v('shadow-v0', 'co2_t'), curt: v('shadow-v0', 'curtail_mwh') };
@@ -512,36 +758,40 @@ function hud() {
     <tr><td>CO₂, т</td><td>${fmt(a.co2)}</td><td>${fmt(b.co2)}</td></tr>`;
   set('g-co2', fmt(e.co2)); set('g-ren', fmt(100 * e.used / Math.max(1, e.used + e.grid))); set('g-cur', fmt(e.curtail));
   flows.grid.mw = e.grid; flows.wind.mw = Math.max(0, v('wind', 'power_mw') - e.curtail * 0.7); flows.pv.mw = Math.max(0, v('pv', 'power_mw') - e.curtail * 0.3);
-  flows.plant.mw = v('plant', 'mill_mw'); flows.charge.mw = view === 'now' ? 22 : e.charge * 3;
+  flows.plant.mw = v('plant', 'mill_mw'); flows.charge.mw = e.charge;
   for (const [dd, n] of [['soft', 'pile-soft'], ['hard', 'pile-hard']]) { const f = 0.35 + 0.9 * v(n, 'fill_pct', 50) / 100; piles[dd].scale.set(f, f, f); piles[dd].position.y = 7.5 * f; }
-  belts[0].rate = view === 'now' ? 0.8 : v('plant', 'feed_soft_tph') / 4000; belts[1].rate = view === 'now' ? 0.8 : v('plant', 'feed_hard_tph') / 4000;
+  belts[0].rate = v('plant', 'feed_soft_tph') / 4000; belts[1].rate = v('plant', 'feed_hard_tph') / 4000;
   for (let l = 0; l < 2; l++) {
     const n = `line-${l + 1}`, ok = v(n, 'available', true), q = v(n, 'feed_tph', 3330);
-    mills[l].speed = q / 3330; const c = !ok ? 0xe0675a : q > 0 ? 0x4fd18b : 0x888888; mills[l].lamp.material.color.set(c); mills[l].lamp.material.emissive.set(c);
+    mills[l].speed = ok ? q / 3330 : 0; const c = !ok ? 0xe0675a : q > 0 ? 0x4fd18b : 0x888888; mills[l].lamp.material.color.set(c); mills[l].lamp.material.emissive.set(c);mills[l].lamp.material.emissiveIntensity=2;
   }
   panelMat.emissiveIntensity = Math.min(1, v('pv', 'power_mw') / 250) * 0.45;
-  const soc = view === 'now' ? 0.5 : v('bess', 'soc', 50) / 100; bessLights.forEach(x => { x.scale.y = Math.max(0.05, soc); });
-  const nch = view === 'now' ? 1 : Math.round(e.charge / 18); chargers.forEach((c, i) => c.material.emissiveIntensity = i < nch ? 2.5 : 0);
+  const soc = v('bess', 'soc', 0) / 100; bessLights.forEach(x => { x.scale.y = Math.max(0.05, soc); });
+  const nch = Math.round(v('energy','charge_mw') / 18); chargers.forEach((c, i) => c.material.emissiveIntensity = i < nch ? 2.5 : 0);
+  details.update(D);
 }
 setInterval(hud, 400);
 
 // ---------- время суток ----------
-let dayK = 1;
-function skyUpd() {
-  const s = String(v('site', 'sim_time', '2026-04-15 12:00')), q = Q.get('h');
-  const h = q !== null ? +q : +(s.slice(11, 13) || 12);
+let dayK = 1, lightingOverride = Q.has('h') && Number.isFinite(Number(Q.get('h'))) ? THREE.MathUtils.clamp(Number(Q.get('h')),0,23.99) : 9, lightingHour=9;
+function setLightingHour(hour){lightingOverride=hour===null?null:THREE.MathUtils.clamp(Number(hour),0,23.99);if(lightingOverride!==null&&!Number.isFinite(lightingOverride))lightingOverride=null;skyUpd(true);}
+$('light-hour').addEventListener('input',e=>setLightingHour(Number(e.target.value)));$('light-auto').onclick=()=>setLightingHour(null);
+function skyUpd(immediate=false) {
+  const s = String(v('site', 'sim_time', '2026-04-15 12:00'));
+  const h = lightingOverride ?? (Number(s.slice(11,13)) + Number(s.slice(14,16)||0)/60);lightingHour=Number.isFinite(h)?h:12;
+  $('light-hour').value=String(lightingHour);$('light-value').textContent=`${String(Math.floor(lightingHour)).padStart(2,'0')}:${String(Math.floor(lightingHour%1*60)).padStart(2,'0')} · ${lightingOverride===null?'модель':'просмотр'}`;$('light-auto').classList.toggle('on',lightingOverride===null);$('light-hour').title='Меняет только освещение. Состояние двойников и модельное время не меняются.';
   const a = (h + 0.5 - 6) / 12 * Math.PI, el = Math.sin(a);
-  const day = THREE.MathUtils.clamp(el * 1.8 + 0.2, 0, 1); dayK += (day - dayK) * 0.03;
-  const dir = new THREE.Vector3(Math.cos(a) * 0.85, Math.max(0.06, el), 0.5).normalize();
+  const day = THREE.MathUtils.clamp(el * 1.8 + 0.2, 0, 1); dayK = immediate ? day : dayK + (day - dayK) * 0.03;
+  const dir = new THREE.Vector3(Math.cos(a) * 0.85, Math.max(0.06, el), 0.5).normalize().lerp(new THREE.Vector3(-.45,.8,.35).normalize(),1-dayK).normalize();
   sun.position.copy(dir).multiplyScalar(1200);
-  sun.intensity = 0.2 + 2.7 * dayK; hemi.intensity = 0.3 + 0.7 * dayK;
-  sun.color.setHSL(0.09, 0.7 * (1 - dayK) + 0.15, 0.75 + 0.15 * dayK);
+  sun.intensity = 0.85 + 2.05 * dayK; hemi.intensity = 0.6 + 0.6 * dayK;nightAmbient.intensity=.18*(1-dayK);
+  sun.color.lerpColors(new THREE.Color(0x9bbcf0),new THREE.Color(0xffefd6),dayK);hemi.color.lerpColors(new THREE.Color(0x719fcf),new THREE.Color(0xcfe3ff),dayK);hemi.groundColor.lerpColors(new THREE.Color(0x7086aa),new THREE.Color(0x8a7458),dayK);
   skyMat.uniforms.sunDir.value.set(Math.cos(a) * 0.85, el, 0.5).normalize(); skyMat.uniforms.day.value = dayK;
-  skyMat.uniforms.top.value.lerpColors(new THREE.Color(0x070f1e), new THREE.Color(0x3a78bb), dayK);
-  skyMat.uniforms.bot.value.lerpColors(new THREE.Color(0x1d2640), new THREE.Color(0xe2e8e9), dayK);
-  scene.fog.color.lerpColors(new THREE.Color(0x1d2640), new THREE.Color(0xd3dde2), dayK);
+  skyMat.uniforms.top.value.lerpColors(new THREE.Color(0x1a2a4a), new THREE.Color(0x3a78bb), dayK);
+  skyMat.uniforms.bot.value.lerpColors(new THREE.Color(0x3a4a6e), new THREE.Color(0xe2e8e9), dayK);
+  scene.fog.color.lerpColors(new THREE.Color(0x3a4a6e), new THREE.Color(0xd3dde2), dayK);
   stars.material.opacity = (1 - dayK) * 0.9;
-  renderer.toneMappingExposure = 0.8 + 0.3 * dayK;
+  renderer.toneMappingExposure = 1 + 0.25 * dayK;
   windows.forEach(w => w.material.emissiveIntensity = (1 - dayK) * 2.2);
 }
 
@@ -589,7 +839,7 @@ setView('tynys');
 
 // ---------- анимация ----------
 let last = performance.now(), rot = 0, smokeT = 0, fps = 60;
-let lastDraw = 0;
+let lastDraw = 0, renderedFrames=0; const frameTimes=[];
 function frame(now) {
   if (LOW && now - lastDraw < 66) { requestAnimationFrame(frame); return; }
   lastDraw = now;
@@ -597,7 +847,8 @@ function frame(now) {
   skyUpd();
   const e = E();
   const feather = e.curtail > 1 ? Math.min(0.9, e.curtail / Math.max(1, v('wind', 'power_mw'))) : 0;
-  rot += dt * (0.2 + 3.2 * v('wind', 'cf_pct', 0) / 100);
+  const lull=details.events.some(e=>e.active&&e.kind==='lull');
+  rot += dt * (lull ? 0 : 3.4 * Math.max(0,v('wind', 'cf_pct', 0)) / 100);
   turbines.forEach((hh, i) => { if (i >= Math.round(feather * turbines.length)) hh.rotation.z = rot + i; });
   mills.forEach(m => m.drum.rotation.x += dt * 1.2 * (m.speed || 0));
   shovels.forEach((s, i) => s.rotation.y = Math.sin(now / 1500 + i * 2) * 0.9);
@@ -605,7 +856,6 @@ function frame(now) {
   const slots = { c: 0, w: 0 };
   trucks.forEach((tr, i) => {
     const n = `truck-${String(i + 1).padStart(2, '0')}`; let st = v(n, 'state', 'empty');
-    if (view === 'now' && (st === 'charging' || st === 'waiting')) st = i % 2 ? 'loaded' : 'empty';
     tr.glow.intensity = st === 'charging' ? 5 : 0;
     for (let k = 0; k < 8; k++) setInst(dustIM, i * 8 + k, 0, -500, 0, 0, 0, 0);
     if (st === 'charging') { const k = slots.c++ % 4; tr.g.position.set(CHARGE.x - 30 + k * 20, 0.4, CHARGE.z - 5); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
@@ -646,11 +896,13 @@ function frame(now) {
   Object.values(flows).forEach(f => updFlow(f, dt));
   tourStep(now);
   controls.update();
-  renderer.render(scene, camera); labels.render(scene, camera);
+  details.tick(now,dayK);
+  renderer.render(scene, camera); labels.render(scene, camera);details.layoutLabels();
+  renderedFrames++;frameTimes.push(performance.now());if(frameTimes.length>300)frameTimes.shift();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-window.__tynys = { scene, camera, controls, setView, startStory, low: LOW, softGL: SOFT_GL, get fps() { return fps; } };
+window.__tynys = { scene,camera,controls,renderer,setView,startStory,low:LOW,softGL:SOFT_GL,mergeStats,setLightingHour,selectObject:details.selectObject,clearSelection:details.clearSelection,get fps(){return fps;},get renderedFrames(){return renderedFrames;},get frameTimes(){return [...frameTimes];},get events(){return details.events;},get selected(){return details.selected;},get lightingHour(){return lightingHour;},get lightingOverride(){return lightingOverride;},get pixelRatio(){return renderer.getPixelRatio();},get source(){return source;},get dayK(){return dayK;},get data(){return structuredClone(D);},get scenarioVisuals(){return{...details.visuals,windLull:details.events.some(e=>e.active&&e.kind==='lull'),windAngles:turbines.map(t=>t.rotation.z),bessColor:bessLights[0].material.emissive.getHex(),line2Speed:mills[1].speed,headlights:details.headlights.filter(x=>x.visible).length};}};
 
 </script>
 </body>
