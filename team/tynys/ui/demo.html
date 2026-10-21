@@ -813,7 +813,15 @@ let tour = null;
 function startStory() { tour = { i: 0, t0: performance.now(), from: { p: camera.position.clone(), t: controls.target.clone() } }; setView(STORY[0].v); }
 function stopStory() { tour = null; $('caption').classList.remove('show'); $('dots').innerHTML = ''; }
 $('tour').onclick = startStory;
-$('reset').onclick = () => { stopStory(); camera.position.copy(HOME.pos); controls.target.copy(HOME.tgt); };
+$('reset').onclick = () => {
+  stopStory();
+  // OrbitControls retains angular/pan velocity after a drag. Flush it before
+  // restoring HOME; otherwise the next frames move the reset camera again.
+  const damping=controls.enableDamping;
+  controls.enableDamping=false;controls.update();
+  camera.position.copy(HOME.pos);controls.target.copy(HOME.tgt);controls.update();
+  controls.enableDamping=damping;
+};
 renderer.domElement.addEventListener('pointerdown', () => { if (tour) stopStory(); });
 addEventListener('keydown', ev => {
   if (!tour) return;

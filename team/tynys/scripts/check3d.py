@@ -25,7 +25,7 @@ import statistics
 import sys
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
-from playwright.async_api import async_playwright
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError, async_playwright
 
 
 VIEWPORT = {"width": 1400, "height": 850}
@@ -141,9 +141,40 @@ async def rendered_fps(page, seconds, warmup):
     }
 
 
+async def click_moving_label(page, object_id):
+    """Use a real mouse at the current hit-tested rectangle of a CSS2D label.
+
+    CSS2D labels can keep moving by subpixels while OrbitControls damping settles.
+    Locator.click's stable-box requirement is unsuitable for that animation; the
+    hit test and selected-object assertion still require the intended real target.
+    """
+    label = page.locator('.lbl[data-object="' + object_id + '"]')
+    await label.wait_for(state="visible", timeout=15000)
+    for attempt in range(1, 5):
+        point = await label.evaluate("""el => {
+          const rect = el.getBoundingClientRect();
+          for (const [fx, fy] of [[.5,.5],[.35,.5],[.65,.5],[.5,.3],[.5,.7]]) {
+            const x = rect.left + rect.width * fx, y = rect.top + rect.height * fy;
+            if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+            const hit = document.elementFromPoint(x, y);
+            if (hit && el.contains(hit)) return {x, y};
+          }
+          return null;
+        }""")
+        if point:
+            await page.mouse.click(point["x"], point["y"])
+            try:
+                await page.wait_for_function(
+                    "id => window.__tynys.selected === id",
+                    arg=object_id, timeout=1200)
+                return {"attempt": attempt, "x": point["x"], "y": point["y"]}
+            except PlaywrightTimeoutError:
+                pass
+        await page.wait_for_timeout(150)
+    raise AssertionError("A real mouse click could not select the visible " + object_id + " label")
+
+
 async def check_controls(page):
-    metrics = await page.evaluate(READ_METRICS)
-    require(6 <= metrics["lightingHour"] <= 18, "Scene did not start in daylight")
     require(await page.locator("#light-hour").count() == 1, "Lighting slider missing")
     require(await page.locator("#compass").is_visible(), "Compass missing")
     before = await page.locator("#compass-arrow").evaluate(
@@ -169,14 +200,35 @@ async def check_controls(page):
     require(len(supplied_meters) >= 3, "Fewer than three meters have actual twin values")
     require(all(finite(m["value"]) and m["min"] <= m["value"] <= m["max"] for m in supplied_meters),
             "Status meter has out-of-range values")
-    label = page.locator('.lbl[data-object="bess"]')
-    await label.click(timeout=15000)
+    click = await click_moving_label(page, "bess")
+    require(await page.evaluate("window.__tynys.selected === 'bess'"),
+            "The click selected a different piece of equipment")
     require(await page.locator("#selection-panel").is_visible(), "Equipment selection panel did not open")
-    require(bool((await page.locator("#selection-name").inner_text()).strip()), "Selection name empty")
-    require(bool((await page.locator("#selection-values").inner_text()).strip()), "Selection values empty")
+    require(await page.locator("#selection-name").inner_text() == "Накопитель",
+            "Selection panel title does not belong to BESS")
+    require("kz.tynys:bess" in await page.locator("#selection-source").inner_text(),
+            "Selection panel source does not belong to the BESS twin")
+    await page.wait_for_function("""() => {
+      if (window.__tynys.selected !== 'bess') return false;
+      const twin = window.__tynys.data.bess || {};
+      const rows = new Map(Array.from(document.querySelectorAll('#selection-values dt'),
+        el => [el.textContent.trim(), el.nextElementSibling?.textContent.trim()]));
+      const fields = [
+        ['soc','Заряд','%'], ['power_mw','Мощность','МВт'],
+        ['energy_mwh','Энергия','МВт·ч'], ['available','Доступен','']
+      ].filter(([key]) => Object.prototype.hasOwnProperty.call(twin, key));
+      return fields.length >= 2 && fields.every(([key, title, unit]) => {
+        const raw = twin[key];
+        const value = typeof raw === 'boolean' ? (raw ? 'да' : 'нет')
+          : Number(raw).toLocaleString('ru-RU', {maximumFractionDigits:1});
+        return rows.get(title) === (value + ' ' + unit).trim();
+      });
+    }""", timeout=5000)
     selection = {
         "name": await page.locator("#selection-name").inner_text(),
         "values": await page.locator("#selection-values").inner_text(),
+        "source": await page.locator("#selection-source").inner_text(),
+        "values_match_bess_twin": True, "mouse_click": click,
     }
     await page.locator("#selection-close").click()
     require(not await page.locator("#selection-panel").is_visible(), "Selection panel did not close")
@@ -365,13 +417,18 @@ async def main(url, out, threshold, seconds, warmup):
                     "Software WebGL was not confirmed by UNMASKED_RENDERER_WEBGL: " + first["glRenderer"])
             require(first["low"] and first["softGL"], "SwiftShader did not select LOW mode")
             require(.85 <= first["pixelRatio"] <= 1, "LOW pixel ratio must remain between 0.85 and 1.0")
+            require(6 <= first["lightingHour"] <= 18, "Scene did not start in daylight")
             report["source"] = await page.locator("#src").inner_text()
             clock_before = await page.locator("#clock").inner_text()
-            report["controls"] = await check_controls(page)
             await set_hour(page, 12)
+            # Benchmark the untouched initial camera. Interaction failures later
+            # still leave actual CPU/rendering evidence in the failure report.
             report["performance"] = await rendered_fps(page, seconds, warmup)
             report["clock"] = {"before": clock_before, "after": await page.locator("#clock").inner_text()}
             require(report["clock"]["before"] != report["clock"]["after"], "Model/replay clock did not advance")
+            report["controls"] = await check_controls(page)
+            await page.locator("#reset").click()
+            await set_hour(page, 12)
             day = await page.screenshot(path=str(target))
             await set_hour(page, 22)
             night_visuals = await page.evaluate("window.__tynys.scenarioVisuals")
