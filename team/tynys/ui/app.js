@@ -113,8 +113,8 @@ function render() {
   const goal = v('scenario', 'goal', 'copper');
   $('g-copper').className = goal === 'copper' ? 'on' : ''; $('g-green').className = goal === 'green' ? 'on' : '';
   $('g-note').textContent = goal === 'green'
-    ? 'Мелем не тоньше 150 мкм: энергия идёт на то, чтобы не сбрасывать ветер и солнце, а не на лишнюю медь.'
-    : 'Мелем тоньше, когда это окупается медью: больше меди, но и больше энергии.';
+    ? 'Мелем не тоньше 150 мкм; каждый МВт·ч из угольной сети считается одинаково дорогим — координатор уменьшает сам объём из сети и не сбрасывает ветер и солнце.'
+    : 'Мелем тоньше, когда это окупается медью, и платим по тарифу зон суток: больше меди, но и больше энергии.';
   // события
   const evs = curEvents();
   $('events').innerHTML = evs.length ? '' : '<span class="mute">Сценариев нет — обычная работа.</span>';
@@ -189,9 +189,9 @@ function drawSizing() {
   const cs = [base, a, ...(x ? [x] : []), b, ...(g ? [g] : [])];
   const row = (lbl, f, k) => [lbl, ...cs.map(r => fmt(f(r), k))];
   const rows = [['', 'Сегодня', 'ВИЭ', ...(x ? ['+ Тыныс, P80 150'] : []), '+ Тыныс: медь', ...(g ? ['+ Тыныс: CO₂'] : [])],
-    row('CO₂ в год, тыс. т', r => r.co2_kt, 0),
+    row('CO₂ в год*, тыс. т', r => r.co2_adj_kt ?? r.co2_kt, 0),
     row('Медь в год, тыс. т', r => r.cu_adj_t / 1000, 1),
-    row('CO₂ на т меди, т', r => r.co2_kt * 1000 / r.cu_adj_t, 2),
+    row('CO₂ на т меди, т', r => (r.co2_adj_kt ?? r.co2_kt) * 1000 / r.cu_adj_t, 2),
     row('Доля ВИЭ, %', r => r.renew_share_pct, 0),
     row('Сброс ВИЭ, ГВт·ч', r => r.curtail_mwh / 1000, 0)];
   $('sizing').innerHTML = rows.map((r, i) => `<tr>${r.map(c => i ? `<td>${c}</td>` : `<th>${c}</th>`).join('')}</tr>`).join('');
