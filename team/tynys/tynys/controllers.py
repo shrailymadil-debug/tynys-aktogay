@@ -101,9 +101,12 @@ class _VarIndex:
 class V2Tynys:
     """Скользящий горизонт: каждый час решается MILP на H часов вперёд, применяется первый шаг."""
 
-    def __init__(self, segregation=True, elastic_grind=True, use_forecast=True, name=None, explain=False, grind_modes=None, solver_options=None):
+    def __init__(self, segregation=True, elastic_grind=True, use_forecast=True, name=None, explain=False, grind_modes=None, solver_options=None, flat_price=False):
         # grind_modes: допустимые P80 (мкм); «зелёный» режим = не тоньше 150 мкм
         self.grind_modes = grind_modes
+        # flat_price: цель «CO₂» — каждый МВт·ч из сети одинаково «угольный», поэтому
+        # планировщик минимизирует сам объём из сети, а не счёт по зонам суток
+        self.flat_price = flat_price
         self.explain = explain
         self.last_plan = None
         self.segregated = segregation
@@ -137,7 +140,10 @@ class V2Tynys:
         mplan = env.mine_plan[idx]
         hf = env.hard_frac[idx]
         mpd = {"soft": mplan * (1 - hf), "hard": mplan * hf}
-        price = np.array([p.price_kzt_mwh((t + h) % 24) + p.co2_price_kzt_t * p.grid_co2_t_mwh for h in range(H)])
+        if self.flat_price:
+            price = np.full(H, p.tariff_kzt_kwh * 1000 + p.co2_price_kzt_t * p.grid_co2_t_mwh)
+        else:
+            price = np.array([p.price_kzt_mwh((t + h) % 24) + p.co2_price_kzt_t * p.grid_co2_t_mwh for h in range(H)])
         bwi = st.bwi_est if self.segregated else p.bwi
         grinds = ([g for g in range(NG) if P80_MODES[g] in self.grind_modes] if self.grind_modes else range(NG)) if self.elastic_grind else [G150]
         e = {(d, g): ph.bond_kwh_t(p, bwi[d], P80_MODES[g]) for d in DOMAINS for g in range(NG)}

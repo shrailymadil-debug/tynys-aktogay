@@ -1,0 +1,27 @@
+name: sizing
+# Предрасчёт «Сколько строить ВЭС и СЭС» (team/tynys/sizing.py): каждый вариант управления
+# считается на своей машине, результат кладётся в ветку sizing-<вариант>.
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    strategy:
+      matrix:
+        variant: [V0, V2, V2green, V2fixed]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r team/tynys/requirements.txt
+      - name: sizing.py ${{ matrix.variant }}
+        working-directory: team/tynys
+        run: SIZING_PART=${{ matrix.variant }} PYTHONPATH=. python sizing.py ${{ matrix.variant }}
+      - name: Результат в ветку
+        run: |
+          git config user.name github-actions; git config user.email github-actions@users.noreply.github.com
+          git checkout --orphan sizing-${{ matrix.variant }}; git rm -rfq --cached .
+          git add -f team/tynys/data/sizing_part_${{ matrix.variant }}.csv
+          git commit -qm "sizing ${{ matrix.variant }} ${GITHUB_SHA::7}"; git push -qf origin sizing-${{ matrix.variant }}
