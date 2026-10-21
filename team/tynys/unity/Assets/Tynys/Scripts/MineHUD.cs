@@ -75,7 +75,15 @@ namespace Tynys
 
         public void Select(string id)
         {
-            if (!string.IsNullOrEmpty(id)) SelectedId = id;
+            if (string.IsNullOrEmpty(id)) return;
+            SelectedId = id;
+            if (cameraRig == null) return;
+            var objects = FindObjectsByType<MineObject>(FindObjectsSortMode.None);
+            Vector3 center = Vector3.zero;
+            int count = 0;
+            foreach (var obj in objects)
+                if (obj.Id == id) { center += obj.transform.position; count++; }
+            if (count > 0) cameraRig.Focus(center / count);
         }
 
         public bool ContainsScreenPoint(Vector3 point)
@@ -83,7 +91,7 @@ namespace Tynys
             float scale = Mathf.Min(Screen.width / 1600f, Screen.height / 900f);
             float w = Screen.width / scale, h = Screen.height / scale;
             Vector2 p = new Vector2(point.x / scale, (Screen.height - point.y) / scale);
-            return p.y <= 104f || p.y >= h - 126f || p.x >= w - 344f
+            return MineSiteLabels.PointerOverLabel(point) || p.y <= 104f || p.y >= h - 126f || p.x >= w - 344f
                 || new Rect(24f, h - 180f, w - 384f, 44f).Contains(p)
                 || new Rect(24f, h - 265f, 365f, 74f).Contains(p)
                 || new Rect(402f, h - 247f, 600f, 56f).Contains(p)

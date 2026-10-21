@@ -48,6 +48,7 @@ services:
       MQTT_HOST: mosquitto
       MQTT_PORT: "1883"
       HOUR_SECONDS: ${TYNYS_HOUR_SECONDS:-6}
+      START_HOUR: ${TYNYS_START_HOUR:-9}
     depends_on:
       tynys-setup:
         condition: service_completed_successfully
@@ -77,6 +78,7 @@ services:
       - ../../team/tynys/ui/app.js:/usr/share/nginx/html/app.js:ro
       - ../../team/tynys/ui/3d.html:/usr/share/nginx/html/3d.html:ro
       - ../../team/tynys/ui/scene3d.js:/usr/share/nginx/html/scene3d.js:ro
+      - ../../team/tynys/ui/scene-details.js:/usr/share/nginx/html/scene-details.js:ro
       - ../../team/tynys/ui/futures.html:/usr/share/nginx/html/futures.html:ro
       - ../../team/tynys/ui/futures.js:/usr/share/nginx/html/futures.js:ro
       - ../../team/tynys/ui/futures.css:/usr/share/nginx/html/futures.css:ro

@@ -38,6 +38,12 @@ jobs:
           export NODE_PATH=/tmp/tynys-browser/node_modules
           node team/tynys/scripts/check_futures_ui.cjs
           node team/tynys/scripts/check_futures_tabs.cjs
+      - name: 3D scene with software WebGL
+        env:
+          TYNYS_3D_ARTIFACT_DIR: .scene-test-output
+        run: |
+          pip install playwright==1.48.0
+          python team/tynys/scripts/check3d.py http://127.0.0.1:8095/3d.html scene.png
       - name: Service logs
         if: failure()
         run: docker compose -f deploy/compose/docker-compose.yml -f team/tynys/compose.yml logs --tail=100 init gateway ditto-nginx tynys-futures tynys-field tynys-coordinator
@@ -48,5 +54,6 @@ jobs:
           path: |
             futures-e2e-report.json
             .futures-test-output/
+            .scene-test-output/
           include-hidden-files: true
           if-no-files-found: ignore
