@@ -23,6 +23,7 @@ namespace Tynys.Editor
             AssetDatabase.Refresh();
             var root=new GameObject("TYNYS · Digital Mine");
             var data=root.AddComponent<MineData>();
+            data.LiveMode=true;
             var world=root.AddComponent<MineWorld>();
             var hud=root.AddComponent<MineHUD>();
             var camera=new GameObject("Обзорная камера",typeof(Camera),typeof(AudioListener),typeof(MineCamera));
@@ -129,7 +130,7 @@ namespace Tynys.Editor
             }
         }
 
-        [MenuItem("Tynys/Build Windows demo")]
+        [MenuItem("Tynys/Build Windows LIVE")]
         public static void BuildWindows()
         {
             if(!File.Exists(ScenePath))CreateScene();
@@ -149,6 +150,40 @@ namespace Tynys.Editor
             CreateScene();
             ValidateScene();
             BuildWindows();
+        }
+
+        [MenuItem("Tynys/Build Web LIVE")]
+        public static void CreateAndBuildWeb()
+        {
+            CreateScene();
+            ValidateScene();
+            PlayerSettings.WebGL.compressionFormat=WebGLCompressionFormat.Disabled;
+            PlayerSettings.WebGL.decompressionFallback=false;
+            PlayerSettings.WebGL.nameFilesAsHashes=false;
+            PlayerSettings.WebGL.template="PROJECT:Tynys";
+            PlayerSettings.WebGL.threadsSupport=false;
+            PlayerSettings.SetManagedStrippingLevel(UnityEditor.Build.NamedBuildTarget.WebGL,ManagedStrippingLevel.Low);
+            EditorUserBuildSettings.development=false;
+            EditorUserBuildSettings.allowDebugging=false;
+            // Stable basename regardless of the external delivery folder.
+            string staging="Builds/Tynys";
+            Directory.CreateDirectory(staging);
+            var report=BuildPipeline.BuildPlayer(new BuildPlayerOptions {
+                scenes=new[]{ScenePath},locationPathName=staging,target=BuildTarget.WebGL,options=BuildOptions.None
+            });
+            if(report.summary.result!=BuildResult.Succeeded)
+                throw new Exception("Web build failed: "+report.summary.result);
+            File.Copy("Assets/Resources/Fonts/DejaVu-LICENSE.txt",Path.Combine(staging,"DejaVu-LICENSE.txt"),true);
+            string output=Environment.GetEnvironmentVariable("TYNYS_WEB_BUILD_PATH");
+            if(!string.IsNullOrEmpty(output))CopyTree(staging,output);
+            Debug.Log("TYNYS_WEB_BUILD_OK "+(string.IsNullOrEmpty(output)?staging:output));
+        }
+
+        static void CopyTree(string source,string destination)
+        {
+            Directory.CreateDirectory(destination);
+            foreach(var file in Directory.GetFiles(source))File.Copy(file,Path.Combine(destination,Path.GetFileName(file)),true);
+            foreach(var directory in Directory.GetDirectories(source))CopyTree(directory,Path.Combine(destination,Path.GetFileName(directory)));
         }
 
         [MenuItem("Tynys/Validate scene")]

@@ -17,6 +17,7 @@ done
 [[ "$c" =~ ^[0-9]+$ ]] || { echo "SMOKE FAIL: координатор молчит"; exit 1; }
 src=$(val plant decision_source)
 [[ "$(curl -fsS "$U/")" == *"Тыныс"* ]] || { echo "SMOKE FAIL: экран :8095 не отвечает"; exit 1; }
+[[ "$(curl -fsS "$U/dashboard.html")" == *'id="map"'* ]] || { echo "SMOKE FAIL: пульт рудника /dashboard.html"; exit 1; }
 [[ "$(curl -fsS "$U/3d.html")" == *"scene3d.js"* ]] || { echo "SMOKE FAIL: 3D-сцена"; exit 1; }
 curl -fsS "$U/vendor/three.module.js" -o /dev/null || { echo "SMOKE FAIL: three.js"; exit 1; }
 [[ "$(curl -fsS "$U/ditto/api/2/things/kz.tynys:site")" == *sim_hour* ]] || { echo "SMOKE FAIL: прокси экрана к Ditto"; exit 1; }

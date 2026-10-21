@@ -75,6 +75,10 @@ services:
       - "${OPENEGIZ_BIND:-127.0.0.1}:${TYNYS_UI_PORT:-8095}:8095"
     volumes:
       - ../../team/tynys/ui/index.html:/usr/share/nginx/html/index.html:ro
+      - ../../team/tynys/ui/unity-shell.css:/usr/share/nginx/html/unity-shell.css:ro
+      - ../../team/tynys/ui/unity-shell.js:/usr/share/nginx/html/unity-shell.js:ro
+      - ../../team/tynys/ui/unity:/usr/share/nginx/html/unity:ro
+      - ../../team/tynys/ui/dashboard.html:/usr/share/nginx/html/dashboard.html:ro
       - ../../team/tynys/ui/app.js:/usr/share/nginx/html/app.js:ro
       - ../../team/tynys/ui/3d.html:/usr/share/nginx/html/3d.html:ro
       - ../../team/tynys/ui/scene3d.js:/usr/share/nginx/html/scene3d.js:ro
