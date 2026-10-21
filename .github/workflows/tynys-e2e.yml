@@ -30,7 +30,7 @@ jobs:
           TYNYS_MIN_FPS: '10'
         run: |
           set -o pipefail
-          pip install playwright==1.48.0 && python -m playwright install --with-deps chromium
+          pip install playwright==1.64.0 && python -m playwright install --with-deps chromium
           python team/tynys/scripts/check3d.py http://127.0.0.1:8095/3d.html screen3d.png --mode functional --expect-source live 2>&1 | tee -a ci.log
           python team/tynys/scripts/screenshot.py http://127.0.0.1:8095 screen.png
       - uses: actions/upload-artifact@v4
