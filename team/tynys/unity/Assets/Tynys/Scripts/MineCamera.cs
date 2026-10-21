@@ -16,6 +16,8 @@ namespace Tynys
         private Camera view;
         private Vector3 desiredTarget;
         private bool movingToFocus;
+        private Vector3 focusVelocity;
+        private float desiredSize = 60f, sizeVelocity;
         private bool dragging;
         private bool panning;
         private Vector3 previousPointer;
@@ -77,12 +79,16 @@ namespace Tynys
             {
                 float wheel = Input.mouseScrollDelta.y;
                 if (Mathf.Abs(wheel) > 0.001f)
+                {
+                    movingToFocus = false;
                     orthographicSize = Mathf.Clamp(orthographicSize * Mathf.Pow(0.9f, wheel), 18f, 100f);
+                }
             }
             if (movingToFocus)
             {
-                target = Vector3.Lerp(target, desiredTarget, 1f - Mathf.Exp(-Time.unscaledDeltaTime * 6f));
-                if ((target - desiredTarget).sqrMagnitude < 0.01f) movingToFocus = false;
+                target = Vector3.SmoothDamp(target, desiredTarget, ref focusVelocity, .65f, 150f, Time.unscaledDeltaTime);
+                orthographicSize = Mathf.SmoothDamp(orthographicSize, desiredSize, ref sizeVelocity, .65f, 90f, Time.unscaledDeltaTime);
+                if ((target - desiredTarget).sqrMagnitude < .01f && Mathf.Abs(orthographicSize-desiredSize)<.01f) movingToFocus = false;
             }
             ApplyCamera();
         }
@@ -125,7 +131,10 @@ namespace Tynys
 
         public void Focus(Vector3 point)
         {
-            desiredTarget = new Vector3(point.x, -3f, point.z);
+            desiredTarget = new Vector3(point.x, Mathf.Clamp(point.y, -8f, 4f), point.z);
+            desiredSize = 32f;
+            focusVelocity = Vector3.zero;
+            sizeVelocity = 0f;
             movingToFocus = true;
         }
     }

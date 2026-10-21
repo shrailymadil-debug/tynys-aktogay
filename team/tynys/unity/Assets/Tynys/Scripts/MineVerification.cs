@@ -32,12 +32,18 @@ namespace Tynys
             var world=FindFirstObjectByType<MineWorld>();
             var hud=FindFirstObjectByType<MineHUD>();
             data.ResetDemo();data.Paused=true;
+            if(Debug.isDebugBuild)errors.Add("Expected release player without Development Build");
+            if(Mathf.Abs(data.State.hour-9)>0.001f)errors.Add("Demo must start at 09:00");
+            if(world.steam.Length!=2||world.truckHeadlights.Length!=28)errors.Add("Missing steam or headlights");
             if(world.trucks.Length!=14)errors.Add("Expected 14 truck groups");
             if(world.rotors.Length!=6)errors.Add("Expected 6 visual turbines");
             foreach(var mf in world.GetComponentsInChildren<MeshFilter>())
                 foreach(var v in mf.sharedMesh.vertices)
                     if(float.IsNaN(v.x)||float.IsInfinity(v.x)||float.IsNaN(v.z)||float.IsInfinity(v.z))
                         errors.Add("Nonfinite mesh: "+mf.name);
+            VerifyTruckRouting(world,errors);
+            world.ResetTruckPoses();
+            yield return null;
             var initialTruck=world.trucks[7].position;
             data.Paused=false;
             yield return new WaitForSecondsRealtime(.3f);
@@ -89,20 +95,76 @@ namespace Tynys
             }
             data.SetLive(false);data.ResetDemo();data.Paused=true;
             hud.Select("substation");
+            world.cameraRig.ResetView();
             yield return Capture(dir,"07-overview");
             File.WriteAllText(Path.Combine(dir,"verification.txt"),
                 errors.Count==0?"PASS: all 7 demo modes, finite geometry, truck animation, missing live server, mode reset and framebuffer captures.\n"+
+                "PASS: route interpolation stays on-road for a 0.28 phase jump and 0.99 to 0.01 wrap; pause and charge/wait transitions.\n"+
                 (liveArg>=0?"PASS: HTTP fixture from repository publisher, live BESS/grid values, retained stale snapshot.\n":""):
                 "FAIL:\n"+string.Join("\n",errors));
             Debug.Log("TYNYS_RUNTIME_VERIFICATION "+(errors.Count==0?"PASS":"FAIL"));
             Application.Quit(errors.Count==0?0:1);
         }
+
+        static void VerifyTruckRouting(MineWorld world,List<string> errors)
+        {
+            const int truck=7;
+            var state=new TruckState{state="loaded",routePos=.12f};
+            world.ResetTruckPoses();world.UpdateTruckPose(truck,state,true,1f/30);
+            var before=world.trucks[truck].position;
+            state.routePos=.40f;
+            for(int frame=0;frame<60;frame++)
+            {
+                world.UpdateTruckPose(truck,state,true,1f/30);
+                if(DistanceToRoad(world.trucks[truck].position,world.route)>.75f)
+                { errors.Add("Truck cut across terrain after sparse telemetry jump");break; }
+            }
+            if(Vector3.Distance(before,world.trucks[truck].position)<5)errors.Add("Truck phase interpolation did not advance");
+            world.ResetTruckPoses();state.state="empty";state.routePos=.99f;
+            world.UpdateTruckPose(truck,state,true,1f/30);state.state="loaded";state.routePos=.01f;
+            for(int frame=0;frame<60;frame++)
+            {
+                world.UpdateTruckPose(truck,state,true,1f/30);
+                var position=world.trucks[truck].position;
+                if(DistanceToRoad(position,world.route)>.75f||Vector3.Distance(position,world.route[0])>15)
+                { errors.Add("Truck wrap took the long route or left road");break; }
+            }
+            var frozen=world.trucks[truck].position;state.routePos=.29f;
+            world.UpdateTruckPose(truck,state,false,1);
+            if(Vector3.Distance(frozen,world.trucks[truck].position)>.001f)errors.Add("Paused/stale truck moved");
+            foreach(string stoppedState in new[]{"charging","waiting"})
+            {
+                state.state=stoppedState;world.UpdateTruckPose(truck,state,true,1f/30);
+                var parked=world.trucks[truck].position;state.routePos=.75f;
+                world.UpdateTruckPose(truck,state,true,1);
+                if(Vector3.Distance(parked,world.trucks[truck].position)>.001f)errors.Add(stoppedState+" truck moved along route");
+                state.state="empty";world.UpdateTruckPose(truck,state,true,1f/30);
+                if(DistanceToRoad(world.trucks[truck].position,world.route)>.75f)errors.Add("Truck did not rejoin road after "+stoppedState);
+            }
+        }
+
+        static float DistanceToRoad(Vector3 point,Vector3[] road)
+        {
+            float closest=float.PositiveInfinity;
+            for(int i=1;i<road.Length;i++)
+            {
+                var segment=road[i]-road[i-1];
+                float t=segment.sqrMagnitude>0?Mathf.Clamp01(Vector3.Dot(point-road[i-1],segment)/segment.sqrMagnitude):0;
+                closest=Mathf.Min(closest,Vector3.Distance(point,road[i-1]+segment*t));
+            }
+            return closest;
+        }
+
         static IEnumerator Capture(string dir,string name)
         {
+            yield return new WaitForSecondsRealtime(1.5f);
             yield return null;
             yield return new WaitForEndOfFrame();
             var texture=ScreenCapture.CaptureScreenshotAsTexture();
             if(texture==null)throw new InvalidOperationException("Framebuffer capture failed");
+            int lit=0;var pixels=texture.GetPixels32();
+            for(int i=0;i<pixels.Length;i+=997)if(pixels[i].r+pixels[i].g+pixels[i].b>45)lit++;
+            if(lit<30)throw new InvalidOperationException("Framebuffer is black; run the visible preview window for capture");
             File.WriteAllBytes(Path.Combine(dir,name+".png"),texture.EncodeToPNG());
             Destroy(texture);
         }

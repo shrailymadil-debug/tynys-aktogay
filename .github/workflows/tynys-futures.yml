@@ -33,11 +33,21 @@ jobs:
         run: python team/tynys/scripts/check_futures.py
       - name: Browser interaction on the actual stand
         run: |
-          npm install --prefix /tmp/tynys-browser playwright@1.48.0
+          npm install --prefix /tmp/tynys-browser playwright@1.64.0
           node /tmp/tynys-browser/node_modules/playwright/cli.js install --with-deps chromium
           export NODE_PATH=/tmp/tynys-browser/node_modules
+          node --experimental-vm-modules team/tynys/scripts/check_scene_geometry.cjs
           node team/tynys/scripts/check_futures_ui.cjs
           node team/tynys/scripts/check_futures_tabs.cjs
+      - name: Live 3D functionality and observed software FPS
+        env:
+          TYNYS_3D_ARTIFACT_DIR: .scene-test-output
+          TYNYS_MIN_FPS: '10'
+        run: |
+          pip install playwright==1.64.0
+          free -m
+          docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}'
+          python team/tynys/scripts/check3d.py http://127.0.0.1:8095/3d.html scene.png --mode functional --expect-source live
       - name: Service logs
         if: failure()
         run: docker compose -f deploy/compose/docker-compose.yml -f team/tynys/compose.yml logs --tail=100 init gateway ditto-nginx tynys-futures tynys-field tynys-coordinator
@@ -48,5 +58,47 @@ jobs:
           path: |
             futures-e2e-report.json
             .futures-test-output/
+            .scene-test-output/
+          include-hidden-files: true
+          if-no-files-found: ignore
+  scene-performance:
+    # A separate runner reserves its CPU for software WebGL instead of sharing
+    # it with Ditto, MongoDB and the model. The live job still records its FPS.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TYNYS_3D_ARTIFACT_DIR: .scene-performance-output
+      TYNYS_MIN_FPS: '10'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the same Chromium used by live checks
+        run: |
+          pip install playwright==1.64.0
+          python -m playwright install --with-deps chromium
+      - name: Gate software-rendered FPS on repository replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .scene-performance-output
+          python -m http.server 8096 --bind 127.0.0.1 --directory team/tynys/ui > .scene-performance-output/http-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8096/3d.html > /dev/null; then
+              break
+            fi
+            sleep 0.25
+          done
+          curl -fsS http://127.0.0.1:8096/3d.html > /dev/null
+          free -m
+          python team/tynys/scripts/check3d.py http://127.0.0.1:8096/3d.html replay.png --mode performance --expect-source replay
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scene-performance-evidence
+          path: .scene-performance-output/
           include-hidden-files: true
           if-no-files-found: ignore

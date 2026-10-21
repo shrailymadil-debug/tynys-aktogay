@@ -27,6 +27,16 @@ SEED = int(os.environ.get("SIM_SEED", "7"))
 log = logging.getLogger("field")
 
 
+def start_clock(environ=None):
+    """Use the same hour index for model weather, controllers and the clock."""
+    settings = os.environ if environ is None else environ
+    day = int(settings.get("START_DOY", dt.date.today().timetuple().tm_yday))
+    hour = int(settings.get("START_HOUR", "9"))
+    if not 1 <= day <= 366 or not 0 <= hour <= 23:
+        raise ValueError("START_DOY must be 1..366; START_HOUR must be 0..23")
+    return day, hour
+
+
 class Totals:
     def __init__(self):
         self.cu = self.grid = self.co2 = self.curt = self.renew = self.cost = self.feed = self.hours = self.cu_adj = 0.0
@@ -52,18 +62,20 @@ def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s field %(message)s")
     wait_ditto()
     bus = Bus("tynys-field")
-    start_doy = int(os.environ.get("START_DOY", dt.date.today().timetuple().tm_yday))
+    start_doy, start_hour = start_clock()
     events, ev_rev = [], None
     p, env = build_env(events, start_doy, SEED)
     st = {k: init_state(p) for k in ("v2", "v0", "v1")}
     ctl = {"v0": V0Traditional(), "v1": V1Reactive()}
     tot = {k: Totals() for k in st}
-    t, last = 0, {}
+    # Fresh inventories at 09:00 by default. No production is invented for
+    # hours before startup; all three controllers use this same weather index.
+    t, last = start_hour, {}
     fleet = Fleet.from_total(st["v2"].fleet_e)
     while True:
         t_hour0 = time.time()
         if t >= env.sc.n():   # год прошёл — начинаем заново
-            t, st, tot = 0, {k: init_state(p) for k in st}, {k: Totals() for k in st}
+            t, st, tot = start_hour, {k: init_state(p) for k in st}, {k: Totals() for k in st}
             fleet = Fleet.from_total(st["v2"].fleet_e)
         # --- сценарий из двойника ---
         try:
@@ -79,9 +91,10 @@ def main():
         # --- 1. состояние → двойник site, запрос решения ---
         sim_time = dt.datetime(2026, 1, 1) + dt.timedelta(days=start_doy - 1, hours=t)
         bus.send("site", {"sim_hour": t, "sim_time": sim_time.strftime("%Y-%m-%d %H:00"),
-                          "start_doy": start_doy, "seed": SEED, "scenario_rev": ev_rev or 0,
+                          "start_doy": start_doy, "start_hour": start_hour, "elapsed_hours": int(tot["v2"].hours),
+                          "seed": SEED, "scenario_rev": ev_rev or 0,
                           "state_json": dumps(state_to_dict(st["v2"])), **tot["v2"].feats()})
-        # итоги теней публикуются в тот же момент, что и итоги V2 (за часы 0..t-1)
+        # Итоги теней и V2 охватывают одни часы: start_hour..t-1.
         for k in ("v0", "v1"):
             bus.send(f"shadow-{k}", {**tot[k].feats(), **last.get(k, {})})
         # --- 2. ждём координатора ---
@@ -144,6 +157,7 @@ def publish_hour(bus, p, env, st, r, t, source, fleet):
     bus.send("bess", {"soc": round(100 * st.bess_e / p.bess_mwh, 1), "power_mw": round(r["bess"], 1),
                       "available": bool(env.bess_avail[t])})
     bus.send("substation", {"grid_mw": round(r["grid"], 1), "grid_cap_mw": round(r["grid_cap"], 1),
+                            "grid_nominal_mw": p.grid_cap_mw,
                             "price_kzt_mwh": round(r["price"]), "co2_t_h": round(r["grid"] * p.grid_co2_t_mwh, 1),
                             "flex_down_mw": round(r["flex_down_mw"], 1), "flex_down_h": round(r["flex_down_h"], 1)})
     bus.send("energy", {"load_mw": round(r["load"], 1), "renew_mw": round(r["renew"], 1),
