@@ -209,6 +209,8 @@ async function main() {
     await frame.waitForFunction(count=>window.tynysStatus.snapshotCount>count,first.snapshotCount,{timeout:45000});
     report.performance=await measure(frame,page);report.live.after=await status(frame);
     assert.ok(report.live.after.snapshotCount>first.snapshotCount,'No further valid Ditto snapshots');
+    assert.ok(Number.isFinite(report.live.after.hour)&&report.live.after.hour>first.hour,
+      'The live model clock did not advance; repeated reads of one snapshot are insufficient LIVE evidence');
     const canvas=await frame.locator('#unity-canvas').screenshot({path:path.join(out,'unity-canvas-live.png')});
     report.live.pixels=pixelEvidence(canvas);
     await page.screenshot({path:path.join(out,'unity-live.png')});
