@@ -21,13 +21,14 @@ export function scenarioEvents(data) {
 
 // Only immutable meshes are folded into world-space batches. Matching both the
 // material settings and attribute schema prevents loss of UVs, normals or colours.
-export function mergeStaticMeshes(scene, dynamicRoots = []) {
+export function mergeStaticMeshes(scene, dynamicRoots = [], {local=false} = {}) {
   const excluded = new Set(dynamicRoots.filter(Boolean)), buckets = new Map();
-  scene.updateMatrixWorld(true);
+  scene.updateWorldMatrix(true,true);
+  const rootInverse=local?scene.matrixWorld.clone().invert():null;
   let before = 0;
   scene.traverse(o => { if (o.isMesh) before++; });
   scene.traverse(o => {
-    if (!o.isMesh || o.isInstancedMesh || Array.isArray(o.material) || o.userData.noMerge) return;
+    if ((local&&o===scene) || !o.isMesh || o.isInstancedMesh || Array.isArray(o.material) || o.userData.noMerge) return;
     for (let p=o;p;p=p.parent) if(excluded.has(p)||p.userData.noMerge) return;
     const m=o.material;
     if(!m || m.transparent || !(m.isMeshStandardMaterial||m.isMeshBasicMaterial))return;
@@ -38,11 +39,11 @@ export function mergeStaticMeshes(scene, dynamicRoots = []) {
   let mergedMeshes=0,batches=0;
   for(const items of buckets.values()) {
     if(items.length<2)continue;
-    const geos=items.map(o=>{const g=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();g.applyMatrix4(o.matrixWorld);return g;});
+    const geos=items.map(o=>{const g=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();g.applyMatrix4(local?new THREE.Matrix4().multiplyMatrices(rootInverse,o.matrixWorld):o.matrixWorld);return g;});
     const merged=mergeGeometries(geos,false);geos.forEach(g=>g.dispose());
     if(!merged)continue;
     merged.computeBoundingSphere();const m=new THREE.Mesh(merged,items[0].material);
-    m.name='static-batch';m.castShadow=items[0].castShadow;m.receiveShadow=items[0].receiveShadow;
+    m.name=local?'rigid-local-batch':'static-batch';m.castShadow=items[0].castShadow;m.receiveShadow=items[0].receiveShadow;
     scene.add(m);items.forEach(o=>o.removeFromParent());mergedMeshes+=items.length;batches++;
   }
   let after=0;scene.traverse(o=>{if(o.isMesh)after++;});
