@@ -532,7 +532,7 @@ namespace Tynys
         {
             if(data==null || data.State==null)return;
             var s=data.State;
-            bool animate=data.LiveMode?(data.IsConnected&&!data.IsStale):!data.Paused;
+            bool animate=!data.Paused&&(!data.LiveMode||(data.IsConnected&&!data.IsStale));
             if(!data.HasSnapshot)
             {
                 foreach(var ps in steam)if(ps!=null)ps.Pause();
@@ -609,7 +609,9 @@ namespace Tynys
             truckPhases=new float[trucks.Length];hasTruckPhase=new bool[trucks.Length];truckPoseStates=new string[trucks.Length];
         }
 
-        /// <summary>Interpolate the cyclic route parameter, never a chord through the pit.</summary>
+        internal float TruckVisualPhase(int index) => truckPhases[index];
+
+        /// <summary>LIVE uses a local illustrative 90-second lap; DEMO follows its continuous phase.</summary>
         public void UpdateTruckPose(int index,TruckState telemetry,bool animate,float deltaTime)
         {
             bool travel=telemetry.state=="loaded"||telemetry.state=="empty";
@@ -632,8 +634,18 @@ namespace Tynys
             if(initialize)truckPhases[index]=targetPhase;
             else if(animate)
             {
-                float delta=Mathf.Repeat(targetPhase-truckPhases[index]+.5f,1)-.5f;
-                truckPhases[index]=Mathf.Repeat(truckPhases[index]+delta*(1-Mathf.Exp(-deltaTime*8)),1);
+                if(data!=null&&data.LiveMode)
+                {
+                    // Backend route_pos is an illustrative seed, now published once/model hour.
+                    // Chasing its +0.7 hourly alias would move backwards and stop between polls.
+                    // State/payload remain authoritative; geometry advances locally, never GPS.
+                    truckPhases[index]=Mathf.Repeat(truckPhases[index]+Mathf.Max(0,deltaTime)/90f,1);
+                }
+                else
+                {
+                    float delta=Mathf.Repeat(targetPhase-truckPhases[index]+.5f,1)-.5f;
+                    truckPhases[index]=Mathf.Repeat(truckPhases[index]+delta*(1-Mathf.Exp(-deltaTime*8)),1);
+                }
             }
             float phase=truckPhases[index];
             var points=phase<.5f?outboundRoute:returnRoute;

@@ -39,8 +39,14 @@ jobs:
           node --experimental-vm-modules team/tynys/scripts/check_scene_geometry.cjs
           node team/tynys/scripts/check_futures_ui.cjs
           node team/tynys/scripts/check_futures_tabs.cjs
-          node team/tynys/scripts/check_dashboard_ui.cjs
-          node team/tynys/scripts/check_unity_web.cjs http://127.0.0.1:8095
+      - name: Dashboard metrics and goals
+        env:
+          NODE_PATH: /tmp/tynys-browser/node_modules
+        run: node team/tynys/scripts/check_dashboard_ui.cjs
+      - name: Unity WebGL LIVE and failure recovery
+        env:
+          NODE_PATH: /tmp/tynys-browser/node_modules
+        run: node team/tynys/scripts/check_unity_web.cjs http://127.0.0.1:8095
       - name: Live 3D functionality and observed software FPS
         env:
           TYNYS_3D_ARTIFACT_DIR: .scene-test-output
