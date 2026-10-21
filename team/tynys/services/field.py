@@ -129,12 +129,11 @@ def main():
             tot[k].add(p, r, st[k])
             last[k] = {"grid_mw": round(r["grid"], 1), "curtail_mw": round(r["curtail"], 1), "feed_tph": round(r["feed"])}
         publish_hour(bus, p, env, st["v2"], rec, t, source, fleet)
-        # --- 4. анимация самосвалов до конца часа ---
-        sub = 0
-        while time.time() - t_hour0 < HOUR_S:
-            time.sleep(max(0.0, min(1.0, HOUR_S - (time.time() - t_hour0))))
-            sub += 1
-            publish_trucks(bus, p, fleet, t + sub / max(HOUR_S, 1))
+        # --- 4. ждём конца модельного часа ---
+        # Самосвалы публикуются раз в час вместе с остальными двойниками: их заряд,
+        # состояние и груз меняются по часовой модели, а движение по дороге экраны
+        # анимируют сами. Это снимает с Ditto ~70 лишних сообщений в час.
+        time.sleep(max(0.0, HOUR_S - (time.time() - t_hour0)))
         t += 1
 
 
