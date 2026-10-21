@@ -5,16 +5,17 @@
 import * as THREE from 'three';
 import { OrbitControls } from './vendor/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from './vendor/CSS2DRenderer.js';
+import { installSceneDetails, mergeStaticMeshes } from './scene-details.js';
 
 const NS = 'kz.tynys';
 const NAMES = ['site', 'pit', 'plant', 'energy', 'coordinator', 'scenario', 'shadow-v0', 'shadow-v1', 'pile-soft', 'pile-hard', 'line-1', 'line-2',
-  'flotation', 'wind', 'pv', 'bess', 'substation', ...Array.from({ length: 14 }, (_, i) => `truck-${String(i + 1).padStart(2, '0')}`)];
+  'flotation', 'wind', 'pv', 'bess', 'substation', ...Array.from({ length: 4 }, (_, i) => `charger-${i+1}`), ...Array.from({ length: 14 }, (_, i) => `truck-${String(i + 1).padStart(2, '0')}`)];
 const $ = id => document.getElementById(id);
 const fmt = (x, k = 0) => (x == null || isNaN(x)) ? '—' : Number(x).toLocaleString('ru-RU', { maximumFractionDigits: k, minimumFractionDigits: k });
 
 // ---------- источник данных ----------
 let D = {};
-let source = 'live';
+let source = 'connecting', lastLiveAt = null;
 let view = 'tynys';         // 'now' — как сейчас (V0), 'tynys' — с координатором (V2)
 const v = (n, f, d = 0) => { const x = D[n] && D[n][f]; return x ?? d; };
 async function pollLive() {
@@ -22,15 +23,23 @@ async function pollLive() {
   if (!r.ok) throw new Error(r.status);
   const data = await r.json(); if (!Array.isArray(data) || !data.length) throw new Error('empty');
   const o = {}; for (const t of data) { const f = {}; for (const [k, x] of Object.entries(t.features || {})) f[k] = x.properties && x.properties.value; o[t.thingId.split(':')[1]] = f; }
-  D = o;
+  if(!o.site)throw new Error('В ответе нет двойника site');
+  D = o; source = 'live'; lastLiveAt = Date.now(); sourceLabel();
 }
 let TRACE = null, tStart = 0;
 async function loadTrace() { if (window.TYNYS_TRACE) return window.TYNYS_TRACE; const r = await fetch('trace.json'); return r.json(); }
 function pollTrace() { const k = ((performance.now() - tStart) / 1000 / 4.0) % TRACE.length; D = TRACE[Math.floor(k)]; }
 async function start() {
-  try { if (window.TYNYS_TRACE) throw 0; await pollLive(); setInterval(() => pollLive().catch(() => {}), 1000); }
-  catch (e) { source = 'replay'; TRACE = await loadTrace(); tStart = performance.now(); pollTrace(); setInterval(pollTrace, 250); }
-  $('src').textContent = source === 'live' ? '● живые данные двойников OpenEgiz' : '● запись 96 ч работы стенда OpenEgiz';
+  try { if (window.TYNYS_TRACE) throw 0; await pollLive(); setInterval(() => pollLive().catch(() => {source='stale';sourceLabel();}), 1500); }
+  catch (e) { try { TRACE = await loadTrace(); if(!Array.isArray(TRACE)||!TRACE.length)throw new Error('Нет записи');source='replay';tStart=performance.now();pollTrace();setInterval(pollTrace,250); }
+    catch {source='unavailable';} sourceLabel(); }
+}
+function sourceLabel(){const text=source==='live'?'● живые двойники OpenEgiz':source==='replay'?'● запись стенда · не живые данные':source==='stale'?`● связь потеряна · снимок ${new Date(lastLiveAt).toLocaleTimeString('ru-RU')}`:source==='unavailable'?'● данные недоступны':'подключение…';$('src').textContent=text;$('source-line').textContent=text+' · движение транспорта схематическое';}
+async function cancelScenarioEvent(id){
+  if(source!=='live')throw new Error('Отмена доступна только при связи с Ditto');
+  await pollLive();let events;try{const raw=v('scenario','events','[]');events=Array.isArray(raw)?raw:JSON.parse(raw);}catch{throw new Error('Некорректный сценарий');}
+  const body={events:{properties:{value:JSON.stringify(events.filter(e=>String(e.id)!==String(id)))}},rev:{properties:{value:Number(v('scenario','rev',0))+1}},goal:{properties:{value:v('scenario','goal','copper')}}};
+  const r=await fetch(`ditto/api/2/things/${NS}:scenario/features`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error(`Ditto: ${r.status}`);await pollLive();hud();
 }
 start();
 
@@ -49,8 +58,9 @@ const SOFT_GL = (() => { try { const g = document.createElement('canvas').getCon
   const e = g.getExtension('WEBGL_debug_renderer_info'); const r = e ? g.getParameter(e.UNMASKED_RENDERER_WEBGL) : g.getParameter(g.RENDERER);
   return /swiftshader|llvmpipe|software|softpipe/i.test(r); } catch (e) { return false; } })();
 const LOW = Q.get('q') === 'low' || (Q.get('q') !== 'high' && (SOFT_GL || /Mobi|Android|iPhone/i.test(navigator.userAgent)));
+document.body.classList.toggle('low-render',LOW);
 const renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: !LOW, powerPreference: 'high-performance' });
-renderer.setPixelRatio(SOFT_GL && Q.get('q') !== 'high' ? 0.6 : Math.min(devicePixelRatio, LOW ? 1 : 2));
+renderer.setPixelRatio(LOW ? 0.9 : Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = !LOW; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
 const labels = new CSS2DRenderer();
@@ -67,11 +77,12 @@ controls.target.copy(HOME.tgt); controls.enableDamping = true; controls.maxPolar
 controls.minDistance = 30; controls.maxDistance = 2200;
 
 const hemi = new THREE.HemisphereLight(0xcfe3ff, 0x8a7458, 0.9); scene.add(hemi);
+const nightAmbient=new THREE.AmbientLight(0x88a8d4,0);scene.add(nightAmbient);
 const sun = new THREE.DirectionalLight(0xfff1d6, 2.6);
 sun.castShadow = true; sun.shadow.mapSize.set(LOW ? 1024 : 4096, LOW ? 1024 : 4096); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.8;
 Object.assign(sun.shadow.camera, { left: -480, right: 480, top: 480, bottom: -480, near: 10, far: 2500 });
 scene.add(sun, sun.target);
-function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); labels.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); labels.setSize(w, h); camera.aspect = w / h;camera.fov=THREE.MathUtils.radToDeg(2*Math.atan(Math.tan(THREE.MathUtils.degToRad(42)/2)/Math.min(1,w/h)));camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 
 // ---------- процедурные текстуры ----------
@@ -82,7 +93,7 @@ const fbm = (x, y) => { let s = 0, a = 0.5, f = 1; for (let i = 0; i < 5; i++) {
 function tex(size, fn) {
   const c = document.createElement('canvas'); c.width = c.height = size; const g = c.getContext('2d'); const img = g.createImageData(size, size);
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) { const [r, gg, b] = fn(x, y); img.data.set([r, gg, b, 255], (y * size + x) * 4); }
-  g.putImageData(img, 0, 0); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+  g.putImageData(img, 0, 0); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = LOW?1:8; return t;
 }
 // бесшовный шум: периодический по размеру тайла
 const tile = (x, y, s, sc) => { const fx = x / s, fy = y / s; const a = fbm(x / sc, y / sc), b = fbm((x - s) / sc, y / sc), c = fbm(x / sc, (y - s) / sc), d = fbm((x - s) / sc, (y - s) / sc);
@@ -92,13 +103,20 @@ const steppe = tex(256, (x, y) => { const n = tile(x, y, 256, 26), g = hash(x, y
 const rock = tex(256, (x, y) => { const n = tile(x, y, 256, 12), g = hash(x, y) * 0.22; const k = 0.68 + 0.4 * n + g; return [160 * k, 140 * k, 120 * k]; });
 const gravel = tex(128, (x, y) => { const k = 0.72 + 0.38 * hash(x, y); return [118 * k, 108 * k, 96 * k]; });
 
-const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, metalness: 0.05, ...o });
+// Software WebGL does not benefit from per-pixel metal/roughness BRDFs on
+// these matte surfaces. Lambert keeps sunlight, hemisphere light, textures,
+// vertex colours and emissive fault signals; HIGH retains the PBR materials.
+const M = (c, o = {}) => {
+  if(!LOW)return new THREE.MeshStandardMaterial({color:c,roughness:.85,metalness:.05,...o});
+  const {roughness,metalness,...diffuse}=o;
+  return new THREE.MeshLambertMaterial({color:c,...diffuse});
+};
 function mesh(geo, mat, x = 0, y = 0, z = 0, parent = scene, shadow = true) {
   const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = shadow; m.receiveShadow = true; parent.add(m); return m;
 }
 function label(html, x, y, z, parent = scene) {
   const d = document.createElement('div'); d.className = 'lbl'; d.innerHTML = html;
-  const o = new CSS2DObject(d); o.position.set(x, y, z); parent.add(o); return d;
+  const o = new CSS2DObject(d); o.position.set(x, y, z); parent.add(o); labels.domElement.appendChild(d); return d;
 }
 function setInst(im, i, x, y, z, sx = 1, sy = 1, sz = 1, rx = 0, ry = 0) { const o = setInst.o || (setInst.o = new THREE.Object3D()); o.position.set(x, y, z); o.rotation.set(rx, ry, 0); o.scale.set(sx, sy, sz); o.updateMatrix(); im.setMatrixAt(i, o.matrix); }
 
@@ -114,7 +132,7 @@ const skyMat = new THREE.ShaderMaterial({
       float hz = pow(1.0-abs(vP.y),10.0); c += vec3(1.0,0.55,0.3)*hz*0.5*smoothstep(0.0,0.3,sd.y+0.1)*(1.0-smoothstep(0.15,0.5,sd.y));
       gl_FragColor = vec4(c,1.0); }`,
 });
-scene.add(new THREE.Mesh(new THREE.SphereGeometry(6000, 32, 16), skyMat));
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(6000, LOW?20:32, LOW?12:16), skyMat));
 const starPos = []; for (let k = 0; k < 1500; k++) { const a = hash(k, 1) * 6.283, b = Math.acos(hash(k, 2) * 0.9 + 0.1); starPos.push(5500 * Math.sin(b) * Math.cos(a), 5500 * Math.cos(b), 5500 * Math.sin(b) * Math.sin(a)); }
 const stars = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3)),
   new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0, fog: false }));
@@ -127,10 +145,10 @@ function terrainH(x, z) {
   return k * (fbm(x / 300, z / 300) * 170 - 50 + fbm(x / 70, z / 70) * 14);
 }
 {
-  const site = new THREE.RingGeometry(PIT_R, SITE_R + 2, 160, 14); site.rotateX(-Math.PI / 2);
+  const site = new THREE.RingGeometry(PIT_R, SITE_R + 2, LOW?96:160, LOW?6:14); site.rotateX(-Math.PI / 2);
   const p = site.attributes.position, uv = site.attributes.uv; for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / 40, p.getZ(i) / 40);
   mesh(site, M(0xffffff, { map: steppe, roughness: 1 }), PIT.x, 0, PIT.z, scene, false);
-  const outer = new THREE.RingGeometry(SITE_R, 4200, 260, 70); outer.rotateX(-Math.PI / 2);
+  const outer = new THREE.RingGeometry(SITE_R, 4200, LOW?64:260, LOW?20:70); outer.rotateX(-Math.PI / 2);
   const op = outer.attributes.position, ouv = outer.attributes.uv;
   for (let i = 0; i < op.count; i++) { const x = op.getX(i) + PIT.x, z = op.getZ(i) + PIT.z; op.setY(i, terrainH(x, z)); ouv.setXY(i, x / 40, z / 40); }
   outer.computeVertexNormals();
@@ -140,7 +158,7 @@ function terrainH(x, z) {
   const prof = [new THREE.Vector2(0, -PIT_D)]; const n = Math.round(PIT_D / BENCH);
   for (let i = 0; i <= n; i++) { const y = -PIT_D + i * BENCH, r0 = 26 + i * (PIT_R - 30) / n; prof.push(new THREE.Vector2(r0, y), new THREE.Vector2(r0 + 3.8, Math.min(0, y + BENCH))); }
   prof.push(new THREE.Vector2(PIT_R, 0));
-  const lg = new THREE.LatheGeometry(prof, 180);
+  const lg = new THREE.LatheGeometry(prof, LOW?96:180);
   const pos = lg.attributes.position, col = [], c = new THREE.Color(), uvs = lg.attributes.uv;
   for (let i = 0; i < pos.count; i++) {
     const y = -pos.getY(i), t = y / PIT_D, ang = Math.atan2(pos.getZ(i), pos.getX(i));
@@ -150,13 +168,13 @@ function terrainH(x, z) {
     col.push(c.r, c.g, c.b); uvs.setXY(i, ang / Math.PI * 14, y / 9);
   }
   lg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); lg.computeVertexNormals();
-  mesh(lg, new THREE.MeshStandardMaterial({ vertexColors: true, map: rock, side: THREE.BackSide, roughness: 1, flatShading: true }), PIT.x, 0, PIT.z, scene, false);
+  mesh(lg, M(0xffffff,{ vertexColors: true, map: rock, side: THREE.BackSide, roughness: 1, metalness: 0, flatShading: true }), PIT.x, 0, PIT.z, scene, false);
   mesh(new THREE.CircleGeometry(27, 48).rotateX(-Math.PI / 2), M(0x8a7a66, { map: gravel }), PIT.x, -PIT_D + 0.1, PIT.z, scene, false);
   mesh(new THREE.CircleGeometry(10, 40).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x3d8f86, roughness: 0.06, metalness: 0.5 }), PIT.x + 12, -PIT_D + 0.3, PIT.z - 9, scene, false);
   // террасированные отвалы пустой породы
   for (const [x, z, r, h] of [[-350, -170, 95, 36], [-390, 160, 80, 30], [-90, -260, 66, 26]]) {
     const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
-    for (let k = 0; k < 3; k++) mesh(new THREE.CylinderGeometry(r * (0.95 - k * 0.22) - 7, r * (1 - k * 0.22), h / 3, 56), M(0xd8c7ad, { map: rock, roughness: 1 }), 0, h / 6 + k * h / 3, 0, g);
+    for (let k = 0; k < 3; k++) mesh(new THREE.CylinderGeometry(r * (0.95 - k * 0.22) - 7, r * (1 - k * 0.22), h / 3, LOW?32:56), M(0xd8c7ad, { map: rock, roughness: 1 }), 0, h / 6 + k * h / 3, 0, g);
   }
 }
 label('<b>Карьер Актогай</b><span id="l-pit">—</span>', PIT.x, 22, PIT.z - PIT_R);
@@ -169,7 +187,7 @@ const rim = roadPts[roadPts.length - 1];
 roadPts.push(new THREE.Vector3(rim.x + 30, 0.4, rim.z + 6), new THREE.Vector3(-10, 0.4, -2), new THREE.Vector3(PILES.x - 26, 0.4, PILES.z + 6));
 const road = new THREE.CatmullRomCurve3(roadPts);
 {
-  const N = 700, pos = [], idx = [], uv = [];
+  const N = LOW?360:700, pos = [], idx = [], uv = [];
   for (let i = 0; i <= N; i++) {
     const p = road.getPointAt(i / N), t = road.getTangentAt(i / N), s = new THREE.Vector3(-t.z, 0, t.x).normalize().multiplyScalar(5);
     pos.push(p.x + s.x, p.y + 0.35, p.z + s.z, p.x - s.x, p.y + 0.35, p.z - s.z); uv.push(0, i / 5, 1, i / 5);
@@ -177,7 +195,7 @@ const road = new THREE.CatmullRomCurve3(roadPts);
   }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   g.setIndex(idx); g.computeVertexNormals(); mesh(g, M(0x9b8f80, { map: gravel, side: THREE.DoubleSide, roughness: 1 }), 0, 0, 0, scene, false);
-  const pts = road.getSpacedPoints(320), berm = new THREE.InstancedMesh(new THREE.SphereGeometry(1.4, 6, 4), M(0x8c7a64, { roughness: 1 }), pts.length);
+  const pts = road.getSpacedPoints(LOW?160:320), berm = new THREE.InstancedMesh(new THREE.SphereGeometry(1.4, 6, 4), M(0x8c7a64, { roughness: 1 }), pts.length);
   pts.forEach((p, i) => { const t = road.getTangentAt(i / (pts.length - 1)), s = new THREE.Vector3(-t.z, 0, t.x).normalize().multiplyScalar(-6.2); setInst(berm, i, p.x + s.x, p.y + 0.6, p.z + s.z, 1.3, 0.6, 1.5); });
   scene.add(berm);
 }
@@ -222,19 +240,21 @@ for (let i = 0; i < 14; i++) {
   mesh(new THREE.BoxGeometry(2.2, 2.2, 1.8), yellow, 4.4, 4.8, 1.6, g);
   mesh(new THREE.BoxGeometry(2.25, 1, 1.85), M(0x24313d, { metalness: 0.6, roughness: 0.15 }), 4.5, 5.3, 1.6, g);
   mesh(new THREE.BoxGeometry(1.6, 2.6, 4.6), M(0x2f6fb0, { metalness: 0.4 }), 4.6, 3.1, -0.6, g);
-  const load = mesh(new THREE.SphereGeometry(3, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), oreMat.hard, -1.2, 4.6, 0, g); load.scale.set(1.2, 0.75, 0.9);
-  for (const [x, z] of [[3.6, 2.5], [3.6, -2.5], [-2.8, 2.5], [-2.8, -2.5], [-2.8, 3.6], [-2.8, -3.6]]) mesh(new THREE.CylinderGeometry(1.6, 1.6, 1.2, 16).rotateX(Math.PI / 2), dark, x, 1.6, z, g);
-  const glow = new THREE.PointLight(0x4cc3ff, 0, 24); glow.position.y = 9; g.add(glow);
+  const load = mesh(new THREE.SphereGeometry(3, LOW?8:12, LOW?4:6, 0, Math.PI * 2, 0, Math.PI / 2), oreMat.hard, -1.2, 4.6, 0, g); load.scale.set(1.2, 0.75, 0.9);
+  for (const [x, z] of [[3.6, 2.5], [3.6, -2.5], [-2.8, 2.5], [-2.8, -2.5], [-2.8, 3.6], [-2.8, -3.6]]) mesh(new THREE.CylinderGeometry(1.6, 1.6, 1.2, LOW?10:16).rotateX(Math.PI / 2), dark, x, 1.6, z, g);
+  // Charging is indicated by emissive panels; avoid fourteen dynamic point lights.
+  const glow = new THREE.Object3D(); glow.intensity=0; glow.position.y = 9; g.add(glow);
   g.scale.setScalar(0.8);
   trucks.push({ g, load, glow, phase: i / 14 });
 }
 const dustIM = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 8, 6), new THREE.MeshStandardMaterial({ color: 0xcdb89a, transparent: true, opacity: 0.22, depthWrite: false }), 14 * 8);
 scene.add(dustIM);
+dustIM.visible=!LOW;
 
 // ---------- склады, конвейеры, фабрика ----------
 const piles = {};
 for (const [d, dz] of [['soft', -20], ['hard', 20]]) {
-  const geo = new THREE.ConeGeometry(20, 15, 56, 5); const p = geo.attributes.position;
+  const geo = new THREE.ConeGeometry(20, 15, LOW?32:56, LOW?3:5); const p = geo.attributes.position;
   for (let i = 0; i < p.count; i++) { const k = 1 + 0.07 * (fbm(p.getX(i) / 4, p.getZ(i) / 4) - 0.5); p.setX(i, p.getX(i) * k); p.setZ(i, p.getZ(i) * k); }
   geo.computeVertexNormals(); piles[d] = mesh(geo, oreMat[d], PILES.x, 7.5, PILES.z + dz);
 }
@@ -296,16 +316,17 @@ const PV = new THREE.Vector3(60, 0, 180);
 const panelMat = new THREE.MeshStandardMaterial({ color: 0x1b2f52, metalness: 0.85, roughness: 0.18, emissive: 0x1e5aa8, emissiveIntensity: 0 });
 const panels = new THREE.InstancedMesh(new THREE.BoxGeometry(12, 0.35, 5), panelMat, 240);
 const legs = new THREE.InstancedMesh(new THREE.BoxGeometry(0.4, 3, 0.4), M(0x9aa3ab, { metalness: 0.6 }), 240);
-{ let k = 0; for (let r = 0; r < 12; r++) for (let c = 0; c < 20; c++) { setInst(panels, k, PV.x + c * 13, 3, PV.z + r * 9, 1, 1, 1, -0.8); setInst(legs, k, PV.x + c * 13, 1.5, PV.z + r * 9); k++; }
+{ let k = 0; for (let r = 0; r < 12; r++) for (let c = 0; c < 20; c++) { setInst(panels, k, PV.x + c * 13, 3, PV.z + r * 9, 1, 1, 1, 0.48); setInst(legs, k, PV.x + c * 13, 1.5, PV.z + r * 9); k++; }
   panels.castShadow = !LOW; panels.receiveShadow = true; scene.add(panels, legs); }
 label('<b>СЭС 250 МВт</b><span id="l-pv">—</span>', PV.x + 125, 18, PV.z + 50);
 
 // ---------- накопитель, подстанция ----------
 const BESS = new THREE.Vector3(230, 0, 60);
 const bessLights = [];
+const bessBodyMat=M(0xeef1f3,{metalness:0.2});bessBodyMat.userData.batchKey='bess-enclosures';
 for (let i = 0; i < 8; i++) {
   const x = BESS.x + (i % 4) * 9, z = BESS.z + Math.floor(i / 4) * 18;
-  mesh(new THREE.BoxGeometry(7, 7, 15), M(0xeef1f3, { metalness: 0.2 }), x, 3.5, z);
+  mesh(new THREE.BoxGeometry(7, 7, 15), bessBodyMat, x, 3.5, z);
   bessLights.push(mesh(new THREE.BoxGeometry(0.3, 5, 11), M(0x111111, { emissive: 0x4fd18b, emissiveIntensity: 1.2 }), x + 3.6, 3.5, z));
 }
 label('<b>Накопитель 60 МВт</b><span id="l-bess">—</span>', BESS.x + 14, 18, BESS.z + 9);
@@ -333,32 +354,33 @@ function pylon(x, z) {
 const pyl = [];
 for (let i = 0; i <= 10; i++) { const k = i / 10; pyl.push(pylon(SUB.x + 40 + (COAL.x - 120 - SUB.x - 40) * k, SUB.z - 30 + (COAL.z + 60 - SUB.z + 30) * k)); }
 for (const t of pyl) towerPts.push(t.p);
+const gridWireMat=M(0x3a3f44);gridWireMat.userData.batchKey='grid-wires';
 for (let i = 0; i < pyl.length - 1; i++) for (const off of [-11, 0, 11]) {
   const a = new THREE.Vector3(off, 45, 0), b = new THREE.Vector3(off, 45, 0);
   pyl[i].g.localToWorld(a); pyl[i + 1].g.localToWorld(b);
   const m = a.clone().add(b).multiplyScalar(0.5); m.y -= 8;
-  mesh(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(a, m, b), 16, 0.2, 4), M(0x3a3f44), 0, 0, 0, scene, false);
+  mesh(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(a, m, b), 16, 0.2, 4), gridWireMat, 0, 0, 0, scene, false);
 }
 {
   const y0 = Math.max(0, terrainH(COAL.x, COAL.z));
   const prof = []; for (let i = 0; i <= 14; i++) { const t = i / 14; prof.push(new THREE.Vector2(42 - 28 * Math.sin(t * Math.PI * 0.8) + 7 * t, t * 120)); }
-  for (const dx of [-70, 30]) mesh(new THREE.LatheGeometry(prof, 56), M(0xcfcac0, { side: THREE.DoubleSide, roughness: 0.9 }), COAL.x + dx, y0, COAL.z);
+  for (const dx of [-70, 30]) mesh(new THREE.LatheGeometry(prof, LOW?32:56), M(0xcfcac0, { side: THREE.DoubleSide, roughness: 0.9 }), COAL.x + dx, y0, COAL.z);
   for (const dx of [110, 140]) { mesh(new THREE.CylinderGeometry(4.5, 8, 200, 16), M(0xb3aaa0), COAL.x + dx, y0 + 100, COAL.z + 20);
     for (const yy of [170, 190]) mesh(new THREE.CylinderGeometry(4.8, 4.8, 8, 16), M(0xc0392b), COAL.x + dx, y0 + yy, COAL.z + 20); }
   mesh(new THREE.BoxGeometry(100, 55, 55), M(0x8e8a84), COAL.x + 170, y0 + 27, COAL.z - 50);
   mesh(new THREE.ConeGeometry(45, 22, 8), M(0x1e1e1e, { roughness: 1 }), COAL.x + 260, y0 + 11, COAL.z + 40);   // угольный склад
 }
 label('<b>Угольная ТЭС · сеть KEGOC</b><span id="l-coal">—</span>', COAL.x + 40, 260, COAL.z);
-const SMOKE_N = 320;
-const smokeMat = new THREE.MeshStandardMaterial({ color: 0x8c8780, transparent: true, opacity: 0.32, depthWrite: false, roughness: 1 });
+const SMOKE_N = LOW?128:320;
+const smokeMat = M(0x8c8780,{ transparent: true, opacity: 0.32, depthWrite: false, roughness: 1, metalness: 0 });
 const smoke = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), smokeMat, SMOKE_N); scene.add(smoke);
 const smokeSrc = [[110, 205, 20], [140, 205, 20], [-70, 120, 0], [30, 120, 0]];
 
 // ---------- потоки энергии ----------
 function flow(points, color) {
   const curve = new THREE.CatmullRomCurve3(points);
-  mesh(new THREE.TubeGeometry(curve, 160, 0.25, 6), new THREE.MeshBasicMaterial({ color: 0x334455, transparent: true, opacity: 0.3 }), 0, 0, 0, scene, false);
-  const n = 60, im = new THREE.InstancedMesh(new THREE.SphereGeometry(1.6, 10, 8), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, fog: false }), n);
+  mesh(new THREE.TubeGeometry(curve, LOW?80:160, 0.25, LOW?4:6), new THREE.MeshBasicMaterial({ color: 0x334455, transparent: true, opacity: 0.3 }), 0, 0, 0, scene, false);
+  const n = LOW?30:60, im = new THREE.InstancedMesh(new THREE.SphereGeometry(1.6, LOW?6:10, LOW?4:8), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, fog: false }), n);
   scene.add(im); return { curve, im, n, mw: 0, off: Math.random() };
 }
 const flows = {
@@ -371,13 +393,25 @@ const flows = {
 const dummy = new THREE.Object3D();
 function updFlow(f, dt) {
   f.off = (f.off + dt * (0.025 + Math.min(f.mw, 300) / 5000)) % 1;
-  const vis = Math.round(Math.min(f.n, f.mw / 4.5));
+  const vis = Math.round(Math.min(f.n, f.mw / 270 * f.n));
   for (let i = 0; i < f.n; i++) {
     if (i < vis) { dummy.position.copy(f.curve.getPointAt((i / f.n + f.off) % 1)); dummy.scale.setScalar(1); } else dummy.scale.setScalar(0);
     dummy.rotation.set(0, 0, 0); dummy.updateMatrix(); f.im.setMatrixAt(i, dummy.matrix);
   }
   f.im.instanceMatrix.needsUpdate = true;
 }
+
+const details = installSceneDetails({scene,camera,controls,renderer,label,mesh,M,road,terrainH,gravel,PLANT,PILES,CHARGE,BESS,SUB,WIND,PV,PIT,PIT_R,trucks,mills,turbines,piles,bessLights,bessBodyMat,gridWireMat,chargers,windows,shovels,flows,belts,getData:()=>D,getSource:()=>source,getView:()=>view,cancelEvent:cancelScenarioEvent});
+// Components stay in each animated root's local coordinates. Cargo, lights,
+// labels and independently moving parts are not baked into the rigid body.
+const rigidMergeStats=LOW?[
+  ...trucks.map(t=>mergeStaticMeshes(t.g,[t.load,t.glow],{local:true,bakeColors:true})),
+  ...turbines.map(hub=>mergeStaticMeshes(hub,[],{local:true,bakeColors:true})),
+  ...mills.map(m=>mergeStaticMeshes(m.drum,[],{local:true,bakeColors:true})),
+]:[];
+const mergeStats = mergeStaticMeshes(scene,details.dynamicRoots,{bakeColors:LOW});
+mergeStats.rigid={batches:0,mergedMeshes:0,savedMeshes:0};
+for(const stat of rigidMergeStats){mergeStats.before+=stat.before-stat.after;mergeStats.batches+=stat.batches;mergeStats.mergedMeshes+=stat.mergedMeshes;mergeStats.rigid.batches+=stat.batches;mergeStats.rigid.mergedMeshes+=stat.mergedMeshes;mergeStats.rigid.savedMeshes+=stat.before-stat.after;}
 
 // ---------- HUD ----------
 const set = (id, h) => { const e = document.getElementById(id); if (e) e.innerHTML = h; };
@@ -389,16 +423,19 @@ function hud() {
   $('clock').textContent = v('site', 'sim_time', '');
   $('whyt').innerHTML = view === 'now'
     ? `<b class="bad">Проблема.</b> Рудник работает «ровно» и не слушает ветер и солнце: из угольной сети ${fmt(e.grid)} МВт${e.curtail > 1 ? `, а <b class="bad">${fmt(e.curtail)} МВт ветра и солнца сейчас выбрасывается</b>` : ''}. Твёрдая руда мелется в любой час.`
-    : `<b class="good">Почему так.</b> ${v('coordinator', 'why', '—')}`;
+    : '<b class="good">Почему так.</b> ';
+  if(view!=='now')$('whyt').appendChild(document.createTextNode(v('coordinator','why','—')));
   set('l-pit', `${fmt(v('pit', 'ore_tph'))} т/ч · твёрдой ${fmt(100 * v('pit', 'hard_frac'))} %`);
   set('l-ps', `${fmt(v('pile-soft', 'tonnes') / 1000)} тыс. т · ${fmt(v('pile-soft', 'fill_pct'))} %`);
   set('l-ph', `${fmt(v('pile-hard', 'tonnes') / 1000)} тыс. т · ${fmt(v('pile-hard', 'fill_pct'))} %`);
-  set('l-pl', view === 'now' ? '6 660 т/ч · смесь · P80 150 мкм' : `твёрдой ${fmt(v('plant', 'feed_hard_tph'))} · мягкой ${fmt(v('plant', 'feed_soft_tph'))} т/ч · P80 ${fmt(v('plant', 'p80_um'))} мкм`);
+  set('l-pl', `${view==='now'?'основной двойник · ':''}твёрдой ${fmt(v('plant', 'feed_hard_tph'))} · мягкой ${fmt(v('plant', 'feed_soft_tph'))} т/ч · P80 ${fmt(v('plant', 'p80_um'))} мкм`);
   set('l-fl', `${fmt(v('flotation', 'cu_tph'), 1)} т меди/ч`);
   set('l-wind', `${fmt(v('wind', 'power_mw'))} МВт${e.curtail > 1 ? ` · <span class="bad">сброс ${fmt(e.curtail)}</span>` : ''}`);
   set('l-pv', `${fmt(v('pv', 'power_mw'))} МВт`);
   set('l-bess', view === 'now' ? 'не управляется' : v('bess', 'available', true) ? `заряд ${fmt(v('bess', 'soc'))} %` : 'ОТКАЗ');
-  set('l-grid', `из сети ${fmt(e.grid)} МВт`);
+  const gridCap=v('substation','grid_cap_mw',null),gridNominal=v('substation','grid_nominal_mw',null);
+  set('l-grid', gridNominal===null ? `${fmt(e.grid)} / ${fmt(gridCap)} МВт · предел`
+    : `Предел ${fmt(gridCap)} / ${fmt(gridNominal)} МВт · из сети ${fmt(e.grid)}`);
   set('l-coal', `<span class="bad">${fmt(e.co2)} т CO₂ в час</span> — из‑за рудника`);
   set('l-ch', view === 'now' ? 'по графику смен' : `${fmt(e.charge)} МВт`);
   const a = { cu: v('shadow-v0', 'cu_adj_t'), co2: v('shadow-v0', 'co2_t'), curt: v('shadow-v0', 'curtail_mwh') };
@@ -410,36 +447,40 @@ function hud() {
     <tr><td>CO₂, т</td><td>${fmt(a.co2)}</td><td>${fmt(b.co2)}</td></tr>`;
   set('g-co2', fmt(e.co2)); set('g-ren', fmt(100 * e.used / Math.max(1, e.used + e.grid))); set('g-cur', fmt(e.curtail));
   flows.grid.mw = e.grid; flows.wind.mw = Math.max(0, v('wind', 'power_mw') - e.curtail * 0.7); flows.pv.mw = Math.max(0, v('pv', 'power_mw') - e.curtail * 0.3);
-  flows.plant.mw = v('plant', 'mill_mw'); flows.charge.mw = view === 'now' ? 22 : e.charge * 3;
+  flows.plant.mw = v('plant', 'mill_mw'); flows.charge.mw = e.charge;
   for (const [dd, n] of [['soft', 'pile-soft'], ['hard', 'pile-hard']]) { const f = 0.35 + 0.9 * v(n, 'fill_pct', 50) / 100; piles[dd].scale.set(f, f, f); piles[dd].position.y = 7.5 * f; }
-  belts[0].rate = view === 'now' ? 0.8 : v('plant', 'feed_soft_tph') / 4000; belts[1].rate = view === 'now' ? 0.8 : v('plant', 'feed_hard_tph') / 4000;
+  belts[0].rate = v('plant', 'feed_soft_tph') / 4000; belts[1].rate = v('plant', 'feed_hard_tph') / 4000;
   for (let l = 0; l < 2; l++) {
     const n = `line-${l + 1}`, ok = v(n, 'available', true), q = v(n, 'feed_tph', 3330);
-    mills[l].speed = q / 3330; const c = !ok ? 0xe0675a : q > 0 ? 0x4fd18b : 0x888888; mills[l].lamp.material.color.set(c); mills[l].lamp.material.emissive.set(c);
+    mills[l].speed = ok ? q / 3330 : 0; const c = !ok ? 0xe0675a : q > 0 ? 0x4fd18b : 0x888888; mills[l].lamp.material.color.set(c); mills[l].lamp.material.emissive.set(c);mills[l].lamp.material.emissiveIntensity=2;
   }
   panelMat.emissiveIntensity = Math.min(1, v('pv', 'power_mw') / 250) * 0.45;
-  const soc = view === 'now' ? 0.5 : v('bess', 'soc', 50) / 100; bessLights.forEach(x => { x.scale.y = Math.max(0.05, soc); });
-  const nch = view === 'now' ? 1 : Math.round(e.charge / 18); chargers.forEach((c, i) => c.material.emissiveIntensity = i < nch ? 2.5 : 0);
+  const soc = v('bess', 'soc', 0) / 100; bessLights.forEach(x => { x.scale.y = Math.max(0.05, soc); });
+  const nch = Math.round(v('energy','charge_mw') / 18); chargers.forEach((c, i) => c.material.emissiveIntensity = i < nch ? 2.5 : 0);
+  details.update(D);
 }
 setInterval(hud, 400);
 
 // ---------- время суток ----------
-let dayK = 1;
-function skyUpd() {
-  const s = String(v('site', 'sim_time', '2026-04-15 12:00')), q = Q.get('h');
-  const h = q !== null ? +q : +(s.slice(11, 13) || 12);
+let dayK = 1, lightingOverride = Q.has('h') && Number.isFinite(Number(Q.get('h'))) ? THREE.MathUtils.clamp(Number(Q.get('h')),0,23.99) : 9, lightingHour=9;
+function setLightingHour(hour){lightingOverride=hour===null?null:THREE.MathUtils.clamp(Number(hour),0,23.99);if(lightingOverride!==null&&!Number.isFinite(lightingOverride))lightingOverride=null;skyUpd(true);}
+$('light-hour').addEventListener('input',e=>setLightingHour(Number(e.target.value)));$('light-auto').onclick=()=>setLightingHour(null);
+function skyUpd(immediate=false) {
+  const s = String(v('site', 'sim_time', '2026-04-15 12:00'));
+  const h = lightingOverride ?? (Number(s.slice(11,13)) + Number(s.slice(14,16)||0)/60);lightingHour=Number.isFinite(h)?h:12;
+  $('light-hour').value=String(lightingHour);$('light-value').textContent=`${String(Math.floor(lightingHour)).padStart(2,'0')}:${String(Math.floor(lightingHour%1*60)).padStart(2,'0')} · ${lightingOverride===null?'модель':'просмотр'}`;$('light-auto').classList.toggle('on',lightingOverride===null);$('light-hour').title='Меняет только освещение. Состояние двойников и модельное время не меняются.';
   const a = (h + 0.5 - 6) / 12 * Math.PI, el = Math.sin(a);
-  const day = THREE.MathUtils.clamp(el * 1.8 + 0.2, 0, 1); dayK += (day - dayK) * 0.03;
-  const dir = new THREE.Vector3(Math.cos(a) * 0.85, Math.max(0.06, el), 0.5).normalize();
+  const day = THREE.MathUtils.clamp(el * 1.8 + 0.2, 0, 1); dayK = immediate ? day : dayK + (day - dayK) * 0.03;
+  const dir = new THREE.Vector3(Math.cos(a) * 0.85, Math.max(0.06, el), 0.5).normalize().lerp(new THREE.Vector3(-.45,.8,.35).normalize(),1-dayK).normalize();
   sun.position.copy(dir).multiplyScalar(1200);
-  sun.intensity = 0.2 + 2.7 * dayK; hemi.intensity = 0.3 + 0.7 * dayK;
-  sun.color.setHSL(0.09, 0.7 * (1 - dayK) + 0.15, 0.75 + 0.15 * dayK);
+  sun.intensity = 0.85 + 2.05 * dayK; hemi.intensity = 0.6 + 0.6 * dayK;nightAmbient.intensity=.18*(1-dayK);
+  sun.color.lerpColors(new THREE.Color(0x9bbcf0),new THREE.Color(0xffefd6),dayK);hemi.color.lerpColors(new THREE.Color(0x719fcf),new THREE.Color(0xcfe3ff),dayK);hemi.groundColor.lerpColors(new THREE.Color(0x7086aa),new THREE.Color(0x8a7458),dayK);
   skyMat.uniforms.sunDir.value.set(Math.cos(a) * 0.85, el, 0.5).normalize(); skyMat.uniforms.day.value = dayK;
-  skyMat.uniforms.top.value.lerpColors(new THREE.Color(0x070f1e), new THREE.Color(0x3a78bb), dayK);
-  skyMat.uniforms.bot.value.lerpColors(new THREE.Color(0x1d2640), new THREE.Color(0xe2e8e9), dayK);
-  scene.fog.color.lerpColors(new THREE.Color(0x1d2640), new THREE.Color(0xd3dde2), dayK);
+  skyMat.uniforms.top.value.lerpColors(new THREE.Color(0x1a2a4a), new THREE.Color(0x3a78bb), dayK);
+  skyMat.uniforms.bot.value.lerpColors(new THREE.Color(0x3a4a6e), new THREE.Color(0xe2e8e9), dayK);
+  scene.fog.color.lerpColors(new THREE.Color(0x3a4a6e), new THREE.Color(0xd3dde2), dayK);
   stars.material.opacity = (1 - dayK) * 0.9;
-  renderer.toneMappingExposure = 0.8 + 0.3 * dayK;
+  renderer.toneMappingExposure = 1 + 0.25 * dayK;
   windows.forEach(w => w.material.emissiveIntensity = (1 - dayK) * 2.2);
 }
 
@@ -461,7 +502,15 @@ let tour = null;
 function startStory() { tour = { i: 0, t0: performance.now(), from: { p: camera.position.clone(), t: controls.target.clone() } }; setView(STORY[0].v); }
 function stopStory() { tour = null; $('caption').classList.remove('show'); $('dots').innerHTML = ''; }
 $('tour').onclick = startStory;
-$('reset').onclick = () => { stopStory(); camera.position.copy(HOME.pos); controls.target.copy(HOME.tgt); };
+$('reset').onclick = () => {
+  stopStory();
+  // OrbitControls retains angular/pan velocity after a drag. Flush it before
+  // restoring HOME; otherwise the next frames move the reset camera again.
+  const damping=controls.enableDamping;
+  controls.enableDamping=false;controls.update();
+  camera.position.copy(HOME.pos);controls.target.copy(HOME.tgt);controls.update();
+  controls.enableDamping=damping;
+};
 renderer.domElement.addEventListener('pointerdown', () => { if (tour) stopStory(); });
 addEventListener('keydown', ev => {
   if (!tour) return;
@@ -487,7 +536,7 @@ setView('tynys');
 
 // ---------- анимация ----------
 let last = performance.now(), rot = 0, smokeT = 0, fps = 60;
-let lastDraw = 0;
+let lastDraw = 0, renderedFrames=0; const frameTimes=[];
 function frame(now) {
   if (LOW && now - lastDraw < 66) { requestAnimationFrame(frame); return; }
   lastDraw = now;
@@ -495,7 +544,8 @@ function frame(now) {
   skyUpd();
   const e = E();
   const feather = e.curtail > 1 ? Math.min(0.9, e.curtail / Math.max(1, v('wind', 'power_mw'))) : 0;
-  rot += dt * (0.2 + 3.2 * v('wind', 'cf_pct', 0) / 100);
+  const lull=details.events.some(e=>e.active&&e.kind==='lull');
+  rot += dt * (lull ? 0 : 3.4 * Math.max(0,v('wind', 'cf_pct', 0)) / 100);
   turbines.forEach((hh, i) => { if (i >= Math.round(feather * turbines.length)) hh.rotation.z = rot + i; });
   mills.forEach(m => m.drum.rotation.x += dt * 1.2 * (m.speed || 0));
   shovels.forEach((s, i) => s.rotation.y = Math.sin(now / 1500 + i * 2) * 0.9);
@@ -503,9 +553,8 @@ function frame(now) {
   const slots = { c: 0, w: 0 };
   trucks.forEach((tr, i) => {
     const n = `truck-${String(i + 1).padStart(2, '0')}`; let st = v(n, 'state', 'empty');
-    if (view === 'now' && (st === 'charging' || st === 'waiting')) st = i % 2 ? 'loaded' : 'empty';
     tr.glow.intensity = st === 'charging' ? 5 : 0;
-    for (let k = 0; k < 8; k++) setInst(dustIM, i * 8 + k, 0, -500, 0, 0, 0, 0);
+    if(!LOW)for (let k = 0; k < 8; k++) setInst(dustIM, i * 8 + k, 0, -500, 0, 0, 0, 0);
     if (st === 'charging') { const k = slots.c++ % 4; tr.g.position.set(CHARGE.x - 30 + k * 20, 0.4, CHARGE.z - 5); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
     if (st === 'waiting') { const k = slots.w++; tr.g.position.set(CHARGE.x - 34 + (k % 8) * 10, 0.4, CHARGE.z + 9 + Math.floor(k / 8) * 9); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
     const target = v(n, 'route_pos', tr.phase); let dd = target - tr.phase; dd -= Math.round(dd);
@@ -521,7 +570,7 @@ function frame(now) {
       setInst(dustIM, i * 8 + k, tr.g.position.x + back.x, 1 + ph * 5, tr.g.position.z + back.z, 1 + ph * 3, 1 + ph * 2, 1 + ph * 3);
     }
   });
-  dustIM.instanceMatrix.needsUpdate = true;
+  if(!LOW)dustIM.instanceMatrix.needsUpdate = true;
   belts.forEach(b => {
     b.off = (b.off + dt * 0.06 * Math.max(0.05, b.rate)) % 1;
     for (let i = 0; i < 30; i++) {
@@ -544,8 +593,10 @@ function frame(now) {
   Object.values(flows).forEach(f => updFlow(f, dt));
   tourStep(now);
   controls.update();
-  renderer.render(scene, camera); labels.render(scene, camera);
+  details.tick(now,dayK);
+  renderer.render(scene, camera); labels.render(scene, camera);details.layoutLabels();
+  renderedFrames++;frameTimes.push(performance.now());if(frameTimes.length>300)frameTimes.shift();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-window.__tynys = { scene, camera, controls, setView, startStory, low: LOW, softGL: SOFT_GL, get fps() { return fps; } };
+window.__tynys = { scene,camera,controls,renderer,setView,startStory,low:LOW,softGL:SOFT_GL,mergeStats,setLightingHour,selectObject:details.selectObject,clearSelection:details.clearSelection,get fps(){return fps;},get renderedFrames(){return renderedFrames;},get frameTimes(){return [...frameTimes];},get events(){return details.events;},get selected(){return details.selected;},get lightingHour(){return lightingHour;},get lightingOverride(){return lightingOverride;},get pixelRatio(){return renderer.getPixelRatio();},get source(){return source;},get dayK(){return dayK;},get data(){return structuredClone(D);},get scenarioVisuals(){return{...details.visuals,windLull:details.events.some(e=>e.active&&e.kind==='lull'),windAngles:turbines.map(t=>t.rotation.z),bessColor:bessLights[0].material.emissive.getHex(),line2Speed:mills[1].speed,headlights:details.headlights.filter(x=>x.visible).length};}};

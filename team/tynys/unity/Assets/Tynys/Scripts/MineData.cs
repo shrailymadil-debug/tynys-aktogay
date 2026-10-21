@@ -56,7 +56,7 @@ namespace Tynys
         private UnityWebRequest pending;
         private MineState lastLive;
         private bool appliedLive;
-        private float demoHour, lastReceived, lastDemoHour;
+        private float demoHour = 9f, lastReceived, lastDemoHour = 9f;
         private float demoBessMWh = 72;
         private const float StaleAfterSeconds = 5;
         private const float MaxPayloadBytes = 1024 * 1024;
@@ -112,8 +112,8 @@ namespace Tynys
         public void ResetDemo()
         {
             if (LiveMode) return;
-            demoHour = 0;
-            lastDemoHour = 0;
+            demoHour = 9f;
+            lastDemoHour = 9f;
             demoBessMWh = 72;
             Scenario = DemoScenario.Normal;
             Paused = false;
@@ -246,7 +246,7 @@ namespace Tynys
             float elapsedHours = Mathf.Max(0, demoHour - lastDemoHour);
             lastDemoHour = demoHour;
             s.hour = demoHour;
-            float daylight = Mathf.Max(0, Mathf.Sin((Mathf.Repeat(demoHour + 8, 24) - 6) / 12 * Mathf.PI));
+            float daylight = Mathf.Max(0, Mathf.Sin((Mathf.Repeat(demoHour, 24) - 6) / 12 * Mathf.PI));
             s.windMW = Mathf.Clamp(165 + 95 * Mathf.Sin(demoHour * 0.29f), 0, 300);
             if (Scenario == DemoScenario.Lull) s.windMW *= 0.08f;
             s.pvMW = 230 * daylight;
@@ -299,7 +299,7 @@ namespace Tynys
             s.flexHours = 0;
             s.cuV0 = s.cuV1 = s.cuV2 = 0; // No fabricated comparative evidence.
             s.mode = inhale ? "вдох" : "выдох";
-            s.simTime = "Демо · " + Mathf.FloorToInt(demoHour).ToString(CultureInfo.InvariantCulture) + " ч";
+            s.simTime = "Демо · " + Mathf.FloorToInt(Mathf.Repeat(demoHour, 24)).ToString("00", CultureInfo.InvariantCulture) + ":" + Mathf.FloorToInt(Mathf.Repeat(demoHour * 60, 60)).ToString("00", CultureInfo.InvariantCulture);
             string detail;
             switch (Scenario)
             {
@@ -315,7 +315,7 @@ namespace Tynys
             int charging = Mathf.RoundToInt(s.chargeMW / 18);
             for (int i = 0; i < s.trucks.Length; i++)
             {
-                float phase = Mathf.Repeat(demoHour * 1.7f + i / 14f, 1);
+                float phase = Mathf.Repeat(demoHour * .22f + i / 14f, 1);
                 s.trucks[i].routePos = phase;
                 s.trucks[i].soc = Mathf.Clamp(58 + 18 * Mathf.Sin(demoHour * 0.21f + i), 10, 95);
                 s.trucks[i].state = i < charging ? "charging" : phase < 0.5f ? "loaded" : "empty";

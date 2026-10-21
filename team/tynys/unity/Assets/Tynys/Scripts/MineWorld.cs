@@ -18,6 +18,8 @@ namespace Tynys
         public Renderer[] lineStatus, batteryBars;
         public LineRenderer[] energyFlows, oreFlows;
         public Transform[] flowDots;
+        public ParticleSystem[] steam;
+        public Light[] truckHeadlights;
         public Vector3[] route;
         public int outboundCount=10;
         public Material sand, rock, darkRock, concrete, steel, ivory, glass, rubber, copper, teal, cyan, blue, red, amber;
@@ -27,6 +29,14 @@ namespace Tynys
         private string lastId;
         private MaterialPropertyBlock propertyBlock;
         private Vector3[] outboundRoute, returnRoute;
+        private Vector3[][] flowPaths;
+        private Material[] flowMaterials;
+        private float[] truckPhases;
+        private bool[] hasTruckPhase;
+        private string[] truckPoseStates;
+        private bool poseWasLive;
+        private float lastPoseHour;
+        public Material[] strata;
 
         public void Build()
         {
@@ -40,22 +50,33 @@ namespace Tynys
             Fleet();
             Connections();
             Labels();
+            var labels = gameObject.GetComponent<MineSiteLabels>();
+            if (labels == null) labels = gameObject.AddComponent<MineSiteLabels>();
+            labels.world = this;
         }
 
         void CreateMaterials()
         {
-            sand=Mat("01 · степь", "#AA9275", .08f);
-            rock=Mat("02 · уступы", "#BB9F7E", .05f);
-            darkRock=Mat("03 · нижние уступы", "#92765B", .05f);
+            sand=Mat("01 · степь", "#C8B28C", .08f);
+            rock=Mat("02 · уступы", "#B89A72", .1f);
+            darkRock=Mat("03 · нижние уступы", "#857F70", .08f);
+            strata=new[]{Mat("Пласт · песчаник","#C4A67B",.08f),Mat("Пласт · охра","#B88960",.09f),
+                Mat("Пласт · известняк","#C2BAA4",.07f),Mat("Пласт · сланец","#8D9490",.12f),
+                Mat("Пласт · медная руда","#9C765D",.12f),Mat("Пласт · порфир","#AAA18B",.09f),Mat("Пласт · основание","#777D79",.1f)};
             concrete=Mat("04 · бетон", "#7C898A", .12f);
             steel=Mat("05 · сталь", "#344C58", .35f);
             ivory=Mat("06 · светлый металл", "#D6E3DD", .32f);
-            glass=Mat("07 · стекло", "#193B4A", .75f);
+            glass=Mat("07 · стекло", "#77B6C4", .92f);
+            glass.SetFloat("_Metallic",.12f);
+            glass.color=new Color(.36f,.63f,.7f,.27f);
+            glass.SetFloat("_Mode",3f);glass.SetInt("_SrcBlend",(int)BlendMode.One);glass.SetInt("_DstBlend",(int)BlendMode.OneMinusSrcAlpha);
+            glass.SetInt("_ZWrite",0);glass.EnableKeyword("_ALPHAPREMULTIPLY_ON");glass.SetOverrideTag("RenderType","Transparent");glass.renderQueue=3000;
             rubber=Mat("08 · шины", "#18282D", .1f);
             copper=Mat("09 · медная руда", "#BF794C", .1f);
             teal=Mat("10 · энергия ВИЭ", "#52D6B5", .45f, true);
             cyan=Mat("11 · электроэнергия", "#66BBD7", .45f, true);
             blue=Mat("12 · фотоэлементы", "#245575", .55f);
+            blue.SetFloat("_Glossiness",.91f);blue.SetFloat("_Metallic",.55f);
             red=Mat("13 · авария", "#EC765B", .35f, true);
             amber=Mat("14 · самосвалы", "#E5B95D", .35f);
         }
@@ -156,7 +177,7 @@ namespace Tynys
         {
             var pit=Group("01 · Карьер",new Vector3(-43,0,0),"pit");
             for(int i=0;i<7;i++)
-                Ring(pit,"Уступ "+(i+1),31-i*3.2f,25-i*2.5f,27.8f-i*3.2f,22.5f-i*2.5f,-i*2.3f,-(i+1)*2.3f,i%2==0?rock:darkRock);
+                Ring(pit,"Уступ "+(i+1),31-i*3.2f,25-i*2.5f,27.8f-i*3.2f,22.5f-i*2.5f,-i*2.3f,-(i+1)*2.3f,strata[i]);
             Cyl("Дно карьера",pit,new Vector3(0,-16.15f,0),new Vector3(18,.1f,15),darkRock);
             var road=new List<Vector3>();
             for(int i=0;i<=150;i++)
@@ -203,14 +224,16 @@ namespace Tynys
                 Beam("Стрела стакера",t,new Vector3(-8,1,-5),new Vector3(0,9,0),.6f,ivory);
                 Box("Привод стакера",t,new Vector3(-8,1,-5),new Vector3(2,2,2),steel);
             }
-            mills=new Transform[2];lineStatus=new Renderer[2];
+            mills=new Transform[2];lineStatus=new Renderer[2];steam=new ParticleSystem[2];
             for(int i=0;i<2;i++)
             {
                 var t=Group("03 · Линия переработки "+(i+1),new Vector3(25,0,i==0?-13:10),"line-"+(i+1));
                 Box("Фундамент",t,new Vector3(0,.25f,0),new Vector3(23,.5f,17),concrete);
                 for(int x=-1;x<=1;x+=2) for(int z=-1;z<=1;z+=2)
                     Box("Колонна",t,new Vector3(x*9,4,z*6.5f),new Vector3(.65f,8,.65f),steel);
-                Box("Частичный разрез крыши",t,new Vector3(0,8.4f,5.2f),new Vector3(23,.6f,6.5f),ivory);
+                Box("Стеклянная крыша",t,new Vector3(0,8.4f,1f),new Vector3(23,.16f,13.5f),glass);
+                for(int rib=-2;rib<=2;rib++)Beam("Ребро крыши",t,new Vector3(rib*4.5f,8.55f,-5.7f),new Vector3(rib*4.5f,8.55f,7.7f),.17f,ivory);
+                steam[i]=Steam(t,new Vector3(7,5,-3));
                 Beam("Ферма крыши",t,new Vector3(-10,8.1f,-6),new Vector3(10,8.1f,-6),.35f,ivory);
                 Box("Задняя стена",t,new Vector3(0,4.4f,7),new Vector3(21,8,.5f),steel);
                 Box("Карниз",t,new Vector3(0,8.05f,-8.5f),new Vector3(23,.8f,.4f),teal);
@@ -253,6 +276,53 @@ namespace Tynys
                 var p=Vector3.Lerp(a,b,i/3f);
                 Beam("Опора",t,new Vector3(p.x,0,p.z),p,.35f,ivory);
             }
+        }
+
+        ParticleSystem Steam(Transform parent,Vector3 position)
+        {
+            var g=new GameObject("Пар · иллюстративный эффект",typeof(ParticleSystem));
+            g.transform.SetParent(parent,false);g.transform.localPosition=position;g.transform.localRotation=Quaternion.Euler(-90,0,0);
+            var ps=g.GetComponent<ParticleSystem>();ps.Stop(true,ParticleSystemStopBehavior.StopEmittingAndClear);
+            var main=ps.main;main.duration=6;main.loop=true;main.startLifetime=new ParticleSystem.MinMaxCurve(2.8f,4.5f);
+            main.startSpeed=new ParticleSystem.MinMaxCurve(.7f,1.5f);main.startSize=new ParticleSystem.MinMaxCurve(1f,2.1f);
+            main.startColor=new Color(.82f,.91f,.96f,.2f);main.maxParticles=50;main.simulationSpace=ParticleSystemSimulationSpace.World;
+            main.playOnAwake=true;main.prewarm=true;
+            var emission=ps.emission;emission.rateOverTime=5f;
+            var shape=ps.shape;shape.shapeType=ParticleSystemShapeType.Cone;shape.angle=12;shape.radius=.6f;
+            var velocity=ps.velocityOverLifetime;velocity.enabled=true;velocity.space=ParticleSystemSimulationSpace.World;
+            velocity.x=.35f;velocity.y=1.1f;velocity.z=.1f;
+            var size=ps.sizeOverLifetime;size.enabled=true;size.size=new ParticleSystem.MinMaxCurve(1,AnimationCurve.Linear(0,.35f,1,2f));
+            var color=ps.colorOverLifetime;color.enabled=true;
+            var gradient=new Gradient();gradient.SetKeys(new[]{new GradientColorKey(Color.white,0),new GradientColorKey(Color.white,1)},
+                new[]{new GradientAlphaKey(0,0),new GradientAlphaKey(.65f,.2f),new GradientAlphaKey(0,1)});color.color=gradient;
+            var tex=new Texture2D(32,32,TextureFormat.RGBA32,false){name="Мягкая частица пара",wrapMode=TextureWrapMode.Clamp};
+            for(int x=0;x<32;x++)for(int y=0;y<32;y++)
+            {
+                float radius=new Vector2((x-15.5f)/15.5f,(y-15.5f)/15.5f).magnitude;
+                tex.SetPixel(x,y,new Color(1,1,1,Mathf.Pow(Mathf.Clamp01(1-radius),2)));
+            }
+            tex.Apply();
+            var material=new Material(Shader.Find("Particles/Standard Unlit")){name="Пар · полупрозрачный",mainTexture=tex};
+            material.SetFloat("_Mode",2);material.SetInt("_SrcBlend",(int)BlendMode.SrcAlpha);material.SetInt("_DstBlend",(int)BlendMode.OneMinusSrcAlpha);
+            material.SetInt("_ZWrite",0);material.EnableKeyword("_ALPHABLEND_ON");material.renderQueue=3000;
+            var renderer=g.GetComponent<ParticleSystemRenderer>();renderer.sharedMaterial=material;renderer.renderMode=ParticleSystemRenderMode.Billboard;
+            renderer.shadowCastingMode=ShadowCastingMode.Off;renderer.receiveShadows=false;
+            return ps;
+        }
+
+        public static Vector3[] Spline(Vector3[] points,int subdivisions)
+        {
+            var samples=new List<Vector3>();
+            for(int i=0;i<points.Length-1;i++)
+            {
+                Vector3 p0=points[Mathf.Max(0,i-1)],p1=points[i],p2=points[i+1],p3=points[Mathf.Min(points.Length-1,i+2)];
+                for(int j=0;j<subdivisions;j++)
+                {
+                    float t=j/(float)subdivisions,t2=t*t,t3=t2*t;
+                    samples.Add(.5f*((2*p1)+(-p0+p2)*t+(2*p0-5*p1+4*p2-p3)*t2+(-p0+3*p1-3*p2+p3)*t3));
+                }
+            }
+            samples.Add(points[points.Length-1]);return samples.ToArray();
         }
 
         void Energy()
@@ -337,6 +407,8 @@ namespace Tynys
             }
             path.AddRange(new[]{new Vector3(-74,.4f,-17),new Vector3(-65,.4f,-29),
                 new Vector3(-40,.4f,-28),new Vector3(-20,.4f,-24),new Vector3(-12,.4f,-16)});
+            // Sample Catmull-Rom curves once; both road and trucks share the smooth path.
+            path = new List<Vector3>(Spline(path.ToArray(),5));
             outboundCount=path.Count;
             Road("Дорога самосвалов",path.ToArray(),3.2f,concrete);
             for(int i=outboundCount-2;i>=0;i--)path.Add(path[i]);
@@ -352,7 +424,9 @@ namespace Tynys
                 Beam("Кабель",charging,new Vector3(x,2.6f,1),new Vector3(x+1.5f,.3f,-1),.14f,rubber);
                 Box("Разметка",charging,new Vector3(x,.25f,-3),new Vector3(4,.05f,4),ivory);
             }
-            trucks=new Transform[14];truckLoads=new Transform[14];
+            trucks=new Transform[14];truckLoads=new Transform[14];truckHeadlights=new Light[28];
+            var lamp=Mat("Фары · тёплый свет","#FFF3C2",.75f,true);
+            lamp.SetColor("_EmissionColor",new Color(2.2f,1.9f,1.3f));
             for(int i=0;i<14;i++)
             {
                 var t=Group("Самосвал · звено "+(i+1),route[i%route.Length],"truck-"+(i+1).ToString("00"));
@@ -360,6 +434,16 @@ namespace Tynys
                 Box("Шасси",t,new Vector3(0,.9f,0),new Vector3(2.4f,.7f,4.2f),steel);
                 Box("Кабина",t,new Vector3(0,1.8f,1.25f),new Vector3(2.6f,1.5f,1.6f),amber);
                 Box("Стекло",t,new Vector3(0,2.1f,2.07f),new Vector3(2.1f,.7f,.1f),glass);
+                for(int side=0;side<2;side++)
+                {
+                    float lampX=side==0?-.86f:.86f;
+                    Box("Фара",t,new Vector3(lampX,1.35f,2.1f),new Vector3(.5f,.32f,.15f),lamp);
+                    var head=new GameObject("Луч фары",typeof(Light));head.transform.SetParent(t,false);
+                    head.transform.localPosition=new Vector3(lampX,1.4f,2.2f);head.transform.localEulerAngles=new Vector3(12,0,0);
+                    var source=head.GetComponent<Light>();source.type=LightType.Spot;source.spotAngle=52;source.innerSpotAngle=30;
+                    source.color=new Color(1,.91f,.68f);source.intensity=2.2f;source.range=15;source.shadows=LightShadows.None;
+                    truckHeadlights[i*2+side]=source;
+                }
                 Box("Кузов",t,new Vector3(0,1.8f,-.9f),new Vector3(3,1.1f,2.8f),amber);
                 Box("Борт L",t,new Vector3(-1.45f,2.55f,-.9f),new Vector3(.17f,.7f,2.9f),amber);
                 Box("Борт R",t,new Vector3(1.45f,2.55f,-.9f),new Vector3(.17f,.7f,2.9f),amber);
@@ -388,6 +472,19 @@ namespace Tynys
             oreFlows=new[]{
                 Flow("Руда · мягкая",new[]{new Vector3(0,1,-11),new Vector3(10,1,-11),new Vector3(25,1,-13)},copper,.8f),
                 Flow("Руда · твёрдая",new[]{new Vector3(0,1,11),new Vector3(10,1,11),new Vector3(25,1,10)},copper,.8f)};
+            var pulse=new Texture2D(64,8,TextureFormat.RGBA32,false){name="Энергия · бегущий импульс",wrapMode=TextureWrapMode.Repeat,filterMode=FilterMode.Bilinear};
+            for(int x=0;x<64;x++)for(int y=0;y<8;y++)
+            {
+                float peak=Mathf.Pow(Mathf.Clamp01(1-Mathf.Abs(x-40)/18f),2);
+                pulse.SetPixel(x,y,new Color(.25f+peak*1.75f,.25f+peak*1.75f,.25f+peak*1.75f,.45f+peak*.55f));
+            }
+            pulse.Apply();
+            for(int i=0;i<energyFlows.Length;i++)
+            {
+                var flowMaterial=new Material(Shader.Find("Tynys/EnergyFlow")){name="Энергия · материал "+i,mainTexture=pulse};
+                flowMaterial.SetColor("_Color",i==0||i==1||i==4?new Color(.22f,1.6f,1.2f):new Color(.3f,1.1f,1.8f));
+                energyFlows[i].sharedMaterial=flowMaterial;energyFlows[i].textureMode=LineTextureMode.Tile;
+            }
             flowDots=new Transform[energyFlows.Length*3];
             for(int i=0;i<flowDots.Length;i++)
                 flowDots[i]=Shape(PrimitiveType.Sphere,"Поток энергии",buildRoot,Vector3.zero,Vector3.one*.65f,i/3==2?cyan:teal).transform;
@@ -423,12 +520,27 @@ namespace Tynys
             System.Array.Copy(route,0,outboundRoute,0,outboundCount);
             returnRoute=new Vector3[route.Length-outboundCount+1];
             System.Array.Copy(route,outboundCount-1,returnRoute,0,returnRoute.Length);
+            ResetTruckPoses();
+            flowPaths=new Vector3[energyFlows.Length][];flowMaterials=new Material[energyFlows.Length];
+            for(int i=0;i<energyFlows.Length;i++)
+            {
+                flowPaths[i]=new Vector3[energyFlows[i].positionCount];energyFlows[i].GetPositions(flowPaths[i]);
+                flowMaterials[i]=energyFlows[i].material;
+            }
         }
         void Update()
         {
             if(data==null || data.State==null)return;
             var s=data.State;
             bool animate=data.LiveMode?(data.IsConnected&&!data.IsStale):!data.Paused;
+            if(!data.HasSnapshot)
+            {
+                foreach(var ps in steam)if(ps!=null)ps.Pause();
+                foreach(var dot in flowDots)dot.gameObject.SetActive(false);
+                return;
+            }
+            if(poseWasLive!=data.LiveMode||(!data.LiveMode&&s.hour<lastPoseHour-.001f))ResetTruckPoses();
+            poseWasLive=data.LiveMode;lastPoseHour=s.hour;
             if(animate)motionTime+=Time.deltaTime;
             for(int i=0;i<rotors.Length;i++)
                 if(animate)rotors[i].Rotate(0,0,Time.deltaTime*Mathf.Clamp(s.windMW/300f,0,1)*120);
@@ -439,6 +551,12 @@ namespace Tynys
                 bool running=(i==0?s.line1Available:s.line2Available)&&(i==0?s.line1Feed:s.line2Feed)>1;
                 if(running&&animate)mills[i].Rotate(0,Time.deltaTime*25,0,Space.Self);
                 SetColor(lineStatus[i],running?teal.color:red.color);
+                if(steam!=null&&i<steam.Length&&steam[i]!=null)
+                {
+                    var emission=steam[i].emission;emission.enabled=running;
+                    if(animate) { if(!steam[i].isPlaying)steam[i].Play(); }
+                    else steam[i].Pause();
+                }
             }
             foreach(var bar in batteryBars)
             {
@@ -448,32 +566,22 @@ namespace Tynys
             for(int i=0;i<trucks.Length;i++)
             {
                 var tr=s.trucks!=null&&i<s.trucks.Length?s.trucks[i]:null;
-                bool charging=tr!=null&&tr.state=="charging";
-                if(charging)
-                {
-                    trucks[i].position=new Vector3(-22+(i%4)*6.5f,.3f,-38+(i/4)*2.5f);
-                    trucks[i].rotation=Quaternion.identity;
-                }
-                else
-                {
-                    // route_pos is a schematic cycle phase, not GPS. Preserve twin phase in live mode.
-                    float phase=tr!=null?tr.routePos:((motionTime*.014f+i/14f)%1);
-                    var points=phase<.5f?outboundRoute:returnRoute;
-                    var p=Along(points,phase<.5f?phase*2:(phase-.5f)*2,out var tangent);
-                    trucks[i].position=p+Vector3.Cross(Vector3.up,tangent.normalized)*.7f;
-                    if(tangent.sqrMagnitude>.001f)trucks[i].rotation=Quaternion.LookRotation(tangent.normalized,Vector3.up);
-                }
+                UpdateTruckPose(i,tr??new TruckState{state="empty",routePos=(motionTime*.014f+i/14f)%1},animate,Time.deltaTime);
                 truckLoads[i].gameObject.SetActive(tr!=null&&tr.state=="loaded");
+                if(truckHeadlights!=null&&truckHeadlights.Length>i*2+1)
+                    for(int side=0;side<2;side++)truckHeadlights[i*2+side].enabled=tr!=null&&(tr.state=="loaded"||tr.state=="empty");
             }
             float[] amounts={s.windMW,s.pvMW,s.gridMW,s.loadMW,s.bessAvailable?Mathf.Abs(s.bessMW):0,s.chargeMW};
             for(int i=0;i<energyFlows.Length;i++)
             {
                 var flow=energyFlows[i];float val=Mathf.Max(0,amounts[i]);
                 flow.startWidth=flow.endWidth=.09f+Mathf.Clamp01(val/250)*.65f;
+                flowMaterials[i].SetFloat("_FlowOffset",motionTime*(i==4&&s.bessMW>0?1:-1)*.65f);
+                flowMaterials[i].SetFloat("_Strength",val>1?1:.12f);
                 for(int j=0;j<3;j++)
                 {
                     var dot=flowDots[i*3+j];dot.gameObject.SetActive(val>1);
-                    var pts=new Vector3[flow.positionCount];flow.GetPositions(pts);
+                    var pts=flowPaths[i];
                     float phase=(motionTime*.12f+j/3f)%1;
                     if(i==4&&s.bessMW>0)phase=1-phase;
                     dot.position=Along(pts,phase,out _);
@@ -496,6 +604,50 @@ namespace Tynys
                 }
             }
         }
+        public void ResetTruckPoses()
+        {
+            truckPhases=new float[trucks.Length];hasTruckPhase=new bool[trucks.Length];truckPoseStates=new string[trucks.Length];
+        }
+
+        /// <summary>Interpolate the cyclic route parameter, never a chord through the pit.</summary>
+        public void UpdateTruckPose(int index,TruckState telemetry,bool animate,float deltaTime)
+        {
+            bool travel=telemetry.state=="loaded"||telemetry.state=="empty";
+            if(!travel)
+            {
+                // Telemetry has no route from the haul road into a bay. Show a discrete
+                // schematic state change instead of inventing a straight-line GPS trip.
+                if(truckPoseStates[index]!=telemetry.state)
+                {
+                    bool charging=telemetry.state=="charging";
+                    trucks[index].position=charging?new Vector3(-22+(index%4)*6.5f,.3f,-38+(index/4)*2.5f):
+                        new Vector3(-24+(index%5)*5.5f,.3f,-29+(index/5)*2.5f);
+                    trucks[index].rotation=Quaternion.identity;
+                }
+                hasTruckPhase[index]=false;truckPoseStates[index]=telemetry.state;
+                return;
+            }
+            float targetPhase=Mathf.Repeat(telemetry.routePos,1);
+            bool initialize=!hasTruckPhase[index];
+            if(initialize)truckPhases[index]=targetPhase;
+            else if(animate)
+            {
+                float delta=Mathf.Repeat(targetPhase-truckPhases[index]+.5f,1)-.5f;
+                truckPhases[index]=Mathf.Repeat(truckPhases[index]+delta*(1-Mathf.Exp(-deltaTime*8)),1);
+            }
+            float phase=truckPhases[index];
+            var points=phase<.5f?outboundRoute:returnRoute;
+            var point=Along(points,phase<.5f?phase*2:(phase-.5f)*2,out var tangent);
+            trucks[index].position=point+Vector3.Cross(Vector3.up,tangent.normalized)*.7f;
+            if(tangent.sqrMagnitude>.001f)
+            {
+                var rotation=Quaternion.LookRotation(tangent.normalized,Vector3.up);
+                if(initialize)trucks[index].rotation=rotation;
+                else if(animate)trucks[index].rotation=Quaternion.Slerp(trucks[index].rotation,rotation,1-Mathf.Exp(-deltaTime*6));
+            }
+            hasTruckPhase[index]=true;truckPoseStates[index]=telemetry.state;
+        }
+
         void SetColor(Renderer r,Color c)
         {
             r.GetPropertyBlock(propertyBlock);propertyBlock.SetColor("_Color",c);propertyBlock.SetColor("_EmissionColor",c*.35f);r.SetPropertyBlock(propertyBlock);
