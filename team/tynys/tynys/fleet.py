@@ -68,7 +68,10 @@ def step_fleet(p, fl: Fleet, prev_total, rec, new_total):
             fl.e[i] -= take_all * avail[i] / tot
         need -= take_all
     for i in range(N_GROUPS):
-        fl.starved[i] = (not fl.charging[i]) and fl.e[i] <= lo + 0.02 * cap
+        # «ждёт зарядки» — только если модель действительно урезала добычу из‑за энергии парка;
+        # иначе звено на минимуме ещё возит (модель считает энергию парка общим запасом)
+        mining_cut = rec.get("mine_plan", rec["mine"]) - (rec["mine"] + rec.get("spilled", 0.0)) > 1.0
+        fl.starved[i] = mining_cut and (not fl.charging[i]) and fl.e[i] <= lo + 0.02 * cap
     # 3) точное сохранение энергии парка (ограничения модели): сначала за счёт запаса
     #    над минимумом / до максимума, и только потом — ниже минимума
     diff = new_total - sum(fl.e)
