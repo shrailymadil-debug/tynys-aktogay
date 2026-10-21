@@ -34,7 +34,7 @@ rows = []
 for name, g in list(df.groupby("season", sort=False)) + [("весь год (4 × 14 сут)", df)]:
     rows.append({"season": name,
                  "mw_mean": g.flex_down_mw.mean(), "mw_p10": g.flex_down_mw.quantile(0.1), "mw_p90": g.flex_down_mw.quantile(0.9),
-                 "h_mean": g.flex_down_h.mean(), "h_p10": g.flex_down_h.quantile(0.1), "h_p90": g.flex_down_h.quantile(0.9)})
+                 "h_mean": g.flex_down_h.mean(), "h_median": g.flex_down_h.median(), "mw_median": g.flex_down_mw.median(), "h_p10": g.flex_down_h.quantile(0.1), "h_p90": g.flex_down_h.quantile(0.9)})
 out = pd.DataFrame(rows).round(1)
 out.to_csv("data/flex.csv", index=False)
 print(out.to_string(index=False))

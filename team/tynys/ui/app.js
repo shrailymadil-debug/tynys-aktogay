@@ -54,9 +54,17 @@ let rot = 0;
 function render() {
   const t = v('site', 'sim_hour', null); if (t == null) return;
   $('clock').textContent = `модельное время ${v('site', 'sim_time', '')} · час ${t}`;
-  const mode = v('coordinator', 'mode', '—'); const m = $('mode');
-  m.textContent = mode === 'вдох' ? 'ВДОХ · копим энергию' : mode === 'выдох' ? 'ВЫДОХ · экономим' : '—';
-  m.className = mode === 'вдох' ? 'inhale' : 'exhale';
+  const mode = v('coordinator', 'mode', '—');
+  $('mode-t').textContent = mode === 'вдох' ? 'ВДОХ · копим энергию' : mode === 'выдох' ? 'ВЫДОХ · экономим' : '—';
+  $('mode').className = 'mode ' + (mode === 'вдох' ? 'inhale' : 'exhale');
+  $('whybox').className = 'panel why ' + (mode === 'вдох' ? '' : 'exhale');
+  // главные показатели
+  const cu0 = v('shadow-v0', 'cu_adj_t'), cu2 = v('site', 'cu_adj_t');
+  $('k-co2').textContent = fmt(v('substation', 'co2_t_h'));
+  $('k-ren').textContent = fmt(v('energy', 'renew_share_pct')) + ' %';
+  $('k-cur').textContent = fmt(v('energy', 'curtail_mw'));
+  $('k-cu').textContent = cu0 > 0 ? (cu2 >= cu0 ? '+' : '') + fmt(100 * (cu2 - cu0) / cu0, 1) + ' %' : '—';
+  $('k-res').textContent = fmt(v('substation', 'flex_down_mw'));
   $('why').textContent = v('coordinator', 'why', '—');
   $('src').textContent = v('plant', 'decision_source') === 'coordinator'
     ? `решение MPC за ${v('coordinator', 'solve_ms', 0)} мс · теневая цена энергии ${fmt(v('coordinator', 'shadow_kzt_kwh'), 1)} ₸/кВт·ч`
@@ -73,7 +81,7 @@ function render() {
     g.querySelector('rect').setAttribute('stroke', !v(n, 'available', true) ? '#e0675a' : q > 0 ? '#4fd18b' : '#3d5a78');
     g.dataset.q = q;
   }
-  $('t-flot').textContent = `извл. ${fmt(v('flotation', 'recovery'), 1)} % · P80 ${fmt(v('plant', 'p80_um'))} мкм · ${fmt(v('flotation', 'cu_tph'), 1)} т Cu/ч`;
+  $('t-flot').textContent = `${fmt(v('flotation', 'cu_tph'), 1)} т меди/ч · извл. ${fmt(v('flotation', 'recovery'), 1)} %`;
   // энергия
   $('t-wind').textContent = `${fmt(v('wind', 'power_mw'))} из 300 МВт`;
   $('t-pv').textContent = `${fmt(v('pv', 'power_mw'))} из 250 МВт`;
@@ -93,7 +101,7 @@ function render() {
   const margin = c => v(c, 'cu_adj_t') * CU_MKZT - v(c, 'grid_cost_mkzt');
   const best = Math.max(...cols.map(margin));
   rows.push(['<b>Медь − энергия, млн ₸</b>', null, 0]);
-  $('kpi').innerHTML = rows.map(([lbl, f, k]) => f === null
+  $('kt').innerHTML = rows.map(([lbl, f, k]) => f === null
     ? `<tr><td>${lbl}</td>${cols.map(c => `<td style="${margin(c) === best ? 'color:var(--v2);font-weight:700' : ''}">${fmt(margin(c))}</td>`).join('')}</tr>`
     : `<tr><td>${lbl}</td>${cols.map(c => `<td>${fmt(v(c, f), k)}</td>`).join('')}</tr>`).join('');
   $('flex').textContent = fmt(v('substation', 'flex_down_mw')); $('flexh').textContent = fmt(v('substation', 'flex_down_h'), 1);
@@ -139,21 +147,22 @@ function drawPlan() {
   const sm = Math.max(1, ...P.shadow_kzt_kwh.filter(x => x != null));
   const sp = P.shadow_kzt_kwh.map((c, h) => `${h ? 'L' : 'M'}${h * bw + bw / 2},${Hh - ((c ?? 0) / sm) * (Hh - 20)}`).join(' ');
   s += `<path d="${sp}" stroke="#fff" stroke-width="2" fill="none"/>`;
-  s += `<text x="4" y="12" class="lbl">0–${H} ч · пунктир — предел сети · полоса снизу — доля твёрдой руды</text>`;
+  for (const h of [0, 6, 12, 18]) s += `<text x="${h * bw + 2}" y="198" class="lbl">+${h} ч</text>`;
   $('plan').innerHTML = s;
 }
 
 function animate(ts) {
   rot = (rot + 0.4 + 6 * v('wind', 'cf_pct', 0) / 100) % 360;
   document.querySelectorAll('.rot').forEach(g => g.setAttribute('transform', `rotate(${rot})`));
+  let slotC = 0, slotW = 0;
   for (let i = 0; i < 14; i++) {
     const n = `truck-${String(i + 1).padStart(2, '0')}`, r = trucksG.children[i], st = v(n, 'state', 'empty');
     let x, y;
-    if (st === 'charging' || st === 'waiting') { x = 255 + (i % 7) * 13; y = 405 + Math.floor(i / 7) * 12; }
+    if (st === 'charging' || st === 'waiting') { const k = st === 'charging' ? slotC++ : 7 + (slotW++ % 7); x = 304 + (k % 7) * 19; y = st === 'charging' ? 474 : 496; }
     else { const ph = (v(n, 'route_pos', 0) + (ts / 1000) * 0.02) % 1; const f = ph < 0.5 ? ph * 2 : 2 - ph * 2;
       const p = road.getPointAtLength(f * roadLen); x = p.x - 7; y = p.y - 4 + (ph < 0.5 ? -7 : 7); }
     r.setAttribute('x', x); r.setAttribute('y', y);
-    r.setAttribute('fill', st === 'charging' ? '#5ec8e5' : st === 'waiting' ? '#e0b25a' : st === 'loaded' ? '#4fd18b' : '#9aa6b2');
+    r.setAttribute('fill', st === 'charging' ? '#5ec8e5' : st === 'waiting' ? '#ebcb88' : st === 'loaded' ? '#6ce0cc' : '#9aa6b2');
   }
   requestAnimationFrame(animate);
 }
@@ -163,7 +172,8 @@ async function poll() {
     const data = await api('GET', `things?ids=${NAMES.map(n => NS + ':' + n).join(',')}&fields=thingId,features`);
     T = {}; for (const t of data) T[t.thingId.split(':')[1]] = t;
     render();
-  } catch (e) { $('clock').textContent = 'нет связи с Ditto: ' + e.message; }
+    $('connection').dataset.state = 'online'; $('conn-t').textContent = 'Ditto · подключено';
+  } catch (e) { $('connection').dataset.state = 'offline'; $('conn-t').textContent = 'нет связи с Ditto'; }
 }
 // ---------- «сколько строить»: результаты расчёта из атрибута двойника energy ----------
 let SZ = [];
@@ -199,9 +209,9 @@ async function loadFlex() {
   try {
     const F = await api('GET', `things/${NS}:substation/attributes/flex_stats`) || [];
     const y = F.find(r => r.season.startsWith('весь год')); if (!y) return;
-    $('flexstat').textContent = `За год на реальной погоде 2024 (предрасчёт flex_stats.py, 4 × 14 суток): в среднем ${fmt(y.mw_mean)} МВт ` +
-      `(p10–p90: ${fmt(y.mw_p10)}–${fmt(y.mw_p90)}), держим ${fmt(y.h_mean, 1)} ч (p10–p90: ${fmt(y.h_p10, 1)}–${fmt(y.h_p90, 1)}). ` +
-      `Длительность ограничивает накопитель (65 % часов) или заряд самосвалов (35 %).`;
+    $('flexstat').textContent = `За год на реальной погоде 2024 (предрасчёт flex_stats.py, 4 × 14 суток): медиана ${fmt(y.mw_median ?? y.mw_mean)} МВт ` +
+      `(p10–p90: ${fmt(y.mw_p10)}–${fmt(y.mw_p90)}) на ${fmt(y.h_median ?? y.h_mean, 1)} ч (p10–p90: ${fmt(y.h_p10, 1)}–${fmt(y.h_p90, 1)}). ` +
+      `Чаще всего длительность ограничивает накопитель (69 % часов), реже — заряд самосвалов (31 %).`;
   } catch (e) { setTimeout(loadFlex, 5000); }
 }
 loadFlex();
