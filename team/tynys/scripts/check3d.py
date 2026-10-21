@@ -1,10 +1,14 @@
 """Check the actual 3D scene in Chromium with software WebGL.
 
 Usage remains: python check3d.py URL out.png
+--mode all (default) checks functionality and gates performance. functional
+checks the live UI and records FPS without gating it; performance only measures
+the renderer on a separately hosted replay. --expect-source rejects fallback.
 CHROME_PATH selects an installed Chrome executable (including Windows).
 TYNYS_3D_ARTIFACT_DIR overrides the output directory.
 TYNYS_MIN_FPS is the required median of one-second rendered-frame windows
-(default 10, not a claim of 60 fps on every CPU); 0 records without an FPS gate.
+(default 10, not a claim of 60 fps on every CPU). Every mode reports whether
+that threshold was met; functional mode explicitly marks it as non-gating.
 TYNYS_FPS_SECONDS defaults to 10 and TYNYS_FPS_WARMUP_SECONDS to 3.
 
 The performance run uses the requested page and its actual source. A separate
@@ -16,12 +20,15 @@ from __future__ import annotations
 import argparse
 import asyncio
 import copy
+import hashlib
+from importlib.metadata import PackageNotFoundError, version
 import json
 import math
 import os
 from pathlib import Path
 import platform
 import statistics
+import subprocess
 import sys
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
@@ -355,6 +362,19 @@ async def scenario_fixture(context, url, errors, screenshot_path):
         grid_label = await page.locator("#l-grid").inner_text()
         require("180 / 260" in grid_label and "предел" in grid_label.lower() and "176" in grid_label,
                 "Grid label must distinguish the constrained cap, nominal cap and actual import")
+        require(visuals.get("gridLimited") is True and visuals.get("capMw") == 180,
+                "The active grid scenario is not reflected in the scene")
+        # Observe actual rendered material changes; neither a hidden fixture flag
+        # nor a single sample in the pulse's dark phase proves the wire blinks.
+        wire_samples = []
+        for color in (0xffa23d, 0x3a3f44):
+            previous_frame = wire_samples[-1]["rendered_frame"] if wire_samples else -1
+            handle = await page.wait_for_function("""({color, after}) => {
+              const a = window.__tynys, visual = a.scenarioVisuals;
+              return visual.gridLimited && visual.gridWireColor === color && a.renderedFrames > after
+                ? {color:visual.gridWireColor, rendered_frame:a.renderedFrames} : false;
+            }""", arg={"color": color, "after": previous_frame}, polling="raf", timeout=15000)
+            wire_samples.append(await handle.json_value())
         pit_label = await page.locator("#l-pit").inner_text()
         digits = "".join(character for character in pit_label if character.isdigit())
         require("7370" in digits and "80" in digits,
@@ -375,6 +395,7 @@ async def scenario_fixture(context, url, errors, screenshot_path):
             "banner_kinds": kinds, "cancel_preserves_other_events": True,
             "cancel_increments_revision": True, "cancel_preserves_goal": True,
             "visuals": visuals, "grid_label": grid_label, "pit_label": pit_label,
+            "grid_wire_rendered_samples": wire_samples,
             "above_nominal_line_meter": line1_meter,
             "unavailable_meters": unavailable_meters,
             "screenshot": str(screenshot_path),
@@ -387,7 +408,25 @@ async def scenario_fixture(context, url, errors, screenshot_path):
         await page.close()
 
 
-async def main(url, out, threshold, seconds, warmup):
+def git_revision():
+    """The CI checkout SHA, or the local checkout HEAD when available."""
+    if os.environ.get("GITHUB_SHA"):
+        return os.environ["GITHUB_SHA"]
+    try:
+        repo = Path(__file__).resolve().parents[3]
+        return subprocess.check_output(
+            ["git", "-c", "safe.directory=" + repo.as_posix(), "rev-parse", "HEAD"], cwd=repo,
+            text=True, stderr=subprocess.DEVNULL, timeout=5).strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def verify_source(actual, expected):
+    if expected:
+        require(actual == expected, f"Expected {expected} data, but the scene uses {actual}")
+
+
+async def main(url, out, threshold, seconds, warmup, mode="all", expect_source=None):
     target = Path(out)
     artifact_dir = os.environ.get("TYNYS_3D_ARTIFACT_DIR")
     if artifact_dir:
@@ -396,16 +435,28 @@ async def main(url, out, threshold, seconds, warmup):
     night_path = target.with_name(target.stem + "-night" + target.suffix)
     scenario_path = target.with_name(target.stem + "-scenarios" + target.suffix)
     report_path = target.with_suffix(".json")
-    report = {"status": "FAIL", "url": url, "viewport": VIEWPORT,
+    functional = mode != "performance"
+    performance_gated = mode != "functional"
+    artifacts = {"day": str(target)}
+    if functional:
+        artifacts.update(night=str(night_path), scenarios=str(scenario_path))
+    report = {"status": "FAIL", "mode": mode, "url": url, "viewport": VIEWPORT,
+              "git_sha": git_revision(), "expected_source": expect_source,
+              "functional_status": "PENDING" if functional else "NOT_RUN",
               "host": {"platform": platform.platform(), "logical_cpus": os.cpu_count()},
               "minimum_median_fps": threshold, "errors": [], "launch_args": GL_ARGS,
-              "artifacts": {"day": str(target), "night": str(night_path), "scenarios": str(scenario_path)}}
+              "artifacts": artifacts}
+    try:
+        report["playwright_version"] = version("playwright")
+    except PackageNotFoundError:
+        report["playwright_version"] = None
     failure = None
     async with async_playwright() as playwright:
         launch = {"headless": True, "args": GL_ARGS}
         if os.environ.get("CHROME_PATH"):
             launch["executable_path"] = os.environ["CHROME_PATH"]
         browser = await playwright.chromium.launch(**launch)
+        report["browser_version"] = browser.version
         try:
             context = await browser.new_context(viewport=VIEWPORT, device_scale_factor=1)
             page = await context.new_page()
@@ -419,37 +470,59 @@ async def main(url, out, threshold, seconds, warmup):
             require(.85 <= first["pixelRatio"] <= 1, "LOW pixel ratio must remain between 0.85 and 1.0")
             require(6 <= first["lightingHour"] <= 18, "Scene did not start in daylight")
             report["source"] = await page.locator("#src").inner_text()
+            report["source_mode"] = await page.evaluate("window.__tynys.source")
+            verify_source(report["source_mode"], expect_source)
+            if report["source_mode"] == "replay":
+                trace_response = await context.request.get(urljoin(run_url, "trace.json"))
+                require(trace_response.ok, "Cannot fingerprint the replay trace")
+                report["replay"] = {
+                    "kind": "repository trace replay; no live backend",
+                    "sha256": hashlib.sha256(await trace_response.body()).hexdigest(),
+                    "snapshot_count": len(await trace_response.json()),
+                }
             clock_before = await page.locator("#clock").inner_text()
             await set_hour(page, 12)
             # Benchmark the untouched initial camera. Interaction failures later
             # still leave actual CPU/rendering evidence in the failure report.
             report["performance"] = await rendered_fps(page, seconds, warmup)
+            report["performance"].update(
+                gated=performance_gated, threshold_median_fps=threshold,
+                meets_threshold=report["performance"]["median_fps"] >= threshold)
+            verify_source(await page.evaluate("window.__tynys.source"), expect_source)
             report["clock"] = {"before": clock_before, "after": await page.locator("#clock").inner_text()}
             require(report["clock"]["before"] != report["clock"]["after"], "Model/replay clock did not advance")
-            report["controls"] = await check_controls(page)
-            await page.locator("#reset").click()
-            await set_hour(page, 12)
-            day = await page.screenshot(path=str(target))
-            await set_hour(page, 22)
-            night_visuals = await page.evaluate("window.__tynys.scenarioVisuals")
-            require(night_visuals.get("headlights", 0) > 0, "Truck headlights did not appear at night")
-            report["night_visuals"] = night_visuals
-            night = await page.screenshot(path=str(night_path))
-            require(day != night, "Day and night screenshots are identical")
-            await page.locator("#light-auto").click()
-            require(await page.evaluate("window.__tynys.lightingOverride === null"),
-                    "Automatic lighting did not restore model time")
-            # Close the first scene before fixture checks to avoid measuring or
-            # testing a second software renderer under unnecessary contention.
-            await page.close()
-            report["scenarios"] = await scenario_fixture(context, run_url, report["errors"], scenario_path)
+            if functional:
+                report["controls"] = await check_controls(page)
+                await page.locator("#reset").click()
+                await set_hour(page, 12)
+                day = await page.screenshot(path=str(target))
+                await set_hour(page, 22)
+                night_visuals = await page.evaluate("window.__tynys.scenarioVisuals")
+                require(night_visuals.get("headlights", 0) > 0, "Truck headlights did not appear at night")
+                report["night_visuals"] = night_visuals
+                night = await page.screenshot(path=str(night_path))
+                require(day != night, "Day and night screenshots are identical")
+                await page.locator("#light-auto").click()
+                require(await page.evaluate("window.__tynys.lightingOverride === null"),
+                        "Automatic lighting did not restore model time")
+                verify_source(await page.evaluate("window.__tynys.source"), expect_source)
+                # Close the first scene before the isolated scenario fixture.
+                await page.close()
+                report["scenarios"] = await scenario_fixture(context, run_url, report["errors"], scenario_path)
+            else:
+                await page.screenshot(path=str(target))
+                await page.close()
             require(not report["errors"], "JavaScript errors: " + "; ".join(report["errors"]))
-            if threshold > 0:
-                require(report["performance"]["median_fps"] >= threshold,
+            if functional:
+                report["functional_status"] = "PASS"
+            if performance_gated:
+                require(report["performance"]["meets_threshold"],
                         "Median software-rendered FPS is below the configured threshold; see CPU and renderer in report")
             report["status"] = "PASS"
         except Exception as error:
             failure = error
+            if report["functional_status"] == "PENDING":
+                report["functional_status"] = "FAIL"
             report["failure"] = f"{type(error).__name__}: {error}"
             if "page" in locals() and not page.is_closed():
                 await page.screenshot(path=str(target.with_name(target.stem + "-failure.png")))
@@ -457,14 +530,32 @@ async def main(url, out, threshold, seconds, warmup):
             await browser.close()
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     performance = report.get("performance", {})
+    if os.environ.get("GITHUB_STEP_SUMMARY"):
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+            summary.write(
+                f"\n### 3D: {mode}, source {report.get('source_mode', 'unknown')}\n\n"
+                f"- Result: **{report['status']}**; functional checks: **{report['functional_status']}**.\n"
+                f"- Actual rendered FPS: median **{performance.get('median_fps', 'not measured')}**, "
+                f"p10 **{performance.get('p10_fps', 'not measured')}**, "
+                f"average **{performance.get('average_fps', 'not measured')}**.\n"
+                f"- Required median: **{threshold}**; meets threshold: "
+                f"**{performance.get('meets_threshold', 'not measured')}**; "
+                f"FPS gates this job: **{performance_gated}**.\n"
+                f"- Commit: `{report['git_sha']}`; report: `{report_path}`.\n")
+            if report.get("replay"):
+                summary.write(f"- Trace SHA256: `{report['replay']['sha256']}` (recorded data, no live backend).\n")
+            if report.get("failure"):
+                summary.write(f"- Failure: {report['failure']}\n")
     print(json.dumps({
-        "status": report["status"], "renderer": performance.get("environment", {}).get("glRenderer"),
+        "status": report["status"], "mode": mode, "functional_status": report["functional_status"],
+        "performance_gated": performance_gated, "meets_threshold": performance.get("meets_threshold"),
+        "renderer": performance.get("environment", {}).get("glRenderer"),
         "median_fps": performance.get("median_fps"), "p10_fps": performance.get("p10_fps"),
         "min_fps": performance.get("min_fps"), "draw_calls": performance.get("draw_calls"),
         "triangles": performance.get("triangles"), "source": report.get("source"),
         "report": str(report_path), "failure": report.get("failure"),
     }, ensure_ascii=False))
-    print("3D OK" if not failure else "3D FAIL")
+    print(f"3D {mode.upper()} {'FAIL' if failure else 'OK'}")
     return 0 if not failure else 1
 
 
@@ -472,10 +563,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("url")
     parser.add_argument("out", help="Day screenshot; also writes NAME-night.png and NAME.json")
+    parser.add_argument("--mode", choices=("all", "functional", "performance"), default="all")
+    parser.add_argument("--expect-source", choices=("live", "replay"))
     arguments = parser.parse_args()
     min_fps = float(os.environ.get("TYNYS_MIN_FPS", "10"))
     sample_seconds = float(os.environ.get("TYNYS_FPS_SECONDS", "10"))
     warmup_seconds = float(os.environ.get("TYNYS_FPS_WARMUP_SECONDS", "3"))
-    if not all(math.isfinite(value) for value in (min_fps, sample_seconds, warmup_seconds)) or min_fps < 0 or sample_seconds < 5 or warmup_seconds < 0:
-        parser.error("FPS settings must be finite; threshold/warmup >= 0 and duration >= 5 seconds")
-    sys.exit(asyncio.run(main(arguments.url, arguments.out, min_fps, sample_seconds, warmup_seconds)))
+    if not all(math.isfinite(value) for value in (min_fps, sample_seconds, warmup_seconds)) or min_fps <= 0 or sample_seconds < 5 or warmup_seconds < 0:
+        parser.error("FPS settings must be finite; threshold > 0, warmup >= 0 and duration >= 5 seconds")
+    sys.exit(asyncio.run(main(arguments.url, arguments.out, min_fps, sample_seconds, warmup_seconds,
+                             arguments.mode, arguments.expect_source)))
