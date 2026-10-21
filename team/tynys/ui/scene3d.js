@@ -103,7 +103,14 @@ const steppe = tex(256, (x, y) => { const n = tile(x, y, 256, 26), g = hash(x, y
 const rock = tex(256, (x, y) => { const n = tile(x, y, 256, 12), g = hash(x, y) * 0.22; const k = 0.68 + 0.4 * n + g; return [160 * k, 140 * k, 120 * k]; });
 const gravel = tex(128, (x, y) => { const k = 0.72 + 0.38 * hash(x, y); return [118 * k, 108 * k, 96 * k]; });
 
-const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, metalness: 0.05, ...o });
+// Software WebGL does not benefit from per-pixel metal/roughness BRDFs on
+// these matte surfaces. Lambert keeps sunlight, hemisphere light, textures,
+// vertex colours and emissive fault signals; HIGH retains the PBR materials.
+const M = (c, o = {}) => {
+  if(!LOW)return new THREE.MeshStandardMaterial({color:c,roughness:.85,metalness:.05,...o});
+  const {roughness,metalness,...diffuse}=o;
+  return new THREE.MeshLambertMaterial({color:c,...diffuse});
+};
 function mesh(geo, mat, x = 0, y = 0, z = 0, parent = scene, shadow = true) {
   const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = shadow; m.receiveShadow = true; parent.add(m); return m;
 }
@@ -161,7 +168,7 @@ function terrainH(x, z) {
     col.push(c.r, c.g, c.b); uvs.setXY(i, ang / Math.PI * 14, y / 9);
   }
   lg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); lg.computeVertexNormals();
-  mesh(lg, new THREE.MeshStandardMaterial({ vertexColors: true, map: rock, side: THREE.BackSide, roughness: 1, flatShading: true }), PIT.x, 0, PIT.z, scene, false);
+  mesh(lg, M(0xffffff,{ vertexColors: true, map: rock, side: THREE.BackSide, roughness: 1, metalness: 0, flatShading: true }), PIT.x, 0, PIT.z, scene, false);
   mesh(new THREE.CircleGeometry(27, 48).rotateX(-Math.PI / 2), M(0x8a7a66, { map: gravel }), PIT.x, -PIT_D + 0.1, PIT.z, scene, false);
   mesh(new THREE.CircleGeometry(10, 40).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x3d8f86, roughness: 0.06, metalness: 0.5 }), PIT.x + 12, -PIT_D + 0.3, PIT.z - 9, scene, false);
   // террасированные отвалы пустой породы
@@ -347,11 +354,12 @@ function pylon(x, z) {
 const pyl = [];
 for (let i = 0; i <= 10; i++) { const k = i / 10; pyl.push(pylon(SUB.x + 40 + (COAL.x - 120 - SUB.x - 40) * k, SUB.z - 30 + (COAL.z + 60 - SUB.z + 30) * k)); }
 for (const t of pyl) towerPts.push(t.p);
+const gridWireMat=M(0x3a3f44);gridWireMat.userData.batchKey='grid-wires';
 for (let i = 0; i < pyl.length - 1; i++) for (const off of [-11, 0, 11]) {
   const a = new THREE.Vector3(off, 45, 0), b = new THREE.Vector3(off, 45, 0);
   pyl[i].g.localToWorld(a); pyl[i + 1].g.localToWorld(b);
   const m = a.clone().add(b).multiplyScalar(0.5); m.y -= 8;
-  mesh(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(a, m, b), 16, 0.2, 4), M(0x3a3f44), 0, 0, 0, scene, false);
+  mesh(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(a, m, b), 16, 0.2, 4), gridWireMat, 0, 0, 0, scene, false);
 }
 {
   const y0 = Math.max(0, terrainH(COAL.x, COAL.z));
@@ -364,7 +372,7 @@ for (let i = 0; i < pyl.length - 1; i++) for (const off of [-11, 0, 11]) {
 }
 label('<b>Угольная ТЭС · сеть KEGOC</b><span id="l-coal">—</span>', COAL.x + 40, 260, COAL.z);
 const SMOKE_N = LOW?128:320;
-const smokeMat = new THREE.MeshStandardMaterial({ color: 0x8c8780, transparent: true, opacity: 0.32, depthWrite: false, roughness: 1 });
+const smokeMat = M(0x8c8780,{ transparent: true, opacity: 0.32, depthWrite: false, roughness: 1, metalness: 0 });
 const smoke = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), smokeMat, SMOKE_N); scene.add(smoke);
 const smokeSrc = [[110, 205, 20], [140, 205, 20], [-70, 120, 0], [30, 120, 0]];
 
@@ -393,15 +401,15 @@ function updFlow(f, dt) {
   f.im.instanceMatrix.needsUpdate = true;
 }
 
-const details = installSceneDetails({scene,camera,controls,renderer,label,mesh,M,road,terrainH,gravel,PLANT,PILES,CHARGE,BESS,SUB,WIND,PV,PIT,trucks,mills,turbines,piles,bessLights,bessBodyMat,chargers,windows,shovels,flows,belts,getData:()=>D,getSource:()=>source,getView:()=>view,cancelEvent:cancelScenarioEvent});
+const details = installSceneDetails({scene,camera,controls,renderer,label,mesh,M,road,terrainH,gravel,PLANT,PILES,CHARGE,BESS,SUB,WIND,PV,PIT,PIT_R,trucks,mills,turbines,piles,bessLights,bessBodyMat,gridWireMat,chargers,windows,shovels,flows,belts,getData:()=>D,getSource:()=>source,getView:()=>view,cancelEvent:cancelScenarioEvent});
 // Components stay in each animated root's local coordinates. Cargo, lights,
 // labels and independently moving parts are not baked into the rigid body.
 const rigidMergeStats=LOW?[
-  ...trucks.map(t=>mergeStaticMeshes(t.g,[t.load,t.glow],{local:true})),
-  ...turbines.map(hub=>mergeStaticMeshes(hub,[],{local:true})),
-  ...mills.map(m=>mergeStaticMeshes(m.drum,[],{local:true})),
+  ...trucks.map(t=>mergeStaticMeshes(t.g,[t.load,t.glow],{local:true,bakeColors:true})),
+  ...turbines.map(hub=>mergeStaticMeshes(hub,[],{local:true,bakeColors:true})),
+  ...mills.map(m=>mergeStaticMeshes(m.drum,[],{local:true,bakeColors:true})),
 ]:[];
-const mergeStats = mergeStaticMeshes(scene,details.dynamicRoots);
+const mergeStats = mergeStaticMeshes(scene,details.dynamicRoots,{bakeColors:LOW});
 mergeStats.rigid={batches:0,mergedMeshes:0,savedMeshes:0};
 for(const stat of rigidMergeStats){mergeStats.before+=stat.before-stat.after;mergeStats.batches+=stat.batches;mergeStats.mergedMeshes+=stat.mergedMeshes;mergeStats.rigid.batches+=stat.batches;mergeStats.rigid.mergedMeshes+=stat.mergedMeshes;mergeStats.rigid.savedMeshes+=stat.before-stat.after;}
 

@@ -34,4 +34,5 @@ __pycache__/
 team/tynys/results/
 .futures-test-output/
 .scene-test-output/
+.scene-performance-output/
 futures-e2e-report.json

@@ -21,7 +21,7 @@ export function scenarioEvents(data) {
 
 // Only immutable meshes are folded into world-space batches. Matching both the
 // material settings and attribute schema prevents loss of UVs, normals or colours.
-export function mergeStaticMeshes(scene, dynamicRoots = [], {local=false} = {}) {
+export function mergeStaticMeshes(scene, dynamicRoots = [], {local=false,bakeColors=false} = {}) {
   const excluded = new Set(dynamicRoots.filter(Boolean)), buckets = new Map();
   scene.updateWorldMatrix(true,true);
   const rootInverse=local?scene.matrixWorld.clone().invert():null;
@@ -31,18 +31,28 @@ export function mergeStaticMeshes(scene, dynamicRoots = [], {local=false} = {}) 
     if ((local&&o===scene) || !o.isMesh || o.isInstancedMesh || Array.isArray(o.material) || o.userData.noMerge) return;
     for (let p=o;p;p=p.parent) if(excluded.has(p)||p.userData.noMerge) return;
     const m=o.material;
-    if(!m || m.transparent || !(m.isMeshStandardMaterial||m.isMeshBasicMaterial))return;
-    const attributes=Object.keys(o.geometry.attributes).sort().map(k=>`${k}:${o.geometry.attributes[k].itemSize}:${o.geometry.attributes[k].normalized}`).join('|');
-    const key=JSON.stringify([m.userData.batchKey,m.type,m.color?.getHex(),m.emissive?.getHex(),m.emissiveIntensity,m.roughness,m.metalness,m.side,m.vertexColors,m.flatShading,m.wireframe,m.opacity,m.depthWrite,m.depthTest,m.fog,m.map?.uuid,m.normalMap?.uuid,m.roughnessMap?.uuid,m.metalnessMap?.uuid,m.alphaMap?.uuid,m.envMap?.uuid,o.castShadow,o.receiveShadow,attributes]);
-    if(!buckets.has(key))buckets.set(key,[]);buckets.get(key).push(o);
+    if(!m || m.transparent || !(m.isMeshStandardMaterial||m.isMeshLambertMaterial||m.isMeshBasicMaterial))return;
+    // Diffuse colour is a vertex multiplier in the Lambert shader. Baking its
+    // already-linear RGB keeps the exact shading while joining colour buckets.
+    // Materials animated by reference must retain that original reference.
+    const colorAttribute=o.geometry.attributes.color;
+    const bake=bakeColors&&m.isMeshLambertMaterial&&!m.userData.dynamicColor&&!m.userData.batchKey&&(!m.vertexColors||!colorAttribute||colorAttribute.itemSize===3);
+    const attributes=Object.keys(o.geometry.attributes).filter(k=>!bake||k!=='color').sort().map(k=>`${k}:${o.geometry.attributes[k].itemSize}:${o.geometry.attributes[k].normalized}`).join('|')+(bake?'|color:3:false':'');
+    const key=JSON.stringify([m.userData.dynamicColor?m.uuid:m.userData.batchKey,m.type,bake?'baked':m.color?.getHex(),m.emissive?.getHex(),m.emissiveIntensity,m.roughness,m.metalness,m.side,bake||m.vertexColors,m.flatShading,m.wireframe,m.opacity,m.depthWrite,m.depthTest,m.fog,m.map?.uuid,m.normalMap?.uuid,m.roughnessMap?.uuid,m.metalnessMap?.uuid,m.alphaMap?.uuid,m.envMap?.uuid,o.castShadow,o.receiveShadow,attributes]);
+    if(!buckets.has(key))buckets.set(key,{items:[],bake});buckets.get(key).items.push(o);
   });
   let mergedMeshes=0,batches=0;
-  for(const items of buckets.values()) {
+  for(const {items,bake} of buckets.values()) {
     if(items.length<2)continue;
-    const geos=items.map(o=>{const g=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();g.applyMatrix4(local?new THREE.Matrix4().multiplyMatrices(rootInverse,o.matrixWorld):o.matrixWorld);return g;});
+    const geos=items.map(o=>{const g=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();g.applyMatrix4(local?new THREE.Matrix4().multiplyMatrices(rootInverse,o.matrixWorld):o.matrixWorld);
+      if(bake){const original=o.material.vertexColors?g.attributes.color:null,c=o.material.color,colors=new Float32Array(g.attributes.position.count*3);
+        for(let i=0;i<g.attributes.position.count;i++){colors[i*3]=c.r*(original?original.getX(i):1);colors[i*3+1]=c.g*(original?original.getY(i):1);colors[i*3+2]=c.b*(original?original.getZ(i):1);}
+        g.setAttribute('color',new THREE.BufferAttribute(colors,3));}
+      return g;});
     const merged=mergeGeometries(geos,false);geos.forEach(g=>g.dispose());
     if(!merged)continue;
-    merged.computeBoundingSphere();const m=new THREE.Mesh(merged,items[0].material);
+    const material=bake?items[0].material.clone():items[0].material;if(bake){material.color.setRGB(1,1,1);material.vertexColors=true;}
+    merged.computeBoundingSphere();const m=new THREE.Mesh(merged,material);
     m.name=local?'rigid-local-batch':'static-batch';m.castShadow=items[0].castShadow;m.receiveShadow=items[0].receiveShadow;
     scene.add(m);items.forEach(o=>o.removeFromParent());mergedMeshes+=items.length;batches++;
   }
@@ -51,7 +61,7 @@ export function mergeStaticMeshes(scene, dynamicRoots = [], {local=false} = {}) 
 }
 
 export function installSceneDetails(ctx) {
-  const {scene,camera,renderer,label,mesh,M,road,terrainH,PLANT,PILES,CHARGE,BESS,SUB,WIND,PV,PIT,trucks,mills,turbines,piles,bessLights,chargers,windows,shovels,flows,getData,getSource,cancelEvent}=ctx;
+  const {scene,camera,renderer,label,mesh,M,road,terrainH,PLANT,PILES,CHARGE,BESS,SUB,WIND,PV,PIT,PIT_R=100,trucks,mills,turbines,piles,bessLights,chargers,windows,shovels,flows,getData,getSource,cancelEvent}=ctx;
   const $=id=>document.getElementById(id);
   const dynamicRoots=[...trucks.map(t=>t.g),...mills.flatMap(m=>[m.drum,m.lamp]),...turbines,...Object.values(piles),...bessLights,...chargers,...windows,...shovels];
   let selected=null, events=[], bannerKey='', lastData={};
@@ -122,11 +132,29 @@ export function installSceneDetails(ctx) {
       for(const y of[1.1,2.6])mesh(new THREE.BoxGeometry(e%2?.18:len,.16,e%2?len:.18),steel,x+(a[0]+b[0])/2,y,z+(a[1]+b[1])/2);}
   }
   fence(SUB.x,SUB.z,55,50);fence(BESS.x+14,BESS.z+9,47,43);
+  // Rim railing follows the pit, with an opening where the actual haul-road
+  // curve first leaves it. Every post/rail is immutable and joins steel batches.
+  const rimRadius=PIT_R+3,rimSegments=48,rimStep=2*Math.PI/rimSegments;
+  let exitAngle=null,previous=road.getPointAt(0);
+  for(let i=1;i<=256;i++){
+    const next=road.getPointAt(i/256),before=Math.hypot(previous.x-PIT.x,previous.z-PIT.z),after=Math.hypot(next.x-PIT.x,next.z-PIT.z);
+    if(before<rimRadius&&after>=rimRadius){const crossing=previous.clone().lerp(next,(rimRadius-before)/(after-before));exitAngle=Math.atan2(crossing.z-PIT.z,crossing.x-PIT.x);break;}
+    previous=next;
+  }
+  const gateHalfAngle=Math.asin(8/rimRadius);
+  const nearExit=(angle,padding=0)=>exitAngle!==null&&Math.abs(Math.atan2(Math.sin(angle-exitAngle),Math.cos(angle-exitAngle)))<gateHalfAngle+padding;
+  for(let i=0;i<rimSegments;i++){
+    const a=i*rimStep,b=a+rimStep,x=PIT.x+Math.cos(a)*rimRadius,z=PIT.z+Math.sin(a)*rimRadius;
+    if(!nearExit(a))mesh(new THREE.BoxGeometry(.35,3,.35),steel,x,1.5,z);
+    if(nearExit(a+rimStep/2,rimStep/2))continue;
+    const bx=PIT.x+Math.cos(b)*rimRadius,bz=PIT.z+Math.sin(b)*rimRadius,length=Math.hypot(bx-x,bz-z);
+    for(const y of[1,2.5]){const rail=mesh(new THREE.BoxGeometry(length,.18,.18),steel,(x+bx)/2,y,(z+bz)/2);rail.rotation.y=-Math.atan2(bz-z,bx-x);}
+  }
   function glowTexture(){const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d'),r=g.createRadialGradient(32,32,1,32,32,31);r.addColorStop(0,'rgba(255,255,255,1)');r.addColorStop(.18,'rgba(255,255,255,.8)');r.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=r;g.fillRect(0,0,64,64);return new THREE.CanvasTexture(c);}
   const glowMap=glowTexture(),lightMat=new THREE.SpriteMaterial({map:glowMap,color:0xffedbe,transparent:true,depthWrite:false,opacity:0});
   const headlights=[];
   trucks.forEach(t=>{const s=new THREE.Sprite(lightMat.clone());s.position.set(5.8,3,0);s.scale.set(10,5,1);t.g.add(s);headlights.push(s);});
-  const lampMat=M(0xaeb8ba,{emissive:0xffd99b,emissiveIntensity:0}),lampSprites=[];
+  const lampMat=M(0xaeb8ba,{emissive:0xffd99b,emissiveIntensity:0}),lampSprites=[];lampMat.userData.dynamicColor=true;
   for(const[x,z]of[[-40,95],[55,95],[74,-68],[178,-65],[188,74],[217,95],[290,-29],[287,92]]){
     mesh(new THREE.BoxGeometry(.55,17,.55),steel,x,8.5,z);mesh(new THREE.BoxGeometry(5,.4,.4),steel,x+2.2,17,z);mesh(new THREE.BoxGeometry(2.8,.5,1.3),lampMat,x+4,16.8,z);
     const s=new THREE.Sprite(lightMat.clone());s.position.set(x+4,16.4,z);s.scale.set(12,12,1);scene.add(s);lampSprites.push(s);
@@ -180,6 +208,9 @@ export function installSceneDetails(ctx) {
     const kinds=new Set(events.filter(e=>e.active).map(e=>e.kind));
     const gridLimited=kinds.has('kegoc');gridBeacon.material.emissiveIntensity=gridLimited?(Math.sin(now/160)>0?3:.15):0;gridBeacon.visible=gridLimited;
     flows.grid.im.material.color.set(gridLimited?(Math.sin(now/220)>0?0xffa23d:0xb77a35):0x9a9a9a);
+    const wirePulse=gridLimited&&Math.sin(now/220)>0;
+    ctx.gridWireMat.color.set(wirePulse?0xffa23d:0x3a3f44);
+    ctx.gridWireMat.emissive.set(gridLimited?0xff8b32:0x000000);ctx.gridWireMat.emissiveIntensity=gridLimited?(wirePulse?1.1:.08):0;
     mills.forEach((m,i)=>{const unavailable=lastData[`line-${i+1}`]?.available===false;if(unavailable){m.lamp.material.color.set(0xff4036);m.lamp.material.emissive.set(0xff4036);m.lamp.material.emissiveIntensity=Math.sin(now/190)>0?3:.2;m.speed=0;}
       steam[i].visible=!unavailable&&Number(lastData[`line-${i+1}`]?.feed_tph)>0;steam[i].position.y=25+((now/1500+i*.5)%1)*8;steam[i].material.opacity=.09*(1-((now/1500+i*.5)%1));});
     const night=clamp((.55-dayK)/.55);lampMat.emissiveIntensity=night*2.5;lampSprites.forEach(s=>{s.visible=night>.02;s.material.opacity=night*.6;});
@@ -204,5 +235,5 @@ export function installSceneDetails(ctx) {
         if(overlap<least){least=overlap;best=[dx,dy];}if(overlap===0)break;}
       el.style.translate=`${best[0]}px ${best[1]}px`;placed.push({left:r.left+best[0],right:r.right+best[0],top:r.top+best[1],bottom:r.bottom+best[1]});}
   }
-  return {update,tick,layoutLabels,selectObject,clearSelection,dynamicRoots,targets,get selected(){return selected;},get events(){return events;},get headlights(){return headlights;},get visuals(){return{hardOreHighlighted:hardHalo.visible,gridLimited:gridBeacon.visible,capMw:lastData.substation?.grid_cap_mw,lineSteam:steam.map(s=>s.visible)};}};
+  return {update,tick,layoutLabels,selectObject,clearSelection,dynamicRoots,targets,get selected(){return selected;},get events(){return events;},get headlights(){return headlights;},get visuals(){return{hardOreHighlighted:hardHalo.visible,gridLimited:gridBeacon.visible,gridWireColor:ctx.gridWireMat.color.getHex(),capMw:lastData.substation?.grid_cap_mw,lineSteam:steam.map(s=>s.visible)};}};
 }
