@@ -563,13 +563,14 @@ function frame(now) {
     // (1 ед. сцены ≈ 10 м), показ ускорен в TRUCK_TIMELAPSE раз. Модель часовая, поэтому
     // положение на дороге — анимация; заряд, состояние и груз звена — из двойника.
     const upNow = tr.phase < 0.5, kmh = upNow ? 12 : 30;
-    tr.phase = (tr.phase + dt * TRUCK_TIMELAPSE * (kmh / 3.6 / 10) / (2 * ROAD_LEN)) % 1;
+    tr.phase = ((tr.phase + Math.max(0, dt) * TRUCK_TIMELAPSE * (kmh / 3.6 / 10) / (2 * ROAD_LEN)) % 1 + 1) % 1;
     const up = tr.phase < 0.5, f = up ? tr.phase * 2 : 2 - tr.phase * 2;
     const p = road.getPointAt(f), t = road.getTangentAt(f), side = new THREE.Vector3(-t.z, 0, t.x).normalize().multiplyScalar(up ? 2.3 : -2.3);
     tr.g.position.copy(p).add(side); tr.g.position.y = p.y + 0.35;
     tr.g.rotation.set(0, Math.atan2(-t.z, t.x) + (up ? 0 : Math.PI), 0);
     tr.g.rotateZ((up ? 1 : -1) * Math.asin(THREE.MathUtils.clamp(t.y, -0.3, 0.3)));
-    tr.load.visible = up;   // в подъём — с рудой, обратно — порожний tr.load.material = hash(i, 9) < hf ? oreMat.hard : oreMat.soft;
+    tr.load.visible = up;   // в подъём — с рудой, обратно — порожний
+    tr.load.material = hash(i, 9) < hf ? oreMat.hard : oreMat.soft;
     if (p.y > -6 && !LOW) for (let k = 0; k < 8; k++) {
       const ph = (now / 900 + k / 8 + i * 0.13) % 1, back = t.clone().multiplyScalar((up ? -1 : 1) * (6 + ph * 14));
       setInst(dustIM, i * 8 + k, tr.g.position.x + back.x, 1 + ph * 5, tr.g.position.z + back.z, 1 + ph * 3, 1 + ph * 2, 1 + ph * 3);

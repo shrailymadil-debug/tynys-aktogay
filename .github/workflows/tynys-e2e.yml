@@ -24,7 +24,7 @@ jobs:
         run: |
           set -o pipefail
           python3 team/tynys/scripts/whatif_check.py | tee -a ci.log
-      - name: Скриншот экрана
+      - name: 3D без GPU (функции)
         if: always()
         env:
           TYNYS_MIN_FPS: '10'
@@ -32,7 +32,10 @@ jobs:
           set -o pipefail
           pip install playwright==1.64.0 && python -m playwright install --with-deps chromium
           python team/tynys/scripts/check3d.py http://127.0.0.1:8095/3d.html screen3d.png --mode functional --expect-source live 2>&1 | tee -a ci.log
-          python team/tynys/scripts/screenshot.py http://127.0.0.1:8095/dashboard.html screen.png
+      - name: Снимок пульта (материал для команды)
+        if: always()
+        continue-on-error: true
+        run: python team/tynys/scripts/screenshot.py http://127.0.0.1:8095/dashboard.html screen.png
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -44,6 +47,7 @@ jobs:
           if-no-files-found: ignore
       - name: Снимок в ветку ci-screens
         if: always()
+        continue-on-error: true
         run: |
           git config user.name github-actions; git config user.email github-actions@users.noreply.github.com
           git checkout --orphan ci-screens; git rm -rfq --cached . ; git add -f screen.png screen3d.png ci.log || git add -f screen.png ci.log
