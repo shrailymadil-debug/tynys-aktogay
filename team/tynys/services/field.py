@@ -18,6 +18,7 @@ from tynys.sim import init_state, step
 from tynys.controllers import V0Traditional, V1Reactive
 from tynys.params import P80_MODES
 from tynys import physics as ph
+from tynys.metrics import grid_adjusted
 from tynys.fleet import Fleet, step_fleet, group_view, N_GROUPS
 from platform_client import Bus, get_things, prop, wait_ditto
 
@@ -39,7 +40,7 @@ def start_clock(environ=None):
 
 class Totals:
     def __init__(self):
-        self.cu = self.grid = self.co2 = self.curt = self.renew = self.cost = self.feed = self.hours = self.cu_adj = 0.0
+        self.cu = self.grid = self.co2 = self.curt = self.renew = self.cost = self.feed = self.hours = self.cu_adj = self.co2_adj = 0.0
         self.pile0 = None
 
     def add(self, p, r, st=None):
@@ -50,12 +51,17 @@ class Totals:
         self.cu += r["cu_t"]; self.grid += r["grid"]; self.co2 += r["grid"] * p.grid_co2_t_mwh
         self.curt += r["curtail"]; self.renew += r["renew"] - r["curtail"]; self.cost += r["grid"] * r["price"]
         self.feed += r["feed"]; self.hours += 1
+        if st is not None:   # CO₂ с учётом запасов: склады и заряд батарей в сравнении с началом (metrics.grid_adjusted)
+            d_pile = sum(st.pile[d] - self.pile0[d] for d in st.pile)
+            self.co2_adj = grid_adjusted(p, self.grid, self.feed, d_pile,
+                                         st.fleet_e - 0.6 * p.n_trucks * p.truck_batt_mwh,
+                                         st.bess_e - 0.5 * p.bess_mwh) * p.grid_co2_t_mwh
 
     def feats(self):
-        return {"cu_t": round(self.cu, 1), "cu_adj_t": round(self.cu_adj, 1), "grid_mwh": round(self.grid, 1), "co2_t": round(self.co2, 1),
+        return {"cu_t": round(self.cu, 1), "cu_adj_t": round(self.cu_adj, 1), "grid_mwh": round(self.grid, 1), "co2_t": round(self.co2, 1), "co2_adj_t": round(self.co2_adj, 1),
                 "curtail_mwh": round(self.curt, 1), "renew_used_mwh": round(self.renew, 1),
                 "grid_cost_mkzt": round(self.cost / 1e6, 2), "ore_fed_kt": round(self.feed / 1000, 2),
-                "co2_per_t_cu": round(self.co2 / self.cu, 3) if self.cu else 0.0}
+                "co2_per_t_cu": round(self.co2_adj / self.cu_adj, 3) if self.cu_adj else 0.0}
 
 
 def main():

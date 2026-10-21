@@ -95,7 +95,7 @@ function render() {
   $('flow-ren').setAttribute('stroke-width', 1 + (v('wind', 'power_mw', 0) + v('pv', 'power_mw', 0)) / 50);
   // KPI
   const cols = ['shadow-v0', 'shadow-v1', 'site'];
-  const rows = [['Медь, т', 'cu_t', 0], ['Медь с учётом склада, т', 'cu_adj_t', 0], ['Из сети, МВт·ч', 'grid_mwh', 0], ['CO₂, т', 'co2_t', 0], ['CO₂ на т меди', 'co2_per_t_cu', 2],
+  const rows = [['Медь, т', 'cu_t', 0], ['Медь с учётом склада, т', 'cu_adj_t', 0], ['Из сети, МВт·ч', 'grid_mwh', 0], ['CO₂ из сети, т', 'co2_t', 0], ['CO₂ с учётом запасов, т', 'co2_adj_t', 0], ['CO₂ на т меди (с учётом запасов)', 'co2_per_t_cu', 2],
     ['Сброс ВИЭ, МВт·ч', 'curtail_mwh', 0], ['Оплата сети, млн ₸', 'grid_cost_mkzt', 0]];
   const CU_MKZT = 9500 * 480 * 0.85 / 1e6;   // оплачиваемая медь, млн ₸/т (допущение, params.py)
   const margin = c => v(c, 'cu_adj_t') * CU_MKZT - v(c, 'grid_cost_mkzt');
@@ -159,7 +159,7 @@ function animate(ts) {
     const n = `truck-${String(i + 1).padStart(2, '0')}`, r = trucksG.children[i], st = v(n, 'state', 'empty');
     let x, y;
     if (st === 'charging' || st === 'waiting') { const k = st === 'charging' ? slotC++ : 7 + (slotW++ % 7); x = 304 + (k % 7) * 19; y = st === 'charging' ? 474 : 496; }
-    else { const ph = (v(n, 'route_pos', 0) + (ts / 1000) * 0.02) % 1; const f = ph < 0.5 ? ph * 2 : 2 - ph * 2;
+    else { const ph = (i / 14 + ts / 1000 / 90) % 1;   // анимация: полный рейс за 90 с const f = ph < 0.5 ? ph * 2 : 2 - ph * 2;
       const p = road.getPointAtLength(f * roadLen); x = p.x - 7; y = p.y - 4 + (ph < 0.5 ? -7 : 7); }
     r.setAttribute('x', x); r.setAttribute('y', y);
     r.setAttribute('fill', st === 'charging' ? '#5ec8e5' : st === 'waiting' ? '#ebcb88' : st === 'loaded' ? '#6ce0cc' : '#9aa6b2');

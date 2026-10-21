@@ -36,3 +36,4 @@ team/tynys/results/
 .scene-test-output/
 .scene-performance-output/
 futures-e2e-report.json
+team/tynys/data/sizing_part_*.csv
