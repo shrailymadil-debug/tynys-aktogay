@@ -33,7 +33,7 @@ jobs:
         run: python team/tynys/scripts/check_futures.py
       - name: Browser interaction on the actual stand
         run: |
-          npm install --prefix /tmp/tynys-browser playwright@1.48.0
+          npm install --prefix /tmp/tynys-browser playwright@1.64.0
           node /tmp/tynys-browser/node_modules/playwright/cli.js install --with-deps chromium
           export NODE_PATH=/tmp/tynys-browser/node_modules
           node --experimental-vm-modules team/tynys/scripts/check_scene_geometry.cjs
@@ -44,7 +44,7 @@ jobs:
           TYNYS_3D_ARTIFACT_DIR: .scene-test-output
           TYNYS_MIN_FPS: '10'
         run: |
-          pip install playwright==1.48.0
+          pip install playwright==1.64.0
           free -m
           docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}'
           python team/tynys/scripts/check3d.py http://127.0.0.1:8095/3d.html scene.png --mode functional --expect-source live
@@ -76,7 +76,7 @@ jobs:
           python-version: '3.12'
       - name: Install the same Chromium used by live checks
         run: |
-          pip install playwright==1.48.0
+          pip install playwright==1.64.0
           python -m playwright install --with-deps chromium
       - name: Gate software-rendered FPS on repository replay
         shell: bash
