@@ -2,7 +2,7 @@
 
 Редактируемая 3D-сцена для проекта `shrailymadil-debug/tynys-aktogay`. Unity **6000.3.2f1**, встроенный рендерер Built-in. Геометрия и материалы созданы программно. При первом открытии Unity скачивает официальный пакет **Post Processing 3.5.4**, закреплённый в Packages/manifest.json. Его совместимость с Unity 6000.3 указана в [документации Unity](https://docs.unity.com/en-us/engine/6000.3/manual/packages-list/packages-all/pack-safe/com-unity-postprocessing).
 
-![Демонстрационная сцена Тыныс в Unity](preview.png)
+![Unity WebGL: живые данные Ditto, программный рендерер](preview.png)
 
 ## Открыть сцену
 
@@ -105,9 +105,11 @@ Windows и WebGL собираются в **Release**, без Development Build �
 
 **Tynys → Build Web LIVE** создаёт браузерную версию в `Builds/Tynys`. Для batch-сборки установленным Unity 6000.3.2f1 используйте `-batchmode -quit -buildTarget WebGL -projectPath "…/team/tynys/unity" -executeMethod Tynys.Editor.TynysBuilder.CreateAndBuildWeb -logFile "…/unity-web.log"`. Переменная `TYNYS_WEB_BUILD_PATH` задаёт дополнительную папку доставки. Эта команда пересоздаёт сцену из исходного макета.
 
+Для обновления сайта задайте `TYNYS_WEB_BUILD_PATH` абсолютным путём к `team/tynys/ui/unity` в этом репозитории или скопируйте туда всё содержимое `Builds/Tynys` после успешной сборки. В Git входят готовые файлы WebGL вместе с исходниками: `make tynys` запускает их без установленного Unity Editor.
+
 WebGL-шаблон хранится в `Assets/WebGLTemplates/Tynys`. Выходные файлы имеют стабильные имена `Build/Tynys.loader.js`, `Tynys.framework.js`, `Tynys.data`, `Tynys.wasm`. Сжатие Unity отключено: HTTP-сервер может применять gzip и должен отдавать `.wasm` как `application/wasm`. Сборка однопоточная и не требует cross-origin isolation. Для встраивания используйте `/unity/` в iframe. Файлы следует отдавать по HTTP(S), не открывать через `file://`.
 
-Браузерный профиль рассчитан на настольный WebGL 2: целевая частота 30 FPS, FXAA, Bloom в быстром режиме, AO отключён, фары показываются эмиссионными материалами без 28 дополнительных spotlights. Это лимит, а не гарантия FPS. Для обнаруженного программного рендерера (SwiftShader/llvmpipe и аналоги) автоматически выбирается облегчённый профиль: целевые 15 FPS, масштаб буфера 0.9, отключены тени, постобработка и частицы; геометрия, данные, skybox и ambient остаются. Статичная геометрия объединяется для отрисовки; техника, роторы, мельницы, склады и индикаторы исключены. Освещение сцены остаётся дневным оформлением, а не моделью положения солнца. Неизменённый DejaVu Sans с кириллицей включён в сборку; лицензия находится рядом со шрифтом в `Assets/Resources/Fonts/DejaVu-LICENSE.txt`. Шрифты ОС зрителя не требуются.
+Браузерный профиль рассчитан на настольный WebGL 2: FXAA, Bloom в быстром режиме, AO отключён, фары показываются эмиссионными материалами без 28 дополнительных spotlights. Для обнаруженного программного рендерера (SwiftShader/llvmpipe и аналоги) автоматически выбирается облегчённый профиль: масштаб буфера 0.9, отключены тени, постобработка и частицы; геометрия, данные, skybox и ambient остаются. Runtime запрашивает 30 или 15 FPS соответственно, однако синхронизация браузера не обеспечивает строгого предела; фактическая частота измеряется отдельно. Статичная геометрия объединяется для отрисовки; техника, роторы, мельницы, склады и индикаторы исключены. Освещение сцены остаётся дневным оформлением, а не моделью положения солнца. Неизменённый DejaVu Sans с кириллицей включён в сборку; лицензия находится рядом со шрифтом в `Assets/Resources/Fonts/DejaVu-LICENSE.txt`. Шрифты ОС зрителя не требуются.
 
 Шаблон отправляет родителю same-origin сообщения `{type:'tynys-unity', state:'loading'|'ready'|'error', progress:0..1, message}`. `ready` означает загрузку runtime, **не подключение LIVE**. Отдельный read-only `window.tynysStatus` и сообщения `tynys-unity-data` содержат mode, connected, stale, hasSnapshot, snapshotCount, frameCount, renderedFrameCount, softwareRenderer, batchedObjects и hour для проверки получения данных. `renderedFrameCount` растёт после Unity WaitForEndOfFrame; `frameCount` относится к игровому циклу. Секреты и команды управления туда не передаются.
 
