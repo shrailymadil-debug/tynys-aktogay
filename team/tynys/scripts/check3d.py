@@ -347,6 +347,9 @@ async def scenario_fixture(context, url, errors, screenshot_path):
         angles = before.get("windAngles")
         require(isinstance(angles, list) and len(angles) > 0 and all(finite(a) for a in angles),
                 "Scene exposes no rotor angles for an actual stopped-wind check")
+        # ждём хотя бы один новый кадр (на медленном программном рендере кадр бывает дольше 0,6 с)
+        await page.wait_for_function("n => window.__tynys.renderedFrames > n",
+                                     arg=before["renderedFrames"], timeout=15000)
         await page.wait_for_timeout(600)
         visuals = await page.evaluate(
             "() => ({...window.__tynys.scenarioVisuals, renderedFrames:window.__tynys.renderedFrames})")
