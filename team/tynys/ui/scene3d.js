@@ -34,7 +34,7 @@ async function start() {
   catch (e) { try { TRACE = await loadTrace(); if(!Array.isArray(TRACE)||!TRACE.length)throw new Error('Нет записи');source='replay';tStart=performance.now();pollTrace();setInterval(pollTrace,250); }
     catch {source='unavailable';} sourceLabel(); }
 }
-function sourceLabel(){const text=source==='live'?'● живые двойники OpenEgiz':source==='replay'?'● запись стенда · не живые данные':source==='stale'?`● связь потеряна · снимок ${new Date(lastLiveAt).toLocaleTimeString('ru-RU')}`:source==='unavailable'?'● данные недоступны':'подключение…';$('src').textContent=text;$('source-line').textContent=text+' · движение транспорта схематическое';}
+function sourceLabel(){const text=source==='live'?'● живые двойники OpenEgiz':source==='replay'?'● запись стенда · не живые данные':source==='stale'?`● связь потеряна · снимок ${new Date(lastLiveAt).toLocaleTimeString('ru-RU')}`:source==='unavailable'?'● данные недоступны':'подключение…';$('src').textContent=text;$('source-line').textContent=text+' · движение самосвалов: схема, ускорено ×10';}
 async function cancelScenarioEvent(id){
   if(source!=='live')throw new Error('Отмена доступна только при связи с Ditto');
   await pollLive();let events;try{const raw=v('scenario','events','[]');events=Array.isArray(raw)?raw:JSON.parse(raw);}catch{throw new Error('Некорректный сценарий');}
@@ -186,6 +186,8 @@ for (let i = 0; i <= 80; i++) { const s = i / 80, a = -0.5 + s * Math.PI * 2.35,
 const rim = roadPts[roadPts.length - 1];
 roadPts.push(new THREE.Vector3(rim.x + 30, 0.4, rim.z + 6), new THREE.Vector3(-10, 0.4, -2), new THREE.Vector3(PILES.x - 26, 0.4, PILES.z + 6));
 const road = new THREE.CatmullRomCurve3(roadPts);
+const ROAD_LEN = road.getLength();   // ед. сцены (≈ 10 м)
+const TRUCK_TIMELAPSE = 10;           // показ движения ускорен ×10
 {
   const N = LOW?360:700, pos = [], idx = [], uv = [];
   for (let i = 0; i <= N; i++) {
@@ -438,13 +440,13 @@ function hud() {
     : `Предел ${fmt(gridCap)} / ${fmt(gridNominal)} МВт · из сети ${fmt(e.grid)}`);
   set('l-coal', `<span class="bad">${fmt(e.co2)} т CO₂ в час</span> — из‑за рудника`);
   set('l-ch', view === 'now' ? 'по графику смен' : `${fmt(e.charge)} МВт`);
-  const a = { cu: v('shadow-v0', 'cu_adj_t'), co2: v('shadow-v0', 'co2_t'), curt: v('shadow-v0', 'curtail_mwh') };
-  const b = { cu: v('site', 'cu_adj_t'), co2: v('site', 'co2_t'), curt: v('site', 'curtail_mwh') };
+  const a = { cu: v('shadow-v0', 'cu_adj_t'), co2: v('shadow-v0', 'co2_adj_t', v('shadow-v0', 'co2_t')), curt: v('shadow-v0', 'curtail_mwh') };
+  const b = { cu: v('site', 'cu_adj_t'), co2: v('site', 'co2_adj_t', v('site', 'co2_t')), curt: v('site', 'curtail_mwh') };
   const d = (x, y, inv) => { const p = 100 * (y - x) / Math.max(1, x); const good = inv ? p < 0 : p > 0; return `<small class="${good ? 'good' : 'bad'}">${p > 0 ? '+' : ''}${fmt(p, 1)} %</small>`; };
   $('kt').innerHTML = `<tr><th></th><th class="bad">Как сейчас</th><th class="good">Тыныс</th></tr>
     <tr><td>Медь, т</td><td>${fmt(a.cu)}</td><td>${fmt(b.cu)} ${d(a.cu, b.cu)}</td></tr>
     <tr><td>Выброшено ВИЭ, МВт·ч</td><td>${fmt(a.curt)}</td><td>${fmt(b.curt)} ${a.curt > 0 ? d(a.curt, b.curt, 1) : ''}</td></tr>
-    <tr><td>CO₂, т</td><td>${fmt(a.co2)}</td><td>${fmt(b.co2)}</td></tr>`;
+    <tr><td title="поправка на склады и заряд батарей в конце">CO₂ с учётом запасов, т</td><td>${fmt(a.co2)}</td><td>${fmt(b.co2)}</td></tr>`;
   set('g-co2', fmt(e.co2)); set('g-ren', fmt(100 * e.used / Math.max(1, e.used + e.grid))); set('g-cur', fmt(e.curtail));
   flows.grid.mw = e.grid; flows.wind.mw = Math.max(0, v('wind', 'power_mw') - e.curtail * 0.7); flows.pv.mw = Math.max(0, v('pv', 'power_mw') - e.curtail * 0.3);
   flows.plant.mw = v('plant', 'mill_mw'); flows.charge.mw = e.charge;
@@ -496,7 +498,7 @@ const STORY = [
   { v: 'tynys', p: [-40, 120, -190], t: [70, 0, 0], h: 'Решение: рудник «дышит»', s: 'ВДОХ — энергии много: мелем твёрдую руду и тоньше, заряжаем самосвалы. ВЫДОХ — мало: мелем мягкую, твёрдую копим на складе.' },
   { v: 'tynys', p: [80, 55, 200], t: [10, 0, 110], h: 'Электросамосвалы — тоже батарея', s: 'Самосвалы заряжаются, когда дует ветер, и возят руду на заряде, когда ветра нет.' },
   { v: 'tynys', p: [360, 130, 140], t: [250, 10, -20], h: 'Мозг считает на сутки вперёд', s: 'Каждый час — план на 24 ч по прогнозу погоды и объяснение словами. В «Двух будущих» можно проверить ограничение сети, последствия для производства и восстановление запасов.' },
-  { v: 'tynys', p: [300, 280, 460], t: [20, -20, -20], h: 'Итог за год на реальной погоде 2024', s: 'ВЭС 300 + СЭС 250 МВт: CO₂ 1 591 → 933 тыс. т в год (−41 %). «Тыныс» сверху: сброс ветра и солнца −23 % и CO₂ ещё −1 % — или +1,9 % меди тонким помолом, но тогда CO₂ +5 %.' },
+  { v: 'tynys', p: [300, 280, 460], t: [20, -20, -20], h: 'Итог за год на реальной погоде 2024', s: 'ВЭС 300 + СЭС 250 МВт: CO₂ 1 601 → 937 тыс. т в год (−41 %). «Тыныс» в режиме «CO₂» сверху: сброс ветра и солнца −24 % и CO₂ ещё −2 %. Режим «медь»: +1,9 % меди тонким помолом, но CO₂ +4 %.' },
 ];
 let tour = null;
 function startStory() { tour = { i: 0, t0: performance.now(), from: { p: camera.position.clone(), t: controls.target.clone() } }; setView(STORY[0].v); }
@@ -557,14 +559,17 @@ function frame(now) {
     if(!LOW)for (let k = 0; k < 8; k++) setInst(dustIM, i * 8 + k, 0, -500, 0, 0, 0, 0);
     if (st === 'charging') { const k = slots.c++ % 4; tr.g.position.set(CHARGE.x - 30 + k * 20, 0.4, CHARGE.z - 5); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
     if (st === 'waiting') { const k = slots.w++; tr.g.position.set(CHARGE.x - 34 + (k % 8) * 10, 0.4, CHARGE.z + 9 + Math.floor(k / 8) * 9); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
-    const target = v(n, 'route_pos', tr.phase); let dd = target - tr.phase; dd -= Math.round(dd);
-    tr.phase = (tr.phase + dt * 0.012 + dd * dt * 0.3 + 1) % 1;
+    // Скорость — как у карьерного самосвала: гружёный в подъём ≈ 12 км/ч, порожний ≈ 30 км/ч
+    // (1 ед. сцены ≈ 10 м), показ ускорен в TRUCK_TIMELAPSE раз. Модель часовая, поэтому
+    // положение на дороге — анимация; заряд, состояние и груз звена — из двойника.
+    const upNow = tr.phase < 0.5, kmh = upNow ? 12 : 30;
+    tr.phase = (tr.phase + dt * TRUCK_TIMELAPSE * (kmh / 3.6 / 10) / (2 * ROAD_LEN)) % 1;
     const up = tr.phase < 0.5, f = up ? tr.phase * 2 : 2 - tr.phase * 2;
     const p = road.getPointAt(f), t = road.getTangentAt(f), side = new THREE.Vector3(-t.z, 0, t.x).normalize().multiplyScalar(up ? 2.3 : -2.3);
     tr.g.position.copy(p).add(side); tr.g.position.y = p.y + 0.35;
     tr.g.rotation.set(0, Math.atan2(-t.z, t.x) + (up ? 0 : Math.PI), 0);
     tr.g.rotateZ((up ? 1 : -1) * Math.asin(THREE.MathUtils.clamp(t.y, -0.3, 0.3)));
-    tr.load.visible = st === 'loaded'; tr.load.material = hash(i, 9) < hf ? oreMat.hard : oreMat.soft;
+    tr.load.visible = up;   // в подъём — с рудой, обратно — порожний tr.load.material = hash(i, 9) < hf ? oreMat.hard : oreMat.soft;
     if (p.y > -6 && !LOW) for (let k = 0; k < 8; k++) {
       const ph = (now / 900 + k / 8 + i * 0.13) % 1, back = t.clone().multiplyScalar((up ? -1 : 1) * (6 + ph * 14));
       setInst(dustIM, i * 8 + k, tr.g.position.x + back.x, 1 + ph * 5, tr.g.position.z + back.z, 1 + ph * 3, 1 + ph * 2, 1 + ph * 3);

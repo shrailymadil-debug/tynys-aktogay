@@ -4,7 +4,8 @@
 (4 сезона × 14 суток) четыре варианта управления:
   V0      — как сейчас (без координации), P80 150 мкм;
   V2      — координатор, цель «медь» (P80 120–250 мкм);
-  V2green — координатор, цель «CO₂» (P80 не тоньше 150 мкм);
+  V2green — координатор, цель «CO₂» (P80 не тоньше 150 мкм; каждый МВт·ч из сети
+            стоит одинаково — минимизируется объём из сети, а не счёт по зонам суток);
   V2fixed — координатор с P80 = 150 мкм, как у V0: отделяет эффект
             адаптации к ВИЭ от эффекта более тонкого помола. Результат —
 data/sizing.csv, его показывает экран (блок «Сколько строить»).
@@ -28,9 +29,11 @@ def evaluate(p, ctl):
     for doy in SEASONS:
         r = pd.DataFrame(run(p, Scenario(start_doy=doy, days=DAYS), ctl, 7))
         s = summarize(p, r, p.pile_cap_t * p.pile_init_frac)
-        for k in ("cu_adj_t", "cu_t", "grid_mwh", "curtail_mwh", "renew_share_pct"):
+        for k in ("cu_adj_t", "cu_t", "grid_mwh", "co2_adj_t", "curtail_mwh", "renew_share_pct"):
             agg[k] = agg.get(k, 0) + s[k] / len(SEASONS) * (1 if k == "renew_share_pct" else 365 / DAYS)
     agg["co2_kt"] = agg["grid_mwh"] * p.grid_co2_t_mwh / 1000
+    # CO₂ с учётом запасов в конце прогонов (склады, заряд самосвалов и накопителя), см. metrics.grid_adjusted
+    agg["co2_adj_kt"] = agg.pop("co2_adj_t") / 1000
     return agg
 
 
@@ -40,7 +43,8 @@ def main():
     winds, pvs = (0, 150, 300, 450, 600), (0, 125, 250, 375, 500)
     for w, s in itertools.product(winds, pvs):
         p = replace(aktogay(), wind_mw=w, pv_mwp=s)
-        for name, ctl in (("V0", V0Traditional()), ("V2", V2Tynys()), ("V2green", V2Tynys(grind_modes=GREEN)),
+        for name, ctl in (("V0", V0Traditional()), ("V2", V2Tynys()),
+                          ("V2green", V2Tynys(grind_modes=GREEN, flat_price=True)),   # цель «CO₂»: минимум МВт·ч из сети
                           ("V2fixed", V2Tynys(elastic_grind=False))):   # тот же MPC, P80 = 150 мкм как у V0
             if only and name not in only:
                 continue
@@ -49,6 +53,9 @@ def main():
             print(rows[-1], flush=True)
     os.makedirs("data", exist_ok=True)
     out = pd.DataFrame(rows)
+    if os.environ.get("SIZING_PART"):            # параллельный расчёт: каждый вариант в свой файл
+        out.to_csv(f"data/sizing_part_{os.environ['SIZING_PART']}.csv", index=False)
+        return
     if only and os.path.exists("data/sizing.csv"):
         old = pd.read_csv("data/sizing.csv")
         out = pd.concat([old[~old.variant.isin(only)], out])

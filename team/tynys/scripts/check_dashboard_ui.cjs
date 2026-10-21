@@ -12,9 +12,12 @@ const fullStats = {season:'весь год (4 × 14 сут)',mw_mean:136,mw_medi
   h_mean:4.5,h_median:1,h_p10:.6,h_p90:1.9};
 let stats = [structuredClone(fullStats)], offline = false;
 const twins = structuredClone(original), writes = [], errors = [], checks = [];
-Object.assign(twins.site, {sim_hour:12,elapsed_hours:3,sim_time:'2026-10-21 12:00',co2_t:200});
-Object.assign(twins['shadow-v0'], {co2_t:100});
-Object.assign(twins['shadow-v1'], {co2_t:100});
+Object.assign(twins.site, {sim_hour:12,elapsed_hours:3,sim_time:'2026-10-21 12:00',co2_t:200,co2_adj_t:180,co2_per_t_cu:1.8});
+Object.assign(twins['shadow-v0'], {co2_t:100,co2_adj_t:110,co2_per_t_cu:1.1});
+Object.assign(twins['shadow-v1'], {co2_t:100,co2_adj_t:90,co2_per_t_cu:.9});
+const sizing = [{wind_mw:0,pv_mwp:0,variant:'V0',co2_kt:300,co2_adj_kt:310},
+  ...['V0','V2fixed','V2','V2green'].map((variant,i)=>({wind_mw:300,pv_mwp:250,variant,co2_kt:200-20*i,co2_adj_kt:190-20*i}))]
+  .map(row=>({...row,cu_adj_t:100000,renew_share_pct:40,curtail_mwh:1000}));
 Object.assign(twins.scenario, {goal:'copper',events:'[]',rev:4});
 Object.assign(twins.coordinator, {goal:'copper'});
 Object.assign(twins.plant, {decision_source:'coordinator'});
@@ -48,7 +51,7 @@ async function main() {
         for (const [key,value] of Object.entries(body)) twins.scenario[key]=value.properties.value;
         return route.fulfill({status:204,body:''});
       }
-      const body = url.pathname.endsWith('/flex_stats') ? stats : url.pathname.endsWith('/sizing') ? [] : things();
+      const body = url.pathname.endsWith('/flex_stats') ? stats : url.pathname.endsWith('/sizing') ? sizing : things();
       return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
     });
     await page.goto(`http://127.0.0.1:${server.address().port}/dashboard.html`);
@@ -56,10 +59,28 @@ async function main() {
     assert.match(await page.locator('#comparison-period').innerText(), /3 завершённых модельных ч/);
     assert.match(await page.locator('#comparison-goal').innerText(), /Больше меди/);
     assert.equal(await page.locator('#g-copper').getAttribute('aria-pressed'),'true');
-    assert.deepEqual(await page.locator('#kt tr').filter({hasText:/^CO₂, т/}).locator('td').allTextContents(),
-      ['CO₂, т','100','100','200']);
+    assert.deepEqual(await page.locator('#kt tr').filter({hasText:/^CO₂ из сети, т/}).locator('td').allTextContents(),
+      ['CO₂ из сети, т','100','100','200']);
+    assert.deepEqual(await page.locator('#kt tr').filter({hasText:/^CO₂ с учётом запасов, т/}).locator('td').allTextContents(),
+      ['CO₂ с учётом запасов, т','110','90','180']);
+    assert.deepEqual(await page.locator('#kt tr').filter({hasText:/^CO₂ на т меди/}).locator('td').allTextContents(),
+      ['CO₂ на т меди (с учётом запасов)','1,10','0,90','1,80']);
+    assert.match(await page.locator('#comparison-emissions').innerText(),/CO₂ из сети/);
     assert.equal(writes.length,0);
     checks.push('Actual CO2, period and backend objective remain visible; page load performs no writes');
+
+    await page.waitForFunction(()=>document.querySelectorAll('#sizing tr').length>1);
+    assert.deepEqual((await page.locator('#sizing tr').filter({hasText:/^CO₂ из сети/}).locator('td').allTextContents()).slice(1),
+      ['300','200','180','160','140']);
+    assert.deepEqual((await page.locator('#sizing tr').filter({hasText:/^CO₂ с учётом запасов/}).locator('td').allTextContents()).slice(1),
+      ['310','190','170','150','130']);
+    delete sizing[3].co2_adj_kt;
+    await page.evaluate(()=>loadSizing());
+    assert.equal((await page.locator('#sizing tr').filter({hasText:/^CO₂ с учётом запасов/}).locator('td').allTextContents())[4],'—');
+    assert.equal((await page.locator('#sizing tr').filter({hasText:/^CO₂ на т меди/}).locator('td').allTextContents())[4],'—');
+    assert.equal((await page.locator('#sizing tr').filter({hasText:/^CO₂ из сети/}).locator('td').allTextContents())[4],'160');
+    sizing[3].co2_adj_kt=150; await page.evaluate(()=>loadSizing());
+    checks.push('Inventory-adjusted CO2 remains separate from gross emissions; absent adjusted sizing is never replaced with gross');
 
     let text = await page.locator('#flexstat').innerText();
     assert.match(text,/Мощность: медиана 143,1 МВт/);
@@ -106,17 +127,18 @@ async function main() {
     checks.push('Missing backend objective is not silently replaced with copper');
 
     twins.scenario.goal='copper'; twins.coordinator.goal='copper'; twins.plant.decision_source='fallback_v1';
-    delete twins.site.co2_t;
+    delete twins.site.co2_t; delete twins.site.co2_adj_t;
     await page.evaluate(() => poll());
     assert.match(await page.locator('#comparison-goal').innerText(),/резервному правилу V1/);
     assert.match(await page.locator('#comparison-emissions').innerText(),/ожидает данных/);
-    assert.equal((await page.locator('#kt tr').filter({hasText:/^CO₂, т/}).locator('td').allTextContents())[3],'—');
+    assert.equal((await page.locator('#kt tr').filter({hasText:/^CO₂ из сети, т/}).locator('td').allTextContents())[3],'—');
+    assert.equal((await page.locator('#kt tr').filter({hasText:/^CO₂ на т меди/}).locator('td').allTextContents())[3],'—');
     offline=true; await page.evaluate(async () => { await poll(); await loadFlex(); });
     assert.equal(await page.locator('#connection').getAttribute('data-state'),'offline');
     assert.match(await page.locator('#flexstat').innerText(),/Статистика резерва недоступна/);
     checks.push('Fallback, absent CO2 and offline statistics are clearly distinguished');
 
-    offline=false; stats=[structuredClone(fullStats)]; twins.site.co2_t=200; twins.plant.decision_source='coordinator';
+    offline=false; stats=[structuredClone(fullStats)]; twins.site.co2_t=200; twins.site.co2_adj_t=180; twins.plant.decision_source='coordinator';
     await page.evaluate(async () => { await poll(); await loadFlex(); });
     assert.equal(await page.locator('nav a[aria-current=page]').getAttribute('href'),'./dashboard.html');
     assert.equal(await page.locator('nav a[href="./"]').count(),1);

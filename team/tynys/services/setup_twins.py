@@ -48,6 +48,27 @@ def twins():
             t("bess", "Накопитель 60 МВт / 120 МВт·ч (допущение)", "bess", "energy", {"soc": 50.0}),
             t("substation", "Подстанция 220 кВ — связь с KEGOC", "substation", "energy", {"grid_mw": 0.0})]
     d = dict(out)
+    # Технологические связи (кроме иерархии _parents): кто кому передаёт руду и энергию.
+    # Это те же потоки, что считает модель sim.step.
+    ref = lambda *names: [f"{NS}:{n}" for n in names]
+    links = {
+        "shovel-1": {"loads": ref(*[f"truck-{i:02d}" for i in range(1, 15)])},
+        "shovel-2": {"loads": ref(*[f"truck-{i:02d}" for i in range(1, 15)])},
+        **{f"truck-{i:02d}": {"hauls_to": ref("pile-soft", "pile-hard"), "charged_by": ref(*[f"charger-{k}" for k in range(1, 5)])}
+           for i in range(1, 15)},
+        **{f"charger-{k}": {"powered_by": ref("substation")} for k in range(1, 5)},
+        "pile-soft": {"feeds": ref("line-1", "line-2")},
+        "pile-hard": {"feeds": ref("line-1", "line-2")},
+        "line-1": {"feeds": ref("flotation"), "powered_by": ref("substation")},
+        "line-2": {"feeds": ref("flotation"), "powered_by": ref("substation")},
+        "wind": {"supplies": ref("substation")},
+        "pv": {"supplies": ref("substation")},
+        "bess": {"exchanges_with": ref("substation")},
+        "substation": {"grid": "KEGOC 220 кВ", "supplies": ref("line-1", "line-2", "flotation", *[f"charger-{k}" for k in range(1, 5)])},
+        "coordinator": {"sets_points_for": ref("line-1", "line-2", *[f"charger-{k}" for k in range(1, 5)], "bess")},
+    }
+    for name, rel in links.items():
+        d[name]["attributes"]["links"] = rel
     d["energy"]["attributes"]["sizing"] = sizing()   # атрибут: поле не перезаписывает его
     d["substation"]["attributes"]["flex_stats"] = csv_rows("flex.csv")   # предрасчёт flex_stats.py
     return d
