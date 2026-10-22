@@ -219,6 +219,22 @@ async function main() {
     assert.ok(report.live.after.connected&&!report.live.after.stale,'LIVE disconnected during measurement');
     report.checks.push('Actual Unity runtime, live Ditto snapshots, advancing Unity frames and nonblack scene');
 
+    // These are actual IMGUI toolbar clicks; the read-only diagnostic only confirms the selected view.
+    assert.equal(report.live.after.presentation,'pit','The close quarry composition is not the default');
+    const toolbarCanvas=await frame.locator('#unity-canvas').boundingBox();
+    const toolbarScale=Math.min(toolbarCanvas.width/1600,toolbarCanvas.height/900);
+    report.presentations={pit:report.live.after};
+    for(const [view,rightInset,file] of [['digital',583,'unity-digital.png'],['site',433,'unity-site.png'],['pit',733,'unity-pit-return.png']]) {
+      await page.mouse.click(toolbarCanvas.x+toolbarCanvas.width-rightInset*toolbarScale,toolbarCanvas.y+132*toolbarScale,{delay:120});
+      await frame.waitForFunction(expected=>window.tynysStatus?.presentation===expected,view,{timeout:15000});
+      const selected=await status(frame);
+      assert.equal(selected.mode,'LIVE');assert.equal(selected.connected,true);assert.equal(selected.stale,false);
+      assert.ok(selected.snapshotCount>=report.live.after.snapshotCount,'View selection reset the data source');
+      report.presentations[view]=selected;
+      await page.screenshot({path:path.join(out,file)});
+    }
+    report.checks.push('Close quarry, digital outlines and whole-site views switch by toolbar without changing LIVE data');
+
     phase='stale';blockDitto=true;
     await frame.waitForFunction(()=>window.tynysStatus.mode==='LIVE'&&window.tynysStatus.stale&&!window.tynysStatus.connected,null,{timeout:45000});
     const stale=await status(frame);assert.equal(stale.hasSnapshot,true);

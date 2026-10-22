@@ -39,6 +39,7 @@ namespace Tynys.Editor
             world.data=data;world.hud=hud;world.viewCamera=cam;world.cameraRig=rig;
             hud.data=data;hud.cameraRig=rig;
             world.Build();
+            var command=root.AddComponent<MineCommandView>();command.world=world;command.Build();hud.command=command;
             var sun=new GameObject("Солнце · мягкие тени",typeof(Light));
             sun.transform.rotation=Quaternion.Euler(52,-28,0);
             var light=sun.GetComponent<Light>();light.type=LightType.Directional;light.color=new Color(1,.94f,.82f);
@@ -199,6 +200,8 @@ namespace Tynys.Editor
                 if(f.sharedMesh==null)throw new Exception("Missing persisted mesh: "+f.name);
             if(world.GetComponentsInChildren<MineObject>().Length<30)throw new Exception("Missing selection IDs");
             if(world.steam.Length!=2||world.truckHeadlights.Length!=28)throw new Exception("Missing particle or headlight bindings");
+            var command=UnityEngine.Object.FindFirstObjectByType<MineCommandView>();
+            if(command==null||command.trucks.Length!=14||command.wires.Length!=15)throw new Exception("Missing command-view transport or digital layer");
             if(RenderSettings.skybox==null||!RenderSettings.fog)throw new Exception("Missing daylight environment");
             if(world.viewCamera.GetComponent<PostProcessLayer>()==null)throw new Exception("Missing post processing");
             if(PlayerSettings.insecureHttpOption!=InsecureHttpOption.AlwaysAllowed)throw new Exception("Release local HTTP is disabled");
