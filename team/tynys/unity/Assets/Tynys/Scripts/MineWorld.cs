@@ -57,14 +57,14 @@ namespace Tynys
 
         void CreateMaterials()
         {
-            sand=Mat("01 · степь", "#C8B28C", .08f);
-            rock=Mat("02 · уступы", "#B89A72", .1f);
-            darkRock=Mat("03 · нижние уступы", "#857F70", .08f);
-            strata=new[]{Mat("Пласт · песчаник","#C4A67B",.08f),Mat("Пласт · охра","#B88960",.09f),
-                Mat("Пласт · известняк","#C2BAA4",.07f),Mat("Пласт · сланец","#8D9490",.12f),
-                Mat("Пласт · медная руда","#9C765D",.12f),Mat("Пласт · порфир","#AAA18B",.09f),Mat("Пласт · основание","#777D79",.1f)};
-            concrete=Mat("04 · бетон", "#7C898A", .12f);
-            steel=Mat("05 · сталь", "#344C58", .35f);
+            sand=Mat("01 · каменистая поверхность", "#697780", .08f);
+            rock=Mat("02 · уступы", "#AC8060", .1f);
+            darkRock=Mat("03 · нижние уступы", "#515965", .08f);
+            strata=new[]{Mat("Пласт · песчаник","#BA9470",.08f),Mat("Пласт · охра","#996549",.09f),
+                Mat("Пласт · известняк","#ACA795",.07f),Mat("Пласт · сланец","#596372",.12f),
+                Mat("Пласт · медная руда","#9B6145",.12f),Mat("Пласт · порфир","#85786E",.09f),Mat("Пласт · основание","#465261",.1f)};
+            concrete=Mat("04 · бетон", "#687B83", .12f);
+            steel=Mat("05 · сталь", "#273D4B", .35f);
             ivory=Mat("06 · светлый металл", "#D6E3DD", .32f);
             glass=Mat("07 · стекло", "#77B6C4", .92f);
             glass.SetFloat("_Metallic",.12f);
@@ -72,13 +72,24 @@ namespace Tynys
             glass.SetFloat("_Mode",3f);glass.SetInt("_SrcBlend",(int)BlendMode.One);glass.SetInt("_DstBlend",(int)BlendMode.OneMinusSrcAlpha);
             glass.SetInt("_ZWrite",0);glass.EnableKeyword("_ALPHAPREMULTIPLY_ON");glass.SetOverrideTag("RenderType","Transparent");glass.renderQueue=3000;
             rubber=Mat("08 · шины", "#18282D", .1f);
-            copper=Mat("09 · медная руда", "#BF794C", .1f);
+            copper=Mat("09 · медная руда", "#B66B43", .1f);
             teal=Mat("10 · энергия ВИЭ", "#52D6B5", .45f, true);
             cyan=Mat("11 · электроэнергия", "#66BBD7", .45f, true);
             blue=Mat("12 · фотоэлементы", "#245575", .55f);
             blue.SetFloat("_Glossiness",.91f);blue.SetFloat("_Metallic",.55f);
             red=Mat("13 · авария", "#EC765B", .35f, true);
-            amber=Mat("14 · самосвалы", "#E5B95D", .35f);
+            amber=Mat("14 · самосвалы", "#E7AC39", .28f);
+            // One small shared texture adds mineral grain without extra draw calls or shader passes.
+            var grain=new Texture2D(128,128,TextureFormat.RGB24,true){name="Минеральное зерно",wrapMode=TextureWrapMode.Repeat};
+            for(int y=0;y<128;y++)for(int x=0;x<128;x++)
+            {
+                float fine=((x*73+y*151+x*y*19)%101)/100f;
+                float value=.72f+.16f*Mathf.PerlinNoise(x*.12f,y*.12f)+.12f*fine;
+                grain.SetPixel(x,y,new Color(value,value,value));
+            }
+            grain.Apply();
+            foreach(var material in new[]{sand,rock,darkRock,concrete,copper})material.mainTexture=grain;
+            foreach(var material in strata)material.mainTexture=grain;
         }
 
         Material Mat(string name,string hex,float smooth,bool emission=false)
@@ -119,7 +130,10 @@ namespace Tynys
         GameObject MeshObject(string n,Transform t,List<Vector3> v,List<int> tri,Material m)
         {
             var mesh=new Mesh {name=n};
-            mesh.SetVertices(v);mesh.SetTriangles(tri,0);mesh.RecalculateNormals();mesh.RecalculateBounds();
+            mesh.SetVertices(v);mesh.SetTriangles(tri,0);
+            var uv=new List<Vector2>(v.Count);
+            foreach(var point in v)uv.Add(new Vector2(point.x*.24f,(point.z+point.y)*.24f));
+            mesh.SetUVs(0,uv);mesh.RecalculateNormals();mesh.RecalculateBounds();
             var g=new GameObject(n,typeof(MeshFilter),typeof(MeshRenderer));
             g.transform.SetParent(t,false);
             g.GetComponent<MeshFilter>().sharedMesh=mesh;g.GetComponent<MeshRenderer>().sharedMaterial=m;
@@ -138,19 +152,26 @@ namespace Tynys
                 float tx=Mathf.Abs(x)<.00001f?float.PositiveInfinity:(x>0?128/x:-42/x);
                 float tz=Mathf.Abs(z)<.00001f?float.PositiveInfinity:50/Mathf.Abs(z);
                 float d=Mathf.Min(tx,tz);
-                verts.Add(new Vector3(-43+31*x,0,25*z));
+                verts.Add(PitPoint(31,25,a,0)+new Vector3(-43,0,0));
                 verts.Add(new Vector3(-43+d*x,0,d*z));
             }
             for(int i=0;i<128;i++){int j=i*2;tris.AddRange(new[]{j,j+2,j+1,j+1,j+2,j+3});}
             MeshObject("Степь · отверстие карьера",t,verts,tris,sand);
             // Side walls show this is a presentation model, not a geographic reconstruction.
-            Box("Южный срез",t,new Vector3(0,-12,-50),new Vector3(170,24,1),darkRock);
-            Box("Северный срез",t,new Vector3(0,-12,50),new Vector3(170,24,1),darkRock);
-            Box("Западный срез",t,new Vector3(-85,-12,0),new Vector3(1,24,100),darkRock);
-            Box("Восточный срез",t,new Vector3(85,-12,0),new Vector3(1,24,100),darkRock);
+            for(int layer=0;layer<7;layer++)
+            {
+                float depth=24f/7f,y=-(layer+.5f)*depth;
+                var material=strata[layer];
+                Box("Южный пласт "+layer,t,new Vector3(0,y,-50),new Vector3(170,depth,1),material);
+                Box("Северный пласт "+layer,t,new Vector3(0,y,50),new Vector3(170,depth,1),material);
+                Box("Западный пласт "+layer,t,new Vector3(-85,y,0),new Vector3(1,depth,100),material);
+                Box("Восточный пласт "+layer,t,new Vector3(85,y,0),new Vector3(1,depth,100),material);
+            }
             Box("Основание макета",t,new Vector3(0,-24.6f,0),new Vector3(172,1.5f,102),steel);
-            foreach(float y in new[]{-7f,-14f,-21f})
-                Box("Геологический слой",t,new Vector3(0,y,-50.56f),new Vector3(169,.24f,.12f),rock);
+            foreach(float z in new[]{-51f,51f})
+                Box("Контур основания",t,new Vector3(0,-24f,z),new Vector3(172,.12f,.12f),teal);
+            foreach(float x in new[]{-86f,86f})
+                Box("Контур основания",t,new Vector3(x,-24f,0),new Vector3(.12f,.12f,102),teal);
             // Sparse low polygon boulders use deterministic placement.
             for(int i=0;i<30;i++)
             {
@@ -160,15 +181,21 @@ namespace Tynys
             }
         }
 
+        static Vector3 PitPoint(float radiusX,float radiusZ,float angle,float y)
+        {
+            float edge=.42f*Mathf.Sin(angle*7)+.18f*Mathf.Sin(angle*19);
+            return new Vector3(Mathf.Cos(angle)*(radiusX+edge),y,Mathf.Sin(angle)*(radiusZ+edge));
+        }
+
         void Ring(Transform t,string name,float outerX,float outerZ,float innerX,float innerZ,float y,float lowerY,Material m)
         {
             var v=new List<Vector3>();var tri=new List<int>();
             for(int i=0;i<=96;i++)
             {
                 float a=i*Mathf.PI*2/96;
-                v.Add(new Vector3(Mathf.Cos(a)*outerX,y,Mathf.Sin(a)*outerZ));
-                v.Add(new Vector3(Mathf.Cos(a)*innerX,y,Mathf.Sin(a)*innerZ));
-                v.Add(new Vector3(Mathf.Cos(a)*innerX,lowerY,Mathf.Sin(a)*innerZ));
+                v.Add(PitPoint(outerX,outerZ,a,y));
+                v.Add(PitPoint(innerX,innerZ,a,y));
+                v.Add(PitPoint(innerX,innerZ,a,lowerY));
             }
             for(int i=0;i<96;i++){int j=i*3;tri.AddRange(new[]{j,j+1,j+3,j+1,j+4,j+3,j+1,j+2,j+4,j+2,j+5,j+4});}
             MeshObject(name,t,v,tri,m);
@@ -410,10 +437,10 @@ namespace Tynys
             // Sample Catmull-Rom curves once; both road and trucks share the smooth path.
             path = new List<Vector3>(Spline(path.ToArray(),5));
             outboundCount=path.Count;
-            Road("Дорога самосвалов",path.ToArray(),3.2f,concrete);
+            Road("Дорога самосвалов",path.ToArray(),3.2f,rock);
             for(int i=outboundCount-2;i>=0;i--)path.Add(path[i]);
             route=path.ToArray();
-            Road("Дорога к зарядке",new[]{new Vector3(-40,.3f,-28),new Vector3(-25,.3f,-37),new Vector3(6,.3f,-37)},3,concrete);
+            Road("Дорога к зарядке",new[]{new Vector3(-40,.3f,-28),new Vector3(-25,.3f,-37),new Vector3(6,.3f,-37)},3,rock);
             var charging=Group("11 · Зарядка флота",new Vector3(-12,0,-35),"pit");
             Box("Зарядная площадка",charging,new Vector3(0,.1f,0),new Vector3(29,.2f,13),concrete);
             for(int i=0;i<4;i++)

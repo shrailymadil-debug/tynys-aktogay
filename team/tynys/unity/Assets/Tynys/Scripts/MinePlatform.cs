@@ -12,6 +12,8 @@ namespace Tynys
     {
         static Font uiFont;
         public static bool AllowTruckLights => Application.platform != RuntimePlatform.WebGLPlayer;
+        // IMGUI tints are linear in this project's rendering pipeline; keep authored UI hex colours exact.
+        public static Color GuiColor(Color color) => QualitySettings.activeColorSpace==ColorSpace.Linear?color.linear:color;
         public static Font UiFont => uiFont != null ? uiFont :
             (uiFont = Resources.Load<Font>("Fonts/DejaVuSans") ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
 
