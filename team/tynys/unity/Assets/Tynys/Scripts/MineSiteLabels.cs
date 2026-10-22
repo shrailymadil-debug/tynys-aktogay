@@ -49,7 +49,11 @@ namespace Tynys
                     float amount=i==0?s.windMW:i==1?s.pvMW:i==2?s.gridMW:i==3?s.line1Feed:i==4?s.line2Feed:s.bessSoc;
                     value=amount.ToString(i==3||i==4?"0":"0.0",CultureInfo.InvariantCulture)+(i==3||i==4?" т/ч":i==5?"% SoC":" МВт");
                 }
-                var color=GUI.color;GUI.color=new Color(.04f,.1f,.14f,.9f);GUI.DrawTexture(rect,Texture2D.whiteTexture);GUI.color=color;
+                var color=GUI.color;
+                GUI.color=MinePlatform.GuiColor(new Color(.025f,.055f,.075f,.95f));GUI.DrawTexture(rect,Texture2D.whiteTexture);
+                GUI.color=MinePlatform.GuiColor(new Color(.4f,.87f,.8f,.75f));
+                GUI.DrawTexture(new Rect(rect.x,rect.y,2*scale,rect.height),Texture2D.whiteTexture);
+                GUI.color=color;
                 string suffix=valid&&world.data.LiveMode&&world.data.IsStale?" · архив":"";
                 GUI.Label(rect,titles[i]+suffix+"\n"+value,style);
                 hitRects.Add(rect);

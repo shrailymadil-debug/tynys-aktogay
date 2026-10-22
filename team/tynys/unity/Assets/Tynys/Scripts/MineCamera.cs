@@ -7,7 +7,7 @@ namespace Tynys
     public sealed class MineCamera : MonoBehaviour
     {
         public Vector3 target = new Vector3(0f, -3f, 0f);
-        public float yaw = -12f;
+        public float yaw = -22f;
         public float pitch = 40f;
         public float distance = 145f;
         public float orthographicSize = 60f;
@@ -119,7 +119,7 @@ namespace Tynys
 
         public void ResetView()
         {
-            yaw = -12f;
+            yaw = -22f;
             pitch = 40f;
             distance = 145f;
             orthographicSize = 60f;

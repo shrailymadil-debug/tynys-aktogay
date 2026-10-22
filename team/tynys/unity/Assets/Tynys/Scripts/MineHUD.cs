@@ -12,9 +12,9 @@ namespace Tynys
         public bool Visible = true;
         public static bool IsTyping { get; private set; }
 
-        private readonly Color background = Hex(0x0C1822);
-        private readonly Color surface = Hex(0x142630);
-        private readonly Color raised = Hex(0x1C333D);
+        private readonly Color background = Hex(0x0B141D);
+        private readonly Color surface = Hex(0x11232D);
+        private readonly Color raised = Hex(0x1B3440);
         private readonly Color teal = Hex(0x66DFCB);
         private readonly Color sand = Hex(0xE7C595);
         private readonly Color ink = Hex(0xEDF4F3);
@@ -110,13 +110,13 @@ namespace Tynys
             for (int y = 0; y < 24; y++)
                 for (int x = 0; x < 24; x++)
                 {
-                    float dx = Mathf.Max(7.5f - x, x - 15.5f, 0f);
-                    float dy = Mathf.Max(7.5f - y, y - 15.5f, 0f);
-                    float a = Mathf.Clamp01(8f - Mathf.Sqrt(dx * dx + dy * dy));
+                    float dx = Mathf.Max(1.5f - x, x - 21.5f, 0f);
+                    float dy = Mathf.Max(1.5f - y, y - 21.5f, 0f);
+                    float a = Mathf.Clamp01(2f - Mathf.Sqrt(dx * dx + dy * dy));
                     rounded.SetPixel(x, y, new Color(1f, 1f, 1f, a));
                 }
             rounded.Apply();
-            panel = new GUIStyle { border = new RectOffset(8, 8, 8, 8) };
+            panel = new GUIStyle { border = new RectOffset(2, 2, 2, 2) };
             panel.normal.background = rounded;
             small = TextStyle(13, muted);
             body = TextStyle(16, ink);
@@ -128,12 +128,12 @@ namespace Tynys
             button.normal.background = rounded;
             button.hover.background = rounded;
             button.active.background = rounded;
-            button.border = new RectOffset(8, 8, 8, 8);
+            button.border = new RectOffset(2, 2, 2, 2);
             button.padding = new RectOffset(6, 6, 2, 2);
             field = TextStyle(12, ink);
             field.normal.background = rounded;
             field.focused.background = rounded;
-            field.border = new RectOffset(8, 8, 8, 8);
+            field.border = new RectOffset(2, 2, 2, 2);
             field.padding = new RectOffset(9, 9, 6, 4);
             field.clipping = TextClipping.Clip;
             badge = TextStyle(11, teal, FontStyle.Bold);
@@ -207,7 +207,7 @@ namespace Tynys
             Chip(new Rect(208, 33, 96, 25), live ? "LIVE" : "ДЕМО", stateColor);
             Label(320, 29, 200, 21, hasSnapshot ? s.simTime ?? "—" : "—", body);
             Label(320, 57, 200, 18, live ? (!hasSnapshot ? "ожидание данных" :
-                data.IsStale ? "данные устарели" : "данные веб-панели") : "учебная симуляция", small);
+                data.IsStale ? "данные устарели" : "телеметрия OpenEgiz") : "учебная симуляция", small);
 
             float kpiX = 532f, gap = 12f;
             float width = (uiWidth - kpiX - 36f - 2f * gap) / 3f;
@@ -233,7 +233,7 @@ namespace Tynys
         private void DrawSceneTools()
         {
             Box(new Rect(24, 112, 325, 36), background, 0.92f);
-            Label(38, 122, 295, 16, "ПРОИЗВОДСТВЕННЫЙ КОНТУР  /  3D", eyebrow);
+            Label(38, 122, 295, 16, "ОПЕРАЦИОННЫЙ ЦЕНТР  /  АКТОГАЙ", eyebrow);
             float y = uiHeight - 265;
             Box(new Rect(24, y, 365, 74), background, 0.94f);
             Dot(43, y + 20, teal);
@@ -290,7 +290,7 @@ namespace Tynys
                 TextWithColor(small, data.LiveMode && data.IsStale ? orange : muted), true);
             GUI.SetNextControlName("tynys-endpoint");
             Color saved = GUI.backgroundColor;
-            GUI.backgroundColor = raised;
+            GUI.backgroundColor = MinePlatform.GuiColor(raised);
             endpoint = GUI.TextField(new Rect(x + 20, connectY + 58, w - 40, 31), endpoint, field);
             GUI.backgroundColor = saved;
             if (Button(new Rect(x + 20, connectY + 98, w - 40, 32),
@@ -450,7 +450,7 @@ namespace Tynys
         private bool Button(Rect r, string text, Color fill, Color foreground)
         {
             Color saved = GUI.backgroundColor;
-            GUI.backgroundColor = fill;
+            GUI.backgroundColor = MinePlatform.GuiColor(fill);
             var style = new GUIStyle(button);
             style.normal.textColor = foreground;
             style.hover.textColor = foreground;
@@ -471,15 +471,28 @@ namespace Tynys
         private void Box(Rect r, Color color, float alpha = 1f)
         {
             Color saved = GUI.color;
-            GUI.color = new Color(color.r, color.g, color.b, alpha);
+            GUI.color = MinePlatform.GuiColor(new Color(color.r, color.g, color.b, alpha));
             GUI.Box(r, GUIContent.none, panel);
             GUI.color = saved;
+            if(r.height>=25&&r.width>=70)
+            {
+                var edge=Hex(0x294650);edge.a=alpha;
+                Fill(new Rect(r.x+2,r.y,r.width-4,1),edge);
+                Fill(new Rect(r.x+2,r.yMax-1,r.width-4,1),edge);
+                Fill(new Rect(r.x,r.y+2,1,r.height-4),edge);
+                Fill(new Rect(r.xMax-1,r.y+2,1,r.height-4),edge);
+                if(r.width>300&&r.height>70)
+                {
+                    Fill(new Rect(r.x,r.y,18,2),teal);
+                    Fill(new Rect(r.xMax-18,r.yMax-2,18,2),teal);
+                }
+            }
         }
 
         private static void Fill(Rect r, Color color)
         {
             Color saved = GUI.color;
-            GUI.color = color;
+            GUI.color = MinePlatform.GuiColor(color);
             GUI.DrawTexture(r, Texture2D.whiteTexture);
             GUI.color = saved;
         }

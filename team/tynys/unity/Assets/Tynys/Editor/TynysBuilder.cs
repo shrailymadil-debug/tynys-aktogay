@@ -29,8 +29,8 @@ namespace Tynys.Editor
             var camera=new GameObject("Обзорная камера",typeof(Camera),typeof(AudioListener),typeof(MineCamera));
             camera.tag="MainCamera";
             var cam=camera.GetComponent<Camera>();
-            cam.clearFlags=CameraClearFlags.Skybox;
-            cam.backgroundColor=new Color(.64f,.78f,.86f);
+            cam.clearFlags=CameraClearFlags.SolidColor;
+            cam.backgroundColor=new Color(.025f,.045f,.065f);
             cam.orthographic=true;cam.orthographicSize=55;cam.farClipPlane=500;cam.nearClipPlane=.1f;
             cam.allowHDR=true;cam.allowMSAA=true;
             camera.transform.position=new Vector3(0,108,-112);
@@ -42,7 +42,7 @@ namespace Tynys.Editor
             var sun=new GameObject("Солнце · мягкие тени",typeof(Light));
             sun.transform.rotation=Quaternion.Euler(52,-28,0);
             var light=sun.GetComponent<Light>();light.type=LightType.Directional;light.color=new Color(1,.94f,.82f);
-            light.intensity=.92f;light.shadows=LightShadows.Soft;light.shadowStrength=.58f;light.shadowBias=.03f;
+            light.intensity=1.05f;light.shadows=LightShadows.Soft;light.shadowStrength=.58f;light.shadowBias=.03f;
             RenderSettings.sun=light;
             RenderSettings.ambientMode=AmbientMode.Trilight;
             RenderSettings.ambientSkyColor=new Color(.68f,.77f,.83f);
@@ -52,8 +52,8 @@ namespace Tynys.Editor
             sky.SetFloat("_SunSize",.025f);sky.SetFloat("_AtmosphereThickness",.8f);sky.SetFloat("_Exposure",1.1f);
             sky.SetColor("_SkyTint",new Color(.6f,.72f,.82f));sky.SetColor("_GroundColor",new Color(.55f,.58f,.55f));
             AssetDatabase.CreateAsset(sky,"Assets/Tynys/Generated/DaylightSky.mat");RenderSettings.skybox=sky;
-            RenderSettings.fog=true;RenderSettings.fogMode=FogMode.Linear;RenderSettings.fogColor=new Color(.7f,.8f,.84f);
-            RenderSettings.fogStartDistance=155f;RenderSettings.fogEndDistance=340f;
+            RenderSettings.fog=true;RenderSettings.fogMode=FogMode.Linear;RenderSettings.fogColor=new Color(.09f,.14f,.19f);
+            RenderSettings.fogStartDistance=210f;RenderSettings.fogEndDistance=420f;
             RenderSettings.reflectionIntensity=.7f;DynamicGI.UpdateEnvironment();
             var reflection=new GameObject("Дневные отражения",typeof(ReflectionProbe));reflection.transform.position=new Vector3(0,12,0);
             var probe=reflection.GetComponent<ReflectionProbe>();probe.size=new Vector3(220,80,150);probe.mode=ReflectionProbeMode.Realtime;
