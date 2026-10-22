@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Tynys
@@ -8,7 +9,8 @@ namespace Tynys
     {
         public MineData data;
         public MineCamera cameraRig;
-        public string SelectedId = "substation";
+        public MineCommandView command;
+        public string SelectedId = "pit";
         public bool Visible = true;
         public static bool IsTyping { get; private set; }
 
@@ -28,6 +30,12 @@ namespace Tynys
         private bool fast;
         private bool initialized;
         private float uiWidth, uiHeight;
+        private readonly List<float> powerHistory=new List<float>();
+        private readonly List<Rect> truckLabelRects=new List<Rect>();
+        private Texture2D gaugeRing,batteryGauge,gridGauge;
+        private int lastBattery=-1,lastGrid=-1;
+        private float nextSample;
+        private bool historyLive;
         private bool HasSnapshot
         {
             get
@@ -62,6 +70,12 @@ namespace Tynys
             if (IsTyping) return;
             if (Input.GetKeyDown(KeyCode.H)) Visible = !Visible;
             if (data == null) return;
+            if(historyLive!=data.LiveMode){historyLive=data.LiveMode;powerHistory.Clear();}
+            if(HasSnapshot&&!data.IsStale&&Time.realtimeSinceStartup>=nextSample)
+            {
+                nextSample=Time.realtimeSinceStartup+1;
+                powerHistory.Add(data.State.loadMW);if(powerHistory.Count>18)powerHistory.RemoveAt(0);
+            }
             if (!data.LiveMode)
             {
                 if (Input.GetKeyDown(KeyCode.Space)) data.Paused = !data.Paused;
@@ -78,6 +92,13 @@ namespace Tynys
             if (string.IsNullOrEmpty(id)) return;
             SelectedId = id;
             if (cameraRig == null) return;
+            if(command!=null)
+            {
+                if(id=="pit"){command.ShowSite(false);return;}
+                if(!command.SiteView&&id.StartsWith("truck-")&&int.TryParse(id.Substring(6),out int index)&&index>=1&&index<=command.trucks.Length)
+                {cameraRig.Focus(command.trucks[index-1].position);return;}
+                command.ShowSite(true);
+            }
             var objects = FindObjectsByType<MineObject>(FindObjectsSortMode.None);
             Vector3 center = Vector3.zero;
             int count = 0;
@@ -91,11 +112,8 @@ namespace Tynys
             float scale = Mathf.Min(Screen.width / 1600f, Screen.height / 900f);
             float w = Screen.width / scale, h = Screen.height / scale;
             Vector2 p = new Vector2(point.x / scale, (Screen.height - point.y) / scale);
-            return MineSiteLabels.PointerOverLabel(point) || p.y <= 104f || p.y >= h - 126f || p.x >= w - 344f
-                || new Rect(24f, h - 180f, w - 384f, 44f).Contains(p)
-                || new Rect(24f, h - 265f, 365f, 74f).Contains(p)
-                || new Rect(402f, h - 247f, 600f, 56f).Contains(p)
-                || new Rect(24f, 112f, 325f, 40f).Contains(p);
+            foreach(var rect in truckLabelRects)if(rect.Contains(p))return true;
+            return MineSiteLabels.PointerOverLabel(point) || p.y <= 154f || p.y >= h - 224f || p.x >= w - 344f || p.x<=290;
         }
 
         private void SetupStyles()
@@ -186,7 +204,9 @@ namespace Tynys
                 endpointInitialized = true;
             }
             DrawHeader();
+            DrawTelemetry();
             DrawSceneTools();
+            DrawTruckLabels(scale);
             DrawInspector();
             DrawScenarios();
             IsTyping = GUI.GetNameOfFocusedControl() == "tynys-endpoint";
@@ -232,35 +252,119 @@ namespace Tynys
 
         private void DrawSceneTools()
         {
-            Box(new Rect(24, 112, 325, 36), background, 0.92f);
-            Label(38, 122, 295, 16, "ОПЕРАЦИОННЫЙ ЦЕНТР  /  АКТОГАЙ", eyebrow);
-            float y = uiHeight - 265;
-            Box(new Rect(24, y, 365, 74), background, 0.94f);
-            Dot(43, y + 20, teal);
-            Label(56, y + 10, 155, 20, "Энергия", small);
-            Dot(202, y + 20, sand);
-            Label(215, y + 10, 155, 20, "Поток руды", small);
-            Dot(43, y + 49, orange);
-            Label(56, y + 39, 155, 20, "Ограничение", small);
-            Dot(202, y + 49, muted);
-            Label(215, y + 39, 155, 20, "Инфраструктура", small);
-            Box(new Rect(402, y + 18, 600, 56), background, 0.96f);
-            Label(418, y + 28, 568, 38,
-                "ПКМ — вращать   ·   колёсико — масштаб   ·   СКМ — сдвиг\nHome — общий вид   ·   H — скрыть панели",
-                TextWithColor(small, ink), true);
-
-            float available = uiWidth - 384f;
-            float width = (available - 8f * 8f) / 9f;
-            for (int i = 0; i < objectIds.Length; i++)
+            float centerWidth=uiWidth-666;
+            Box(new Rect(306,112,centerWidth,40),background);
+            Label(320,125,350,18,"3D / ОПЕРАЦИОННЫЙ ЦЕНТР",eyebrow);
+            if(command!=null)
             {
-                Rect r = new Rect(24 + (width + 8f) * i, uiHeight - 178, width, 35);
-                bool selected = SelectedId == objectIds[i];
-                if (Button(r, objectNames[i], selected ? teal : surface, selected ? background : ink))
+                if(Button(new Rect(uiWidth-804,118,142,28),"КАРЬЕР",!command.SiteView&&!command.Digital?teal:surface,!command.SiteView&&!command.Digital?background:ink))
+                {command.SetDigital(false);command.ShowSite(false);SelectedId="pit";}
+                if(Button(new Rect(uiWidth-654,118,142,28),"ЦИФРОВОЙ СЛОЙ",!command.SiteView&&command.Digital?teal:surface,!command.SiteView&&command.Digital?background:ink))
+                {bool next=command.SiteView||!command.Digital;command.ShowSite(false);command.SetDigital(next);SelectedId="pit";}
+                if(Button(new Rect(uiWidth-504,118,142,28),"ВЕСЬ РУДНИК",command.SiteView?teal:surface,command.SiteView?background:ink))
+                {command.ShowSite(true);SelectedId="substation";}
+            }
+            Label(312,uiHeight-221,centerWidth,25,"ПКМ — вращение   ·   колёсико — масштаб   ·   Home — карьер   ·   H — панели",small);
+            float width=(centerWidth-8*6)/9;
+            for(int i=0;i<objectIds.Length;i++)
+            {
+                bool selected=SelectedId==objectIds[i];
+                if(Button(new Rect(306+(width+6)*i,uiHeight-178,width,35),objectNames[i],selected?teal:surface,selected?background:ink))
+                {Select(objectIds[i]);GUI.FocusControl(null);}
+            }
+        }
+
+        private void DrawTelemetry()
+        {
+            var s=data.State;bool valid=HasSnapshot;
+            Box(new Rect(16,112,260,230),background);
+            Label(34,130,224,18,"ТЕЛЕМЕТРИЯ / ЭНЕРГОСИСТЕМА",eyebrow);
+            float grid=valid&&s.gridCapMW>0?s.gridMW/s.gridCapMW*100:0;
+            Gauge(new Rect(34,162,100,100),valid?s.bessSoc:0,valid?F(s.bessSoc,"0")+"%":"—",ref batteryGauge,ref lastBattery,teal);
+            Gauge(new Rect(158,162,100,100),grid,valid?F(grid,"0")+"%":"—",ref gridGauge,ref lastGrid,sand);
+            Label(34,264,100,20,"ЗАРЯД BESS",eyebrow,false,TextAnchor.MiddleCenter);
+            Label(158,264,100,20,"СЕТЬ / ЛИМИТ",eyebrow,false,TextAnchor.MiddleCenter);
+            Label(34,302,108,22,valid?"ВЭС  "+F(s.windMW)+" МВт":"ВЭС  —",small);
+            Label(151,302,108,22,valid?"СЭС  "+F(s.pvMW)+" МВт":"СЭС  —",small);
+
+            Box(new Rect(16,354,260,178),background);
+            Label(34,372,224,18,"НАГРУЗКА / ПОСЛЕДНИЕ СНИМКИ",eyebrow);
+            Label(34,398,224,30,valid?F(s.loadMW)+" МВт":"—",number);
+            var chart=new Rect(34,440,224,59);
+            for(int i=0;i<3;i++)Fill(new Rect(chart.x,chart.y+chart.height*i/2,chart.width,1),raised);
+            if(powerHistory.Count>1)
+            {
+                float max=1;foreach(float value in powerHistory)max=Mathf.Max(max,value*1.15f);
+                for(int i=1;i<powerHistory.Count;i++)
                 {
-                    Select(objectIds[i]);
-                    GUI.FocusControl(null);
+                    Vector2 a=new Vector2(chart.x+(i-1)*chart.width/17,chart.yMax-powerHistory[i-1]/max*chart.height);
+                    Vector2 b=new Vector2(chart.x+i*chart.width/17,chart.yMax-powerHistory[i]/max*chart.height);
+                    GuiLine(a,b,teal,1.8f);
                 }
             }
+            Label(34,508,224,15,"Наблюдения после открытия экрана",TextWithSize(small,10));
+
+            Box(new Rect(16,544,260,uiHeight-682),background);
+            Label(34,562,224,18,"ТРАНСПОРТ / СОСТОЯНИЕ",eyebrow);
+            int moving=0,charging=0,waiting=0;
+            if(valid&&s.trucks!=null)foreach(var truck in s.trucks)
+            {if(truck.state=="loaded"||truck.state=="empty")moving++;else if(truck.state=="charging")charging++;else if(truck.state=="waiting")waiting++;}
+            Row(34,592,224,"В движении",valid?moving.ToString():"—",teal);
+            Row(34,624,224,"На зарядке",valid?charging.ToString():"—",sand);
+            Row(34,656,224,"Ожидают",valid?waiting.ToString():"—",orange);
+            Label(34,698,224,40,"14 звеньев · по 3 машины\nДвижение по схеме, не GPS",TextWithSize(small,11),true);
+        }
+
+        private void Gauge(Rect r,float value,string text,ref Texture2D texture,ref int previous,Color color)
+        {
+            if(gaugeRing==null)gaugeRing=Arc(100);
+            int percent=Mathf.RoundToInt(Mathf.Clamp(value,0,100));
+            if(texture==null||previous!=percent)
+            {if(texture!=null)Destroy(texture);texture=Arc(percent);previous=percent;}
+            var saved=GUI.color;
+            GUI.color=MinePlatform.GuiColor(raised);GUI.DrawTexture(r,gaugeRing);
+            GUI.color=MinePlatform.GuiColor(color);GUI.DrawTexture(r,texture);GUI.color=saved;
+            Label(r.x,r.y+36,r.width,32,text,TextWithSize(number,22),false,TextAnchor.MiddleCenter);
+        }
+        static Texture2D Arc(int percent)
+        {
+            var texture=new Texture2D(128,128,TextureFormat.RGBA32,false){hideFlags=HideFlags.HideAndDontSave};
+            for(int y=0;y<128;y++)for(int x=0;x<128;x++)
+            {
+                float dx=x-63.5f,dy=y-63.5f,r=Mathf.Sqrt(dx*dx+dy*dy);
+                float angle=Mathf.Repeat(Mathf.Atan2(-dy,dx)*Mathf.Rad2Deg+225,360);
+                float alpha=Mathf.Clamp01(2-Mathf.Abs(r-53));
+                texture.SetPixel(x,y,new Color(1,1,1,angle<=percent*2.7f?alpha:0));
+            }
+            texture.Apply();return texture;
+        }
+        static void GuiLine(Vector2 a,Vector2 b,Color color,float width)
+        {
+            var matrix=GUI.matrix;var d=b-a;
+            GUI.matrix=matrix*Matrix4x4.TRS(new Vector3(a.x,a.y,0),Quaternion.Euler(0,0,Mathf.Atan2(d.y,d.x)*Mathf.Rad2Deg),Vector3.one);
+            Fill(new Rect(0,-width*.5f,d.magnitude,width),color);GUI.matrix=matrix;
+        }
+        private void DrawTruckLabels(float scale)
+        {
+            truckLabelRects.Clear();
+            if(command==null||command.SiteView||!HasSnapshot||data.State.trucks==null)return;
+            foreach(int i in new[]{0,5,10})
+            {
+                if(i>=command.trucks.Length||!command.trucks[i].gameObject.activeSelf)continue;
+                var point=cameraRig.GetComponent<Camera>().WorldToScreenPoint(command.trucks[i].position+Vector3.up*4);
+                if(point.z<=0)continue;
+                var rect=new Rect(point.x/scale-58,(Screen.height-point.y)/scale-48,116,42);
+                if(rect.x<306||rect.xMax>uiWidth-356||rect.y<163||rect.yMax>uiHeight-240)continue;
+                bool overlap=false;foreach(var other in truckLabelRects)if(other.Overlaps(rect)){overlap=true;break;}
+                if(overlap)continue;truckLabelRects.Add(rect);
+                var truck=data.State.trucks[i];
+                string text="T"+(i+1).ToString("00")+"  ·  "+F(truck.soc,"0")+"%\n"+TruckStateName(truck.state);
+                if(Button(rect,text,background,truck.state=="waiting"?orange:teal))Select("truck-"+(i+1).ToString("00"));
+            }
+        }
+        static string TruckStateName(string state)
+        {
+            switch(state){case "loaded":return "С РУДОЙ";case "empty":return "ПОРОЖНИЙ";case "charging":return "ЗАРЯДКА";case "waiting":return "ОЖИДАНИЕ";default:return "—";}
         }
 
         private void DrawInspector()
@@ -316,6 +420,14 @@ namespace Tynys
                 return;
             }
             var s = data.State;
+            if(SelectedId.StartsWith("truck-")&&int.TryParse(SelectedId.Substring(6),out int truckIndex)&&truckIndex>=1&&truckIndex<=s.trucks.Length)
+            {
+                var truck=s.trucks[truckIndex-1];
+                Chip(new Rect(x,y,w,28),TruckStateName(truck.state),truck.state=="waiting"?orange:teal);
+                Progress(x,y+46,w,truck.soc,"Заряд батареи",teal);
+                Label(x,y+104,w,82,"Одно визуальное звено соответствует трём электросамосвалам. Положение на дороге иллюстративное; состояние и заряд — из модели.",small,true);
+                return;
+            }
             switch (SelectedId)
             {
                 case "pit":
@@ -510,6 +622,7 @@ namespace Tynys
         }
         private static string ObjectName(string id)
         {
+            if(id.StartsWith("truck-"))return "Самосвал / звено "+id.Substring(6);
             switch (id)
             {
                 case "pit": return "Открытый карьер";
@@ -534,6 +647,9 @@ namespace Tynys
         {
             IsTyping = false;
             if (rounded != null) Destroy(rounded);
+            if(gaugeRing!=null)Destroy(gaugeRing);
+            if(batteryGauge!=null)Destroy(batteryGauge);
+            if(gridGauge!=null)Destroy(gridGauge);
         }
     }
 }

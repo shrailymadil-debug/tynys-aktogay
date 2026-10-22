@@ -24,6 +24,7 @@ namespace Tynys
         {
             hitRects.Clear();
             if(world==null||world.data==null||world.hud==null||!world.hud.Visible||world.viewCamera==null)return;
+            if(world.hud.command!=null&&!world.hud.command.SiteView)return;
             if(style==null)
             {
                 var font=MinePlatform.UiFont;
@@ -40,7 +41,7 @@ namespace Tynys
                 if(screen.z<0)continue;
                 float y=Screen.height-screen.y;
                 var rect=new Rect(screen.x-66*scale,y-17*scale,132*scale,34*scale);
-                if(rect.x<8*scale||rect.xMax>Screen.width-350*scale||rect.y<156*scale||rect.yMax>Screen.height-275*scale)continue;
+                if(rect.x<300*scale||rect.xMax>Screen.width-350*scale||rect.y<156*scale||rect.yMax>Screen.height-205*scale)continue;
                 bool collision=false;foreach(var previous in hitRects)if(previous.Overlaps(rect)){collision=true;break;}
                 if(collision)continue;
                 string value="—";

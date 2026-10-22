@@ -636,7 +636,7 @@ namespace Tynys
             truckPhases=new float[trucks.Length];hasTruckPhase=new bool[trucks.Length];truckPoseStates=new string[trucks.Length];
         }
 
-        internal float TruckVisualPhase(int index) => truckPhases[index];
+        internal float TruckVisualPhase(int index) => truckPhases==null?0:truckPhases[index];
 
         /// <summary>LIVE uses a local illustrative 90-second lap; DEMO follows its continuous phase.</summary>
         public void UpdateTruckPose(int index,TruckState telemetry,bool animate,float deltaTime)

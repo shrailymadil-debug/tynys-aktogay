@@ -21,6 +21,7 @@ namespace Tynys
         class BrowserStatus
         {
             public string mode, status;
+            public string presentation;
             public bool connected, stale, hasSnapshot, softwareRenderer;
             public int snapshotCount, frameCount, renderedFrameCount, batchedObjects;
             public float hour;
@@ -82,6 +83,8 @@ namespace Tynys
             var animated = new List<Transform>();
             animated.AddRange(world.trucks); animated.AddRange(world.rotors); animated.AddRange(world.mills);
             animated.AddRange(world.stockpiles); animated.AddRange(world.flowDots);
+            var command=world.GetComponent<MineCommandView>();
+            if(command!=null&&command.trucks!=null)animated.AddRange(command.trucks);
             foreach (var bar in world.batteryBars) animated.Add(bar.transform);
             foreach (var status in world.lineStatus) animated.Add(status.transform);
             var stationary = new List<GameObject>();
@@ -105,6 +108,7 @@ namespace Tynys
             nextStatus = Time.realtimeSinceStartup + 1;
             TynysStatus(JsonUtility.ToJson(new BrowserStatus {
                 mode = data.LiveMode ? "LIVE" : "DEMO", status = data.Status,
+                presentation = PresentationName(),
                 connected = data.IsConnected, stale = data.IsStale, hasSnapshot = data.HasSnapshot,
                 snapshotCount = data.SnapshotCount, frameCount = Time.frameCount, renderedFrameCount = renderedFrameCount,
                 softwareRenderer = softwareRenderer, batchedObjects = batchedObjects,
@@ -112,5 +116,11 @@ namespace Tynys
             }));
 #endif
         }
+        string PresentationName()
+        {
+            var command=GetCommand();
+            return command==null||command.SiteView?"site":command.Digital?"digital":"pit";
+        }
+        MineCommandView GetCommand()=>data==null?null:data.GetComponent<MineCommandView>();
     }
 }
