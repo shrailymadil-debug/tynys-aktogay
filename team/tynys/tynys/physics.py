@@ -10,6 +10,10 @@ def ensure_process_state(p, st):
     """Explicit legacy-snapshot migration; new snapshots retain exact history."""
     if not st.pile_cu:
         st.pile_cu = {d: st.pile[d]*p.cu_grade[d] for d in DOMAINS}
+    if not st.pile_bwi_mass:
+        st.pile_bwi_mass = {d: st.pile[d]*st.bwi_est[d] for d in DOMAINS}
+    if not st.pile_recovery_cu:
+        st.pile_recovery_cu = {d: st.pile_cu[d]*p.r150[d] for d in DOMAINS}
     if not st.line_x:
         x = np.zeros((p.n_lines, len(DOMAINS), len(P80_MODES)))
         total = sum(st.pile.values())
@@ -50,10 +54,10 @@ def mill_power_mw(p: Params, q: float, bwi: float, p80_um: float, running=True) 
     return mill_idle_mw(p) + q * mill_variable_mwh_t(p, bwi, p80_um) if running else 0.0
 
 
-def recovery_inf(p: Params, domain: str, p80_um: float) -> float:
+def recovery_inf(p: Params, domain: str, p80_um: float, reference=None) -> float:
     """Предельное извлечение как функция крупности помола (линейная аппроксимация
     потери раскрытия минералов; наклон — параметр чувствительности)."""
-    return p.r150[domain] - p.recovery_slope_per_100um * (p80_um - 150.0) / 100.0
+    return max(0., min(.98, (p.r150[domain] if reference is None else reference) - p.recovery_slope_per_100um * (p80_um - 150.0) / 100.0))
 
 
 def kinetic_factor(p: Params, q_line_tph: float) -> float:

@@ -11,7 +11,7 @@ const output=process.argv[3];
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto(url);
     await page.waitForFunction(()=>document.querySelectorAll('#equipment-rows tr').length===20);
-    await page.waitForFunction(()=>document.querySelector('#flexstat').textContent.includes('physics-v3'));
+    await page.waitForFunction(()=>document.querySelector('#flexstat').textContent.includes('physics-v4'));
     const line=page.locator('#equipment-rows tr').filter({hasText:'Линия 1'});
     if(await line.locator('td').nth(5).innerText()==='—')throw Error('Per-line P80 is missing');
     const crusher=page.locator('#equipment-rows tr').filter({hasText:'Дробилка'});
@@ -34,6 +34,6 @@ const output=process.argv[3];
     await page.evaluate(()=>window.__tynys.selectObject('line-1'));
     const mill=await page.locator('#selection-values').innerText();
     if(!mill.includes('Постоянная часть мощности')||!mill.includes('P80'))throw Error('Mill physics telemetry missing');
-    console.log(JSON.stringify({dashboardRows:20,crusherFault:'PASS',processObjects:7,perLinePhysics:'PASS',reserveModel:'physics-v3',pageErrors:errors}));
+    console.log(JSON.stringify({dashboardRows:20,crusherFault:'PASS',processObjects:7,perLinePhysics:'PASS',reserveModel:'physics-v4',pageErrors:errors}));
   } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

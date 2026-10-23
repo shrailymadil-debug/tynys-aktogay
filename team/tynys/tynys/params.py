@@ -34,6 +34,7 @@ class Params:
     bwi_noise_phi: float = 0.98
     grade_noise_sd: float = 0.10   # ASSUMPTION: relative within-domain Cu variability
     grade_noise_phi: float = 0.98
+    geomet: bool = False  # GeoMet spatial analogue; enabled for Aktogay scenario
 
     # ---------- флотация ----------
     k_flot_per_min: float = 0.25   # константа кинетики 1-го порядка (ASSUMPTION)
@@ -69,6 +70,9 @@ class Params:
     service_duration_h: int = 4
     equipment_wear_per_h: float = 0.00001
     planned_stops: bool = True  # staggered 4 h weekly line / fortnightly crusher stops
+    flexible_maintenance: bool = False
+    maintenance_window_h: int = 12  # nominal start +/-12 h; one mill crew
+    liner_duration_h: int = 12     # ASSUMPTION: replacement every fourth service
 
     # ---------- склады ----------
     pile_cap_t: float = 60_000.0   # живая ёмкость КАЖДОГО из двух складов (soft/hard)
@@ -176,6 +180,7 @@ def aktogay() -> Params:
     ASSUMPTION (сценарий «Тыныс»), их размеры — ручки what-if.
     """
     return Params(
+        geomet=True, flexible_maintenance=True,
         lat=46.95, lon=79.86,                              # SRC: координаты карьера
         cu_grade={"soft": 0.0042, "hard": 0.0044},          # SRC: среднее 0,43 %
         r150={"soft": 0.885, "hard": 0.875},                # SRC: факт 87,9 % (калибровка)

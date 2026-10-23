@@ -144,6 +144,18 @@ def _snapshot(snapshot, request, p):
         except (KeyError, TypeError) as exc:
             raise ValueError("process state: неполная история процесса") from exc
     # Preserve and validate all causal state. Dropping equipment or group
+    geo_fields = {"pile_bwi_mass", "pile_recovery_cu"}
+    if geo_fields & set(d):
+        if not geo_fields <= set(d):
+            raise ValueError("geology: incomplete stock assays")
+        try:
+            state["pile_bwi_mass"] = {k: _number(d["pile_bwi_mass"][k], f"pile_bwi_mass.{k}", 0, state["pile"][k]*100) for k in DOMAINS}
+            state["pile_recovery_cu"] = {k: _number(d["pile_recovery_cu"][k], f"pile_recovery_cu.{k}", 0, state["pile_cu"][k]) for k in DOMAINS}
+        except (KeyError, TypeError) as exc:
+            raise ValueError("geology: incomplete stock assays") from exc
+    if "maintenance" in d:
+        from .maintenance import validate_plan
+        state["maintenance"] = validate_plan(p, d["maintenance"])
     # batteries here would silently repair the counterfactual mine on replay.
     if "equipment" in d:
         if not isinstance(d["equipment"], dict) or set(d["equipment"]) - set(asset_specs(p)):
@@ -151,10 +163,11 @@ def _snapshot(snapshot, request, p):
         state["equipment"] = {}
         defaults = asdict(Equipment())
         for name, values in d["equipment"].items():
-            if not isinstance(values, dict) or set(values) != set(defaults):
+            if not isinstance(values, dict) or set(values) - set(defaults) or set(defaults)-{"liner_operating_h", "liner_replacements"}-set(values):
                 raise ValueError("equipment: неполное состояние оборудования")
+            values = {**defaults, **values}  # v3 snapshot migration
             checked = {k: _number(v, f"{name}.{k}", 0, 1 if k == "health" else 1e9,
-                                   k in ("repair_remaining_h", "maintenance_count")) for k, v in values.items()}
+                                   k in ("repair_remaining_h", "maintenance_count", "liner_replacements")) for k, v in values.items()}
             if checked["available_h"] > checked["elapsed_h"] or checked["operating_h"] > checked["available_h"]:
                 raise ValueError("equipment: несовместимые счётчики часов")
             state["equipment"][name] = checked
@@ -211,6 +224,10 @@ def _environment(p, snapshot, request):
         env.bess_avail[a:a + 12] = False
     if request["hard_ore"]:
         env.hard_frac[a:a + 72] = np.clip(env.hard_frac[a:a + 72] + 0.3, 0.05, 0.95)
+        env.sc.hard_frac_shift.update({a: .8, a+72: p.hard_frac_base})
+        if p.geomet:
+            from .geology import install
+            install(env)
     return env
 
 
@@ -237,6 +254,7 @@ def _controller(goal):
     # a wall-clock cutoff could choose different incumbent plans under load.
     return V2Tynys(
         grind_modes=(150, 200, 250) if goal == "green" else None,
+        flat_price=goal == "green",
         solver_options={"time_limit": None, "node_limit": 16, "mip_rel_gap": 0.01},
     )
 
@@ -261,6 +279,10 @@ def _run(p, env, snapshot, request, controller, progress, cancelled, label):
             {"object": "substation", "text": f"Предел {raw['grid_cap']:.0f} МВт; фактическое потребление сети {raw['grid']:.1f} МВт."},
             {"object": "charger", "text": f"Зарядка {raw['charge']:.1f} МВт; флот {state.fleet_e:.1f} МВт·ч."},
         ]
+        for name, item in state.maintenance.items():
+            if item["start"] <= t < item["start"]+item["duration"]:
+                job = "замена футеровки" if item["kind"] == "liner" else "плановое ТО"
+                explanations.append({"object": name, "text": f"{job}: окно {item['start']}–{item['start']+item['duration']}, линия недоступна."})
         if not env.bess_avail[t]:
             explanations.append({"object": "bess", "text": "Накопитель недоступен: заряд и разряд равны нулю."})
         elif abs(raw["bess"]) > 0.5:
@@ -434,10 +456,12 @@ def evaluate(request, snapshot, progress=None, cancelled=None):
     for d in DOMAINS:
         fingerprint.update(env.grade_true[d][t0:t0+n].tobytes())
         fingerprint.update(env.bwi_true[d][t0:t0+n].tobytes())
+        fingerprint.update(env.recovery_true[d][t0:t0+n].tobytes())
+    fingerprint.update(json.dumps({d:ids[t0:t0+n] for d,ids in env.geology_ids.items()}, sort_keys=True).encode())
     fingerprint.update(json.dumps([env.sc.equipment_down, env.sc.equipment_maintenance],
                                   sort_keys=True, separators=(",",":")).encode())
     result = {
-        "schema_version": SCHEMA_VERSION, "model_version": "physics-v3", "request": request,
+        "schema_version": SCHEMA_VERSION, "model_version": "physics-v4-geomet-maintenance", "request": request,
         "snapshot": {**copy.deepcopy(snapshot),
                      "weather_source": env.w.get("source", "Синтетическая погода"),
                      "disturbance_sha256": fingerprint.hexdigest()},

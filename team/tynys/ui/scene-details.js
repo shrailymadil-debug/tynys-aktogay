@@ -16,6 +16,8 @@ Object.assign(FIELDS,{throughput_tph:['Пропускная способност
   flow_m3_h:['Вода в процесс','м³/ч'],fresh_m3_h:['Свежая вода','м³/ч'],recycle_m3_h:['Оборотная вода','м³/ч'],
   grade_pct:['Содержание Cu','%'],assigned_shovel:['Экскаватор',''],assigned_charger:['Зарядная группа','']});
 FIELDS.tonnes=['Накоплено','т'];
+Object.assign(FIELDS,{maintenance_start_h:['Начало ТО','ч'],maintenance_deadline_h:['Крайний старт','ч'],maintenance_kind:['Работа',''],liner_remaining_pct:['Ресурс футеровки','%'],liner_replacements:['Замен футеровки','']});
+Object.assign(STATES,{liner:'замена футеровки',inspection:'плановое ТО'});
 Object.assign(FIELDS,{idle_mw:['Постоянная часть мощности','МВт'],stop_reason:['Причина остановки',''],cu_t:['Cu в запасе','т']});
 Object.assign(STATES,{equipment_unavailable:'оборудование недоступно',controlled_stop:'штатная остановка',
   capacity_trip:'защита по мощности / производительности',stockout_trip:'недостаточно руды',power_trip:'дефицит электропитания'});

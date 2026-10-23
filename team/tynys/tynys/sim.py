@@ -82,6 +82,11 @@ class Env:
                 grade[t] = p.grade_noise_phi * grade[t-1] + math.sqrt(1-p.grade_noise_phi**2) * p.grade_noise_sd * grade_rng.standard_normal()
             self.grade_true[d] = p.cu_grade[d] * np.clip(1 + grade, .5, 1.5)
         self.line_avail = np.ones((p.n_lines, n), dtype=bool)
+        self.recovery_true = {d: np.full(n, p.r150[d]) for d in DOMAINS}
+        self.geology_ids = {}
+        if p.geomet:
+            from .geology import install
+            install(self)
         for l, (a, b) in sc.line_down.items():
             self.line_avail[l, a:b] = False
         self.bess_avail = np.ones(n, dtype=bool)
@@ -120,6 +125,9 @@ class State:
     pile_cu: dict = field(default_factory=dict)  # contained copper tonnes, not recoverable product
     line_x: list = field(default_factory=list)   # previous actual [line, domain, P80] t/h
     line_mw: list = field(default_factory=list)  # previous metered MW, includes rotating draw
+    pile_bwi_mass: dict = field(default_factory=dict)  # t * kWh/t, additive energy proxy
+    pile_recovery_cu: dict = field(default_factory=dict)  # recoverable Cu at reference P80
+    maintenance: dict = field(default_factory=dict)
 
 
 def init_state(p: Params) -> State:
@@ -146,6 +154,13 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
     previous_q = previous_x.sum(axis=(1, 2))
     previous_mw = np.asarray(st.line_mw)
     grades = {d: st.pile_cu[d]/st.pile[d] if st.pile[d] > 1e-9 else p.cu_grade[d] for d in DOMAINS}
+    bwis = {d: st.pile_bwi_mass[d]/st.pile[d] if st.pile[d] > 1e-9 else p.bwi[d] for d in DOMAINS}
+    recoveries = {d: st.pile_recovery_cu[d]/st.pile_cu[d] if st.pile_cu[d] > 1e-9 else p.r150[d] for d in DOMAINS}
+    if "maintenance" in dec:
+        from .maintenance import accept_plan
+        accept_plan(p, st, dec["maintenance"], t)
+    from .maintenance import schedule
+    schedule(p, env, st, t, coordinated=False)  # retains committed plans on fallback
     factors = prepare_equipment(p, env, st, t)
     for l in range(p.n_lines):
         if st.line_lock[l] > 0:
@@ -171,7 +186,7 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
             if di == 0:
                 requested = x.sum(axis=1).copy()
             x[:, di, :] = requested * (st.pile[d] / total if total else 0.5)
-    energy = np.array([[ph.mill_variable_mwh_t(p, env.bwi_true[d][t], g)
+    energy = np.array([[ph.mill_variable_mwh_t(p, bwis[d] if p.geomet else env.bwi_true[d][t], g)
                         for g in P80_MODES] for d in DOMAINS])
     idle = ph.mill_idle_mw(p)
     qramp, pramp = p.line_q_nom*p.line_q_ramp_fraction, p.line_p_max_mw*p.line_power_ramp_fraction
@@ -255,7 +270,7 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
         mine, charge = sum(fleet.ore_tph), sum(fleet.charge_mw)
         line_q = x.sum(axis=(1, 2))
         mill = (x * energy).sum(axis=(1, 2)) + idle*(line_q > 0)
-        cu_lines = [sum(x[l, di, gi] * grades[d] * ph.recovery_inf(p, d, g)
+        cu_lines = [sum(x[l, di, gi] * grades[d] * ph.recovery_inf(p, d, g, recoveries[d] if p.geomet else None)
                         for di, d in enumerate(DOMAINS) for gi, g in enumerate(P80_MODES))
                     * ph.kinetic_factor(p, line_q[l]) for l in range(p.n_lines)]
         return dict(fed=fed, fleet=fleet, mine=mine, charge=charge,
@@ -323,6 +338,8 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
     for d in DOMAINS:
         st.pile_cu[d] += mine*fractions[d]*env.grade_true[d][t] - fed[d]*grades[d]
         st.pile_cu[d] = max(0.0, st.pile_cu[d])
+        st.pile_bwi_mass[d] = max(0., st.pile_bwi_mass[d] + mine*fractions[d]*env.bwi_true[d][t] - fed[d]*bwis[d])
+        st.pile_recovery_cu[d] = max(0., st.pile_recovery_cu[d] + mine*fractions[d]*env.grade_true[d][t]*env.recovery_true[d][t] - fed[d]*grades[d]*recoveries[d])
         st.pile[d] += mine*fractions[d] - fed[d]
     cu = float(sum(f["cu_lines"]))
     feed_cu = sum(fed[d]*grades[d] for d in DOMAINS)
@@ -423,9 +440,15 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
                grade_soft=grades["soft"], grade_hard=grades["hard"],
                mined_cu_t=sum(mine*fractions[d]*env.grade_true[d][t] for d in DOMAINS),
                pile_cu_soft=st.pile_cu["soft"], pile_cu_hard=st.pile_cu["hard"],
+               pile_recovery_cu_soft=st.pile_recovery_cu["soft"], pile_recovery_cu_hard=st.pile_recovery_cu["hard"],
                waste_tph=waste, tailings_tph=tailings, concentrate_tph=concentrate,
                fresh_water_m3_h=fresh_water, assets=assets, fleet=asdict(st.fleet))
     rec.update({f"line{l}": float(f["line_q"][l]) for l in range(p.n_lines)})
+    # Same-hour weather counterfactual at identical operating setpoints. This
+    # isolates the wind event from concurrent sunlight/load changes in the demo.
+    base_wind = float(wx.wind_power_pu(np.array([env.w["wind_v"][t]]))[0])*p.wind_mw*factors["wind"]
+    rec["grid_no_lull_mw"] = min(gcap, max(0., rec["load"]-pv-base_wind-bess_set))
+    rec["lull_grid_delta_mw"] = rec["grid"]-rec["grid_no_lull_mw"]
     rec["flex_down_mw"], rec["flex_down_h"] = flexibility(p, st, rec)
     assets["substation"].update(flex_down_mw=rec["flex_down_mw"], flex_down_h=rec["flex_down_h"])
     return rec

@@ -9,7 +9,7 @@ const ASSETS = {
   'charger-1':'Зарядная группа 1','charger-2':'Зарядная группа 2',
   'charger-3':'Зарядная группа 3','charger-4':'Зарядная группа 4',
 };
-const NAMES = ['site','pit','plant','energy','coordinator','scenario','shadow-v0','shadow-v1','pile-soft','pile-hard',
+const NAMES = ['site','pit','plant','energy','geology','coordinator','scenario','shadow-v0','shadow-v1','pile-soft','pile-hard',
   ...Object.keys(ASSETS),'wind','pv','bess','substation', ...Array.from({length:14},(_,i)=>`truck-${String(i+1).padStart(2,'0')}`)];
 const EVENTS = {lull:['Штиль на сутки',3,24], line_trip:['Авария линии 2',0,8], kegoc:['Запрос KEGOC: −80 МВт',2,4],
   hard_ore:['Пошла твёрдая руда',0,72], plan_up:['План добычи +10 %',0,48], bess_fault:['Отказ накопителя',0,12],
@@ -65,6 +65,14 @@ $('g-green').onclick = () => writeScenario(curEvents(), 'green');
 let rot = 0;
 function render() {
   const t = v('site', 'sim_hour', null); if (t == null) return;
+  $('geo-active').textContent = ['soft','hard'].map(d => `${d==='soft'?'Мягкий':'Твёрдый'} забой ${v('geology','active_'+d,'—')}: BWi ${fmt(v('geology','bwi_'+d,null),1)} кВт·ч/т; Cu ${fmt(v('geology','grade_'+d+'_pct',null),2)}%; LCT ${fmt(v('geology','recovery_'+d+'_pct',null),1)}%`).join(' · ');
+  const maint = $('maintenance-plan'); maint.replaceChildren();
+  for (const id of ['line-1','line-2']) {
+    const line = document.createElement('p'), start = v(id,'maintenance_start_h',-1);
+    const kind = v(id,'maintenance_kind')==='liner'?'футеровка':'ТО';
+    line.textContent = `${ASSETS[id]}: ${start>=t?`${kind} с часа ${start}, крайний старт ${v(id,'maintenance_deadline_h')}`:v(id,'state')==='maintenance'?`${kind} выполняется`:'окно ещё не назначено'}; ресурс футеровки ${fmt(v(id,'liner_remaining_pct',100))}%.`;
+    maint.appendChild(line);
+  }
   const states = {running:'Работает',idle:'Простой',fault:'Отказ',maintenance:'ТО / ремонт',lockout:'Блокировка'};
   const body = $('equipment-rows'); body.replaceChildren();
   for (const [id, title] of Object.entries(ASSETS)) {
@@ -224,7 +232,16 @@ function drawSizing() {
   $('sizing').innerHTML = rows.map((r, i) => `<tr>${r.map(c => i ? `<td>${c}</td>` : `<th>${c}</th>`).join('')}</tr>`).join('');
 }
 async function loadSizing() {
-  try { SZ = await api('GET', `things/${NS}:energy/attributes/sizing`) || []; } catch (e) { return setTimeout(loadSizing, 5000); }
+  try {
+    const attrs = await api('GET', `things/${NS}:energy/attributes`) || {};
+    SZ = attrs.sizing || [];
+    const eq = attrs.wind_equivalent, current = attrs.wind_equivalent_current;
+    if (eq?.status==='ok') {
+      $('page-title').textContent = `Тыныс: эквивалент ${fmt(eq.equivalent_wind_mw)} МВт ВЭС${eq.archived?' в архивном расчёте':''}.`;
+      $('equivalent-note').textContent = `ВЭС ${fmt(eq.wind_mw)} + СЭС ${fmt(eq.pv_mwp)}: одинаковый CO₂ при выпуске Cu в пределах ${fmt(eq.copper_tolerance_pct)}%. Без координатора — ${fmt(eq.required_baseline_wind_mw)} МВт ВЭС по интерполяции (${fmt(eq.grid_step_equivalent_mw)} МВт добавления по сетке). Это эквивалент по выбросам, не гарантированная замена оборудования.`;
+      if (eq.archived) $('equivalent-note').textContent += ' Архив legacy-v1. '+(current?.status==='unavailable'?'Новая модель: сопоставимый эквивалент пока не подтверждён.':'');
+    }
+  } catch (e) { return setTimeout(loadSizing, 5000); }
   if (!SZ.length) return;
   const uniq = k => [...new Set(SZ.map(r => r[k]))].sort((a, b) => a - b);
   $('sz-w').innerHTML = uniq('wind_mw').map(x => `<option ${x == 300 ? 'selected' : ''}>${x}</option>`).join('');
@@ -236,7 +253,7 @@ async function loadFlex() {
   try {
     const attrs = await api('GET', `things/${NS}:substation/attributes`) || {};
     const y = (attrs.flex_stats || []).find(r => r.season === 'all' || r.season.startsWith('весь год')); if (!y) return;
-    const source = attrs.flex_stats_model === 'physics-v3' ? 'Расчёт physics-v3' : 'Архив прежней модели';
+    const source = attrs.flex_stats_model === 'physics-v4-geomet-maintenance' ? 'Расчёт physics-v4' : 'Архив прежней модели';
     $('flexstat').textContent = `${source}: погода 2024, 4 × 14 суток, включая часы без импорта. Среднее ${fmt(y.mw_mean,1)} МВт; медиана ${fmt(y.mw_median ?? y.mw_mean)} МВт ` +
       `(p10–p90: ${fmt(y.mw_p10)}–${fmt(y.mw_p90)}) на ${fmt(y.h_median ?? y.h_mean, 1)} ч (p10–p90: ${fmt(y.h_p10, 1)}–${fmt(y.h_p90, 1)}). ` +
       `Длительность — предел по запасам при неизменных условиях, а не гарантия выдачи резерва.`;

@@ -79,6 +79,8 @@ def test_stock_clipping_cannot_bypass_power_ramp_by_changing_mix():
     shortage_per_line = .101/hard
     st.pile['hard'] = p.line_q_nom-2*shortage_per_line
     st.pile_cu['hard'] = st.pile['hard']*p.cu_grade['hard']
+    st.pile_bwi_mass['hard'] = st.pile['hard']*p.bwi['hard']
+    st.pile_recovery_cu['hard'] = st.pile_cu['hard']*p.r150['hard']
     r = step(p, env, st, 0, decision(p, p.line_q_nom, 250), True)
     assert r['trips'] == 2
     assert all(r['assets'][f'line-{l+1}']['stop_reason'] == 'stockout_trip' for l in range(2))

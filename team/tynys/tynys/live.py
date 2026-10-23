@@ -70,6 +70,7 @@ def state_to_dict(st: State):
             "bwi_est": {k: float(x) for k, x in st.bwi_est.items()},
             "equipment": equipment_to_dict(st), "materials": dict(st.materials),
             "pile_cu": dict(st.pile_cu), "line_x": st.line_x, "line_mw": st.line_mw,
+            "pile_bwi_mass": dict(st.pile_bwi_mass), "pile_recovery_cu": dict(st.pile_recovery_cu), "maintenance": st.maintenance,
             "fleet": asdict(st.fleet) if st.fleet else None}
 
 
@@ -81,6 +82,8 @@ def state_from_dict(d):
                  materials={k: float(v) for k, v in d.get("materials", {}).items()},
                  pile_cu={k: float(v) for k,v in d.get("pile_cu", {}).items()},
                  line_x=d.get("line_x", []), line_mw=d.get("line_mw", []),
+                 pile_bwi_mass=d.get("pile_bwi_mass", {}), pile_recovery_cu=d.get("pile_recovery_cu", {}),
+                 maintenance=d.get("maintenance", {}),
                  fleet=Fleet(**d["fleet"]) if d.get("fleet") else None)
 
 

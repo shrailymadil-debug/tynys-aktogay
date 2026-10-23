@@ -25,7 +25,7 @@ def twins():
     p = aktogay()
     out = [
         t("site", SITE, "mine", None, {"sim_hour": 0, "cu_t": 0.0}, lat=p.lat, lon=p.lon,
-          source="KAZ Minerals Annual Report 2024; Open-Meteo ERA5", model_version="physics-v3"),
+          source="KAZ Minerals Annual Report 2024; Open-Meteo ERA5; GeoMet v4 analogue", model_version="physics-v4-geomet-maintenance"),
         t("pit", "Карьер Актогай", "pit", "site", {"ore_tph": 0., "waste_tph": 0., "hard_frac": .5}),
         t("plant", "Обогатительные фабрики", "plant", "site", {"feed_tph": 0.}),
         t("energy", "Энергосистема рудника", "energy", "site", {"load_mw": 0.}),
@@ -58,6 +58,14 @@ def twins():
                       "bwi_est": p.bwi[domain], "bwi_true": p.bwi[domain]},
                      domain=domain, capacity_t=p.pile_cap_t))
     d = dict(out)
+    from tynys.geology import model
+    _, d["geology"] = t("geology", "Геология GeoMet — пространственный аналог", "geology", "pit",
+        {"active_soft": "", "active_hard": "", "analogue": True,
+         "bwi_soft": p.bwi["soft"], "bwi_hard": p.bwi["hard"],
+         "grade_soft_pct": 100*p.cu_grade["soft"], "grade_hard_pct": 100*p.cu_grade["hard"],
+         "recovery_soft_pct": 100*p.r150["soft"], "recovery_hard_pct": 100*p.r150["hard"]}, model=model(),
+        source="https://doi.org/10.5281/zenodo.7051975", license="CC BY 4.0",
+        assumption="GeoMet не является геологией Актогая; XYZ отображены в схематическом карьере")
     ref = lambda *names: [f"{NS}:{name}" for name in names]
     links = {
         **{f"shovel-{j}": {"loads": ref(*[f"truck-{i+1:02d}" for i in range(14) if shovel_for(i) == f"shovel-{j}"])} for j in (1,2)},
@@ -73,6 +81,7 @@ def twins():
         "wind": {"supplies": ref("substation")}, "pv": {"supplies": ref("substation")},
         "bess": {"exchanges_with": ref("substation")},
         "coordinator": {"sets_points_for": ref("line-1", "line-2", "charger-1", "charger-2", "charger-3", "charger-4", "bess")},
+        "geology": {"assays_for": ref("pit", "pile-soft", "pile-hard"), "informs": ref("coordinator")},
     }
     consumers = [name for name, (kind, _, _) in asset_specs(p).items()
                  if kind not in ("truck", "wind_farm", "pv_farm", "bess", "substation", "waste_dump")]
@@ -96,9 +105,19 @@ def twins():
             types[type_name]["features"].update(copy.deepcopy(body["features"]))
     # Historical sizing/flex results remain accessible, explicitly versioned.
     d["energy"]["attributes"].update(sizing=sizing(), sizing_model="legacy-aggregate-v1")
-    current_flex = csv_rows("flex-physics-v3.csv")
-    d["substation"]["attributes"].update(flex_stats=current_flex or csv_rows("flex.csv"),
-        flex_stats_model="physics-v3" if current_flex else "legacy-aggregate-v1")
+    from pathlib import Path
+    import json
+    data_dir = Path(__file__).resolve().parents[1]/"data"
+    def report(name):
+        path = data_dir/name
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    archived = report("wind-equivalent-archive.json")
+    current = report("wind-equivalent-physics-v4.json")
+    d["energy"]["attributes"].update(wind_equivalent=current if current.get("status") == "ok" else archived,
+        wind_equivalent_current=current, sizing_current=csv_rows("sizing-physics-v4.csv"))
+    current_flex = csv_rows("flex-physics-v4.csv")
+    d["substation"]["attributes"].update(flex_stats=current_flex or csv_rows("flex-physics-v3.csv"),
+        flex_stats_model="physics-v4-geomet-maintenance" if current_flex else "archive-physics-v3")
     return {**types, **d}
 
 
