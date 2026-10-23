@@ -25,6 +25,9 @@ class Scenario:
     line_down: dict = field(default_factory=dict)      # {line: (t0,t1)}
     hard_frac_shift: dict = field(default_factory=dict)  # {t0: new_base}
     mine_mult: dict = field(default_factory=dict)      # {(t0,t1): mult}
+    truck_mult: dict = field(default_factory=dict)     # {(t0,t1): исправная доля самосвалов}
+    grade_mult: dict = field(default_factory=dict)     # {(t0,t1): множитель содержания меди}
+    tariff_mult: dict = field(default_factory=dict)    # {(t0,t1): множитель тарифа}
     bess_down: tuple = ()                              # (t0,t1)
 
     def n(self):
@@ -59,6 +62,15 @@ class Env:
         for (a, b), m in sc.mine_mult.items():
             mm[a:b] *= m
         self.mine_plan = p.mine_ore_tph * mm
+        self.truck_mult = np.ones(n)
+        for (a, b), m in sc.truck_mult.items():
+            self.truck_mult[a:b] *= m
+        self.grade_mult = np.ones(n)
+        for (a, b), m in sc.grade_mult.items():
+            self.grade_mult[a:b] *= m
+        self.tariff_mult = np.ones(n)
+        for (a, b), m in sc.tariff_mult.items():
+            self.tariff_mult[a:b] *= m
         # фактическая твёрдость: BWi домена × (1 + AR(1)-шум) — контроллеру неизвестна
         self.bwi_true = {}
         for i, d in enumerate(DOMAINS):
@@ -126,7 +138,7 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
     haul_e_t = ph.haul_mwh_per_t_ore(p)
     charge_req = float(np.clip(dec["charge_mw"], 0, p.charge_mw_max))
     trucks_hauling = p.n_trucks - charge_req / p.charger_mw
-    haul_cap_ore = trucks_hauling * p.truck_tph / (1 + p.strip_ratio)
+    haul_cap_ore = trucks_hauling * p.truck_tph * env.truck_mult[t] / (1 + p.strip_ratio)
     mine_plan = env.mine_plan[t]
     mine = min(mine_plan, haul_cap_ore)
     # энергия батарей: если не хватает, добыча останавливается пропорционально
@@ -306,9 +318,9 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
         for di, d in enumerate(DOMAINS):
             for gi, g in enumerate(P80_MODES):
                 if x[l][di][gi] > 0:
-                    cu += x[l][di][gi] * p.cu_grade[d] * ph.recovery_inf(p, d, g) * kf
+                    cu += x[l][di][gi] * p.cu_grade[d] * env.grade_mult[t] * ph.recovery_inf(p, d, g) * kf
         e_mill += mill_mw(l)
-    feed_cu = sum(fed[d] * p.cu_grade[d] for d in DOMAINS)
+    feed_cu = sum(fed[d] * p.cu_grade[d] * env.grade_mult[t] for d in DOMAINS)
 
     # виртуальный датчик твёрдости: по фактической мощности мельниц уточняем BWi (фильтр)
     for di, d in enumerate(DOMAINS):
@@ -342,7 +354,8 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
         pile_soft=st.pile["soft"], pile_hard=st.pile["hard"],
         mill_mw=e_mill, load=demand() + charge, cu_t=cu, feed_cu_t=feed_cu,
         p80=p80_avg, trips=len(tripped), restarts=restarts, unserved=unserved,
-        price=p.price_kzt_mwh(hod), hard_frac=env.hard_frac[t],
+        price=p.price_kzt_mwh(hod) * env.tariff_mult[t], tariff_mult=env.tariff_mult[t],
+        grade_mult=env.grade_mult[t], truck_availability=env.truck_mult[t], hard_frac=env.hard_frac[t],
         line0=line_q(0), line1=line_q(1) if p.n_lines > 1 else 0.0,
         bwi_est_soft=st.bwi_est["soft"], bwi_est_hard=st.bwi_est["hard"],
     )
