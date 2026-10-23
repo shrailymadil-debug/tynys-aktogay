@@ -26,7 +26,7 @@ jobs:
       - name: Последствия сценариев для меди и CO₂
         run: |
           set -o pipefail
-          python -m pip install --disable-pip-version-check numpy scipy
+          python -m pip install --disable-pip-version-check numpy scipy pandas
           PYTHONPATH=team/tynys python team/tynys/scripts/scenario_effect_check.py | tee -a ci.log
       - name: What-if на стенде (включить → след в двойниках → отменить)
         run: |
