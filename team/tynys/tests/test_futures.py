@@ -61,9 +61,11 @@ class FuturesTests(unittest.TestCase):
         r = self.stressed
         self.assertNotEqual(r["verdict"]["status"], "feasible")
         self.assertTrue(r["verdict"]["reasons"])
-        self.assertIn("unserved", {v["code"] for v in r["verdict"]["reasons"]})
+        self.assertIn("copper_loss", {v["code"] for v in r["verdict"]["reasons"]})
         self.assertEqual(r["limits"]["requested_cap_mw"], 60)
-        self.assertGreater(r["summary"]["tynys"]["unserved_mwh"], 0)
+        # Flow-dependent auxiliaries shut down with production. A 60 MW cap
+        # need not cause unserved fixed load, but cannot preserve copper output.
+        self.assertGreater(r["summary"]["reference"]["copper_t"], r["summary"]["tynys"]["copper_t"])
 
     def test_failed_battery_cannot_supply_or_absorb_energy(self):
         for f in self.stressed["frames"][:12]:

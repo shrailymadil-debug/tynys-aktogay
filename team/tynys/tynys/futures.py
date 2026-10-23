@@ -19,6 +19,9 @@ from .controllers import V1Reactive, V2Tynys
 from .live import DAYS, EVENTS, scenario_from_events, state_from_dict
 from .params import DOMAINS, aktogay
 from .sim import Env, step
+from .assets import asset_specs, Equipment
+from .fleet import N_GROUPS, group_caps
+from dataclasses import asdict
 
 SCHEMA_VERSION = 1
 MPC_HORIZON_H = 12
@@ -118,6 +121,47 @@ def _snapshot(snapshot, request, p):
     if len(state["line_lock"]) != p.n_lines:
         raise ValueError("line_lock: по одному счётчику на линию")
     state["line_lock"] = [_number(x, "line_lock", 0, 24, True) for x in state["line_lock"]]
+    # Preserve and validate all causal state. Dropping equipment or group
+    # batteries here would silently repair the counterfactual mine on replay.
+    if "equipment" in d:
+        if not isinstance(d["equipment"], dict) or set(d["equipment"]) - set(asset_specs(p)):
+            raise ValueError("equipment: неизвестное оборудование")
+        state["equipment"] = {}
+        defaults = asdict(Equipment())
+        for name, values in d["equipment"].items():
+            if not isinstance(values, dict) or set(values) != set(defaults):
+                raise ValueError("equipment: неполное состояние оборудования")
+            checked = {k: _number(v, f"{name}.{k}", 0, 1 if k == "health" else 1e9,
+                                   k in ("repair_remaining_h", "maintenance_count")) for k, v in values.items()}
+            if checked["available_h"] > checked["elapsed_h"] or checked["operating_h"] > checked["available_h"]:
+                raise ValueError("equipment: несовместимые счётчики часов")
+            state["equipment"][name] = checked
+    if "materials" in d:
+        allowed = {"waste_t", "tailings_t", "concentrate_t", "tailings_cu_t", "fresh_water_m3", "retained_water_m3"}
+        if not isinstance(d["materials"], dict) or set(d["materials"]) - allowed:
+            raise ValueError("materials: неизвестный запас")
+        state["materials"] = {k: _number(v, k, 0, 1e15) for k, v in d["materials"].items()}
+    if "fleet" in d:
+        state["fleet"] = None
+        if d["fleet"] is not None:
+            fleet = d["fleet"]
+            fields = {"e", "charging", "starved", "util", "charge_mw", "ore_tph", "waste_tph", "available"}
+            if not isinstance(fleet, dict) or set(fleet) != fields:
+                raise ValueError("fleet: неполное состояние звеньев")
+            checked = {"util": _number(fleet["util"], "fleet.util", 0, 1)}
+            for key in fields - {"util"}:
+                if not isinstance(fleet[key], list) or len(fleet[key]) != N_GROUPS:
+                    raise ValueError("fleet: ожидается 14 звеньев")
+                if key in ("charging", "starved", "available"):
+                    if any(type(v) is not bool for v in fleet[key]):
+                        raise ValueError("fleet: требуется bool")
+                    checked[key] = list(fleet[key])
+                else:
+                    hi = group_caps(p)[1] if key == "e" else 1e9
+                    checked[key] = [_number(v, f"fleet.{key}", 0, hi) for v in fleet[key]]
+            if abs(sum(checked["e"]) - state["fleet_e"]) > 1e-6:
+                raise ValueError("fleet: сумма энергии звеньев не равна энергии парка")
+            state["fleet"] = checked
     out["state"] = state
     for key in ("source", "captured_at"):
         if key in snapshot:
@@ -219,6 +263,8 @@ def _run(p, env, snapshot, request, controller, progress, cancelled, label):
             "line1_tph": raw["line0"], "line2_tph": raw["line1"],
             "unserved_mw": raw["unserved"], "trips": raw["trips"],
             "spilled_t": raw["spilled"], "explanations": explanations,
+            "waste_tph": raw["waste_tph"], "tailings_tph": raw["tailings_tph"],
+            "concentrate_tph": raw["concentrate_tph"], "fresh_water_m3_h": raw["fresh_water_m3_h"],
             "fallback": bool(getattr(controller, "last_fallback", False)),
         }
         # No NaN from p80 (undefined for stopped lines) is exposed by this API.
@@ -362,8 +408,11 @@ def evaluate(request, snapshot, progress=None, cancelled=None):
     fingerprint = hashlib.sha256()
     for a in (env.w["wind_pu"], env.w["pv_pu"], env.hard_frac, env.mine_plan, env.bess_avail):
         fingerprint.update(np.asarray(a[t0:t0 + n]).tobytes())
+    fingerprint.update(env.line_avail[:,t0:t0+n].tobytes())
+    fingerprint.update(json.dumps([env.sc.equipment_down, env.sc.equipment_maintenance],
+                                  sort_keys=True, separators=(",",":")).encode())
     result = {
-        "schema_version": SCHEMA_VERSION, "request": request,
+        "schema_version": SCHEMA_VERSION, "model_version": "equipment-v2", "request": request,
         "snapshot": {**copy.deepcopy(snapshot),
                      "weather_source": env.w.get("source", "Синтетическая погода"),
                      "disturbance_sha256": fingerprint.hexdigest()},

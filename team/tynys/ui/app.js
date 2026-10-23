@@ -1,9 +1,21 @@
 // Экран «Тыныс»: все данные — из двойников Eclipse Ditto (через прокси /ditto).
 const NS = 'kz.tynys';
+const ASSETS = {
+  'shovel-1':'Экскаватор 1','shovel-2':'Экскаватор 2',crusher:'Дробилка',
+  'conveyor-crushed':'Конвейер дроблёной руды','conveyor-feed':'Конвейер питания',
+  'waste-dump':'Отвал вскрыши',water:'Водовод',tailings:'Хвостовое хозяйство',
+  concentrate:'Концентрат',dewatering:'Водоотлив','pit-services':'Службы карьера',
+  workshops:'Мастерские',camp:'Посёлок','line-1':'Линия 1','line-2':'Линия 2',flotation:'Флотация',
+  'charger-1':'Зарядная группа 1','charger-2':'Зарядная группа 2',
+  'charger-3':'Зарядная группа 3','charger-4':'Зарядная группа 4',
+};
 const NAMES = ['site','pit','plant','energy','coordinator','scenario','shadow-v0','shadow-v1','pile-soft','pile-hard',
-  'line-1','line-2','flotation','wind','pv','bess','substation', ...Array.from({length:14},(_,i)=>`truck-${String(i+1).padStart(2,'0')}`)];
+  ...Object.keys(ASSETS),'wind','pv','bess','substation', ...Array.from({length:14},(_,i)=>`truck-${String(i+1).padStart(2,'0')}`)];
 const EVENTS = {lull:['Штиль на сутки',3,24], line_trip:['Авария линии 2',0,8], kegoc:['Запрос KEGOC: −80 МВт',2,4],
-  hard_ore:['Пошла твёрдая руда',0,72], plan_up:['План добычи +10 %',0,48], bess_fault:['Отказ накопителя',0,12]};
+  hard_ore:['Пошла твёрдая руда',0,72], plan_up:['План добычи +10 %',0,48], bess_fault:['Отказ накопителя',0,12],
+  crusher_fault:['Отказ дробилки',0,8], shovel_fault:['Отказ экскаватора 1',0,8],
+  conveyor_fault:['Отказ конвейера питания',0,4], water_fault:['Отказ водовода',0,4],
+  charger_fault:['Отказ зарядной группы 1',0,8], crusher_service:['ТО дробилки',2,4]};
 const $ = id => document.getElementById(id);
 const SVGNS = 'http://www.w3.org/2000/svg';
 let T = {};
@@ -53,6 +65,20 @@ $('g-green').onclick = () => writeScenario(curEvents(), 'green');
 let rot = 0;
 function render() {
   const t = v('site', 'sim_hour', null); if (t == null) return;
+  const states = {running:'Работает',idle:'Простой',fault:'Отказ',maintenance:'ТО / ремонт',lockout:'Блокировка'};
+  const body = $('equipment-rows'); body.replaceChildren();
+  for (const [id, title] of Object.entries(ASSETS)) {
+    const row = document.createElement('tr');
+    const flow = v(id,'flow_m3_h',null) ?? v(id,'throughput_tph',null) ?? v(id,'rate_tph',null) ?? v(id,'feed_tph',null) ?? v(id,'inflow_tph',null);
+    const speed = v(id,'speed_rpm',null);
+    const cells = [title,states[v(id,'state')] || '—',
+      flow === null ? '—' : fmt(flow,1)+(id==='water'?' м³/ч':' т/ч'),
+      fmt(v(id,'power_mw',null),2), speed===null?'—':fmt(speed,1),
+      fmt(v(id,'health_pct',null),1),fmt(v(id,'availability_pct',null),1)];
+    for (const value of cells) { const cell=document.createElement('td');cell.textContent=value;row.appendChild(cell); }
+    body.appendChild(row);
+  }
+  $('material-stocks').textContent = `С начала прогона: вскрыша ${fmt(v('waste-dump','tonnes'))} т · хвосты ${fmt(v('tailings','tonnes'))} т · концентрат ${fmt(v('concentrate','tonnes'))} т. Вода: свежая ${fmt(v('water','fresh_m3_h'))} + оборотная ${fmt(v('water','recycle_m3_h'))} = ${fmt(v('water','flow_m3_h'))} м³/ч.`;
   $('clock').textContent = `модельное время ${v('site', 'sim_time', '')} · час ${t}`;
   const mode = v('coordinator', 'mode', '—');
   $('mode-t').textContent = mode === 'вдох' ? 'ВДОХ · копим энергию' : mode === 'выдох' ? 'ВЫДОХ · экономим' : '—';
@@ -158,8 +184,9 @@ function animate(ts) {
   for (let i = 0; i < 14; i++) {
     const n = `truck-${String(i + 1).padStart(2, '0')}`, r = trucksG.children[i], st = v(n, 'state', 'empty');
     let x, y;
-    if (st === 'charging' || st === 'waiting') { const k = st === 'charging' ? slotC++ : 7 + (slotW++ % 7); x = 304 + (k % 7) * 19; y = st === 'charging' ? 474 : 496; }
-    else { const ph = (i / 14 + ts / 1000 / 90) % 1;   // анимация: полный рейс за 90 с const f = ph < 0.5 ? ph * 2 : 2 - ph * 2;
+    if (['charging','waiting','idle','unavailable','fault','maintenance'].includes(st)) { const k = st === 'charging' ? slotC++ : 7 + (slotW++ % 7); x = 304 + (k % 7) * 19; y = st === 'charging' ? 474 : 496; }
+    else { const ph = (i / 14 + ts / 1000 / 90) % 1;   // анимация: полный рейс за 90 с
+      const f = ph < 0.5 ? ph * 2 : 2 - ph * 2;
       const p = road.getPointAtLength(f * roadLen); x = p.x - 7; y = p.y - 4 + (ph < 0.5 ? -7 : 7); }
     r.setAttribute('x', x); r.setAttribute('y', y);
     r.setAttribute('fill', st === 'charging' ? '#5ec8e5' : st === 'waiting' ? '#ebcb88' : st === 'loaded' ? '#6ce0cc' : '#9aa6b2');
@@ -209,7 +236,7 @@ async function loadFlex() {
   try {
     const F = await api('GET', `things/${NS}:substation/attributes/flex_stats`) || [];
     const y = F.find(r => r.season.startsWith('весь год')); if (!y) return;
-    $('flexstat').textContent = `За год на реальной погоде 2024 (предрасчёт flex_stats.py, 4 × 14 суток): медиана ${fmt(y.mw_median ?? y.mw_mean)} МВт ` +
+    $('flexstat').textContent = `Архив прежней модели, не пересчитан: погода 2024 (flex_stats.py, 4 × 14 суток): медиана ${fmt(y.mw_median ?? y.mw_mean)} МВт ` +
       `(p10–p90: ${fmt(y.mw_p10)}–${fmt(y.mw_p90)}) на ${fmt(y.h_median ?? y.h_mean, 1)} ч (p10–p90: ${fmt(y.h_p10, 1)}–${fmt(y.h_p90, 1)}). ` +
       `Чаще всего длительность ограничивает накопитель (69 % часов), реже — заряд самосвалов (31 %).`;
   } catch (e) { setTimeout(loadFlex, 5000); }

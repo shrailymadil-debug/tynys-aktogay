@@ -8,7 +8,18 @@ const fmt = n => typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString(
 const TITLES = {pit:'Карьер',plant:'Фабрика',flotation:'Флотация','pile-soft':'Склад мягкой руды','pile-hard':'Склад твёрдой руды',wind:'Ветровая станция',pv:'Солнечная станция',bess:'Накопитель',substation:'Подстанция','line-1':'Линия 1','line-2':'Линия 2'};
 const FIELDS = {soc:['Заряд','%'],power_mw:['Мощность','МВт'],capacity_mw:['Установлено','МВт'],grid_mw:['Из сети','МВт'],grid_cap_mw:['Предел сети','МВт'],feed_tph:['Подача','т/ч'],ore_tph:['Добыча','т/ч'],ore_plan_tph:['План добычи','т/ч'],load_pct:['Загрузка','%'],tonnes:['Руды на складе','т'],fill_pct:['Заполнение','%'],bwi_est:['Оценка твёрдости','кВт·ч/т'],bwi_true:['Твёрдость','кВт·ч/т'],available:['Доступен',''],running:['Работает',''],lock_h:['До перезапуска','ч'],hard_frac:['Доля твёрдой руды',''],cu_tph:['Медь','т/ч'],recovery:['Извлечение','%'],cf_pct:['Мощность / установленная','%'],energy_mwh:['Энергия','МВт·ч'],payload_t:['Груз звена','т'],state:['Состояние',''],feed_soft_tph:['Мягкая руда','т/ч'],feed_hard_tph:['Твёрдая руда','т/ч'],mill_mw:['Мельницы','МВт'],p80_um:['P80','мкм'],spilled_tph:['Переполнение','т/ч']};
 const STATES = {charging:'заряжается',waiting:'ожидает зарядки',loaded:'с грузом',empty:'порожний',digging:'добыча',idle:'остановлен'};
+Object.assign(STATES,{running:'работает',fault:'отказ',maintenance:'ТО / ремонт',lockout:'блокировка',unavailable:'недоступен'});
+Object.assign(FIELDS,{throughput_tph:['Пропускная способность','т/ч'],inflow_tph:['Входящий поток','т/ч'],
+  rate_tph:['Погрузка','т/ч'],waste_tph:['Вскрыша','т/ч'],speed_rpm:['Скорость привода','об/мин'],
+  health_pct:['Исправность','%'],availability_pct:['Готовность за прогон','%'],
+  repair_remaining_h:['До конца ремонта','ч'],operating_h:['Наработка','ч'],
+  flow_m3_h:['Вода в процесс','м³/ч'],fresh_m3_h:['Свежая вода','м³/ч'],recycle_m3_h:['Оборотная вода','м³/ч'],
+  grade_pct:['Содержание Cu','%'],assigned_shovel:['Экскаватор',''],assigned_charger:['Зарядная группа','']});
+FIELDS.tonnes=['Накоплено','т'];
 const EVENT_NAMES = {lull:'Штиль',line_trip:'Авария линии 2',kegoc:'Ограничение KEGOC',hard_ore:'Твёрдая руда',plan_up:'План добычи +10 %',bess_fault:'Отказ накопителя'};
+Object.assign(EVENT_NAMES,{crusher_fault:'Отказ дробилки',shovel_fault:'Отказ экскаватора 1',
+  conveyor_fault:'Отказ конвейера питания',water_fault:'Отказ водовода',
+  charger_fault:'Отказ зарядной группы 1',crusher_service:'ТО дробилки'});
 
 export function scenarioEvents(data) {
   const raw = data.scenario?.events;
@@ -84,6 +95,39 @@ export function installSceneDetails(ctx) {
   mills.forEach((m,i)=>target(`line-${i+1}`,TITLES[`line-${i+1}`],[PLANT.x-34,12,PLANT.z+(i?-14:14)*-1],[25,25,23]));
   chargers.forEach((m,i)=>target(`charger-${i+1}`,`Зарядная станция ${i+1}`,[CHARGE.x-30+i*20,5,CHARGE.z-12],[16,12,16]));
   trucks.forEach((t,i)=>target(`truck-${String(i+1).padStart(2,'0')}`,`Звено самосвалов ${String(i+1).padStart(2,'0')}`,[0,3,0],[12,7,8],t.g));
+
+  // Schematic positions, not a surveyed layout of Aktogay. All quantities and
+  // stop states in the cards come from the corresponding process twins.
+  const processObjects=[
+    ['crusher','Дробилка',[8,8,-15],[16,16,18]],
+    ['conveyor-crushed','Дроблёная руда',[28,7,-15],[24,4,5]],
+    ['conveyor-feed','Питание фабрики',[73,8,-15],[28,18,60]],
+    ['waste-dump','Отвал вскрыши',[-235,12,155],[80,26,80]],
+    ['tailings','Хвостовое хозяйство',[183,2,132],[58,5,58]],
+    ['water','Водовод',[242,7,130],[15,15,15]],
+    ['concentrate','Концентрат',[208,7,-20],[22,14,25]],
+  ];
+  const processSteel=M(0x8b969e,{roughness:.65}),processOre=M(0x8a7462,{roughness:1});
+  mesh(new THREE.BoxGeometry(14,9,16),processSteel,8,4.5,-15);
+  mesh(new THREE.CylinderGeometry(8,4,7,8),M(0xc4a86a,{roughness:.7}),8,12,-15);
+  mesh(new THREE.BoxGeometry(26,1.4,4),processSteel,28,7,-15);
+  mesh(new THREE.ConeGeometry(40,24,16),processOre,-235,12,155);
+  mesh(new THREE.CylinderGeometry(28,30,4,32),processOre,183,2,132);
+  mesh(new THREE.CircleGeometry(27,32).rotateX(-Math.PI/2),M(0x587b7e,{roughness:.3}),183,4.1,132);
+  mesh(new THREE.CylinderGeometry(6,6,12,16),processSteel,242,6,130);
+  mesh(new THREE.BoxGeometry(22,14,25),processSteel,208,7,-20);
+  function pipe(a,b){
+    const start=new THREE.Vector3(...a),end=new THREE.Vector3(...b),delta=end.clone().sub(start),mid=start.clone().add(end).multiplyScalar(.5);
+    const obj=mesh(new THREE.CylinderGeometry(.65,.65,delta.length(),8),M(0x4e9aa9,{roughness:.6}),mid.x,mid.y,mid.z);
+    obj.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.normalize());
+  }
+  pipe([242,2,130],[183,2,132]);pipe([242,2,130],[170,2,40]);pipe([170,2,40],[170,2,0]);
+  for(const[id,title,center,size]of processObjects){
+    target(id,title,center,size);
+    label(`<b>${title}</b><span id="l-${id}">—</span>`,center[0],center[1]+size[1]/2+8,center[2]);
+    const el=document.getElementById(`l-${id}`).closest('.lbl');
+    el.dataset.object=id;el.style.pointerEvents='auto';el.style.cursor='pointer';el.onclick=()=>selectObject(id);
+  }
 
   function makeBar(id,spanId,read,caption) {
     const parent=$(spanId)?.closest('.lbl');if(!parent)return;
@@ -183,6 +227,11 @@ export function installSceneDetails(ctx) {
   renderer.domElement.addEventListener('pointerdown',e=>{press={x:e.clientX,y:e.clientY,button:e.button};});
   renderer.domElement.addEventListener('pointerup',e=>{if(!press||press.button!==0||Math.hypot(e.clientX-press.x,e.clientY-press.y)>5)return;const rect=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);scene.updateMatrixWorld(true);raycaster.setFromCamera(pointer,camera);const hit=raycaster.intersectObjects(proxies,false)[0];if(hit)selectObject(hit.object.userData.objectId);else clearSelection();press=null;});
   function update(data) {
+    for(const[id]of processObjects){
+      const d=data[id],el=document.getElementById(`l-${id}`);
+      const q=d?.flow_m3_h??d?.throughput_tph??d?.inflow_tph;
+      el.textContent=d?`${STATES[d.state]||d.state} · ${fmt(q)} ${id==='water'?'м³/ч':'т/ч'}`:'нет данных в записи';
+    }
     lastData=data;events=scenarioEvents(data);const active=events.filter(e=>e.active),kinds=new Set(active.map(e=>e.kind));
     const readable=getSource()==='live';const key=JSON.stringify([events,readable,getSource()]);
     if(key!==bannerKey){bannerKey=key;$('scenario-banner').hidden=!events.length;$('scenario-list').replaceChildren();

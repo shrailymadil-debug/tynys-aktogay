@@ -14,6 +14,7 @@ from scipy.sparse import coo_matrix
 from .params import Params, DOMAINS, P80_MODES
 from . import physics as ph
 from . import weather as wx
+from .assets import capacity_factor, asset_specs, process_factor, mining_capacity, load_coefficients
 
 NG = len(P80_MODES)
 G150 = P80_MODES.index(150)
@@ -24,7 +25,10 @@ def _empty_x(p):
 
 
 def _line_ok(env, st, l, t):
-    return env.line_avail[l, t] and st.line_lock[l] == 0
+    return (env.line_avail[l, t] and st.line_lock[l] == 0
+            and capacity_factor(env, st, f"line-{l+1}", t) > 0
+            and all(capacity_factor(env, st, name, t) > 0 for name in
+                    ("water", "tailings", "concentrate", "conveyor-feed", "flotation")))
 
 
 def _fleet_charge_rule(p, env, st, t):
@@ -56,8 +60,10 @@ class V1Reactive:
         tot = sum(st.pile.values())
         fs = st.pile["soft"] / tot if tot > 0 else 0.5
         e = fs * ph.bond_kwh_t(p, p.bwi["soft"], 150) + (1 - fs) * ph.bond_kwh_t(p, p.bwi["hard"], 150)
-        e_t = (e + p.flot_kwh_t) / 1000.0  # МВт·ч/т
-        other = p.base_load_mw + p.crush_kwh_t * env.mine_plan[t] / 1000.0 + charge
+        factors = {n: capacity_factor(env, st, n, t) for n in asset_specs(p)}
+        fixed, mine_coef, feed_coef = load_coefficients(p, factors)
+        e_t = e / 1000.0 + feed_coef  # МВт·ч/т
+        other = fixed + mine_coef * min(env.mine_plan[t], mining_capacity(p, factors)) + charge
         lines = [l for l in range(p.n_lines) if _line_ok(env, st, l, t)]
         q_nom = p.line_q_nom * len(lines)
         q_max = min(p.line_q_max, p.line_p_max_mw / (e / 1000.0)) * len(lines)
@@ -137,7 +143,13 @@ class V2Tynys:
         renew = wf * p.wind_mw + pf * p.pv_mwp
         gcap = env.known_grid_cap(t, H)
         idx = np.minimum(np.arange(t, t + H), env.sc.n() - 1)
-        mplan = env.mine_plan[idx]
+        factors = [{n: capacity_factor(env, st, n, int(idx[h]), h) for n in asset_specs(p)} for h in range(H)]
+        renew = wf * p.wind_mw * np.array([f["wind"] for f in factors]) + pf * p.pv_mwp * np.array([f["pv"] for f in factors])
+        gcap *= np.array([f["substation"] for f in factors])
+        mplan = np.array([min(env.mine_plan[idx[h]], mining_capacity(p, factors[h]),
+                             p.mine_ore_tph*p.shovel_capacity_factor/2 * sum(factors[h][f"shovel-{i}"] for i in (1,2)),
+                             p.n_trucks/14*p.truck_tph/(1+p.strip_ratio) * sum(factors[h][f"truck-{i:02d}"] for i in range(1,15)))
+                          * factors[h]["pit-services"] for h in range(H)])
         hf = env.hard_frac[idx]
         mpd = {"soft": mplan * (1 - hf), "hard": mplan * hf}
         if self.flat_price:
@@ -165,7 +177,8 @@ class V2Tynys:
         Cun = 1e7
 
         # известная недоступность линий
-        avail = np.ones((p.n_lines, H), dtype=bool)
+        line_factors = np.array([[min(f[f"line-{l+1}"], process_factor(f)) for f in factors] for l in range(p.n_lines)])
+        avail = line_factors > 0
         for l in range(p.n_lines):
             if not env.line_avail[l, t]:
                 h = 0
@@ -193,9 +206,9 @@ class V2Tynys:
                 ON[l, h] = vi.add(0, 1 if avail[l, h] else 0, 0, 1)
                 XO[l, h] = vi.add(0, p.line_q_max - p.line_q_nom, ovl_cost)
                 SU[l, h] = vi.add(0, 1, p.restart_cost_kzt)
-            CH[h] = vi.add(0, p.charge_mw_max)
-            BC[h] = vi.add(0, p.bess_mw if env.bess_avail[min(t + h, env.sc.n() - 1)] else 0)
-            BD[h] = vi.add(0, p.bess_mw if env.bess_avail[min(t + h, env.sc.n() - 1)] else 0)
+            CH[h] = vi.add(0, p.charge_mw_max/4 * sum(factors[h][f"charger-{i}"] for i in range(1,5)))
+            BC[h] = vi.add(0, p.bess_mw * factors[h]["bess"])
+            BD[h] = vi.add(0, p.bess_mw * factors[h]["bess"])
             GR[h] = vi.add(0, gcap[h], price[h])
             CU[h] = vi.add(0, np.inf, 1.0)
             UN[h] = vi.add(0, np.inf, Cun)
@@ -229,11 +242,11 @@ class V2Tynys:
         for h in range(H):
             for l in range(p.n_lines):
                 xs = [X[l, d, g, h] for d in DOMAINS for g in range(NG)]
-                con([(j, 1) for j in xs] + [(ON[l, h], -p.line_q_max)], -np.inf, 0)
+                con([(j, 1) for j in xs] + [(ON[l, h], -p.line_q_max*line_factors[l,h])], -np.inf, 0)
                 con([(j, -1) for j in xs] + [(ON[l, h], p.line_q_min)], -np.inf, 0)
                 con([(j, 1) for j in xs] + [(ON[l, h], -p.line_q_nom), (XO[l, h], -1)], -np.inf, 0)
                 con([(X[l, d, g, h], e[d, g] / 1000) for d in DOMAINS for g in range(NG)]
-                    + [(ON[l, h], -p.line_p_max_mw)], -np.inf, 0)
+                    + [(ON[l, h], -p.line_p_max_mw*line_factors[l,h])], -np.inf, 0)
                 prev = (1.0 if st.line_on[l] else 0.0)
                 if h == 0:
                     con([(ON[l, h], 1), (SU[l, h], -1)], -np.inf, prev)
@@ -244,6 +257,11 @@ class V2Tynys:
                         con([(X[l, "soft", g, h], 1 - phi), (X[l, "hard", g, h], -phi)], 0, 0)
             # склады
             for d in DOMAINS:
+                opening_feed = [(X[l, d, g, h], 1) for l in range(p.n_lines) for g in range(NG)]
+                if h > 0:
+                    con(opening_feed + [(S[d, h-1], -1)], -np.inf, 0)
+                else:
+                    con(opening_feed, -np.inf, st.pile[d])
                 terms = [(S[d, h], 1), (MS[d, h], 1)] + [(X[l, d, g, h], 1) for l in range(p.n_lines) for g in range(NG)]
                 if h > 0:
                     terms.append((S[d, h - 1], -1))
@@ -273,11 +291,12 @@ class V2Tynys:
             else:
                 rhs = st.bess_e
             con(terms, rhs, rhs)
-            # баланс мощности
+            # баланс мощности: та же декомпозиция, что в поле
+            fixed, mine_coef, feed_coef = load_coefficients(p, factors[h])
             terms = [(GR[h], 1), (BD[h], 1), (UN[h], 1), (CH[h], -1), (BC[h], -1), (CU[h], -1)]
-            terms += [(X[l, d, g, h], -(e[d, g] + p.flot_kwh_t) / 1000) for l in range(p.n_lines) for d in DOMAINS for g in range(NG)]
-            terms += [(MS[d, h], p.crush_kwh_t / 1000) for d in DOMAINS]
-            rhs = p.base_load_mw + p.crush_kwh_t * mt / 1000 - renew[h]
+            terms += [(X[l, d, g, h], -(e[d, g] / 1000 + feed_coef)) for l in range(p.n_lines) for d in DOMAINS for g in range(NG)]
+            terms += [(MS[d, h], mine_coef) for d in DOMAINS]
+            rhs = fixed + mine_coef * mt - renew[h]
             PB[h] = r[0]
             con(terms, rhs, rhs)
         # терминальные цели (запас «дыхания» на конец горизонта)
