@@ -76,12 +76,13 @@ function resultWarning() {
   text('result-warning', warnings.join(' '));
 }
 
-async function submitRequest(mode) {
+async function submitRequest(mode, onPrepared) {
   if (state.pending || !$('request-form').reportValidity()) return;
   stopPlayback();
   let request;
   try { request = readRequest(mode); } catch (error) { statusMessage(error.message, true); return; }
   state.pending = request;
+  onPrepared?.(request.id);
   state.pendingAccepted = false;
   state.superseded = false;
   state.dirty = false;
@@ -139,6 +140,7 @@ async function poll() {
     setConnection('online', 'Ditto · подключено');
     const serviceStatus = feature(twin, 'status', 'idle');
     const id = feature(twin, 'request_id', '');
+    state.serviceStatus=serviceStatus;state.serviceId=id;
     const updated = feature(twin, 'updated_at', '');
     // A request is a single shared twin. Another browser can replace it. Confirm
     // its current id after our PUT was acknowledged; an old result alone is not
@@ -464,4 +466,24 @@ $('export').addEventListener('click', () => {
 document.addEventListener('visibilitychange', () => { if (document.hidden) stopPlayback(); else schedulePoll(100); });
 window.addEventListener('pagehide', () => { stopPlayback(); clearTimeout(state.pollTimer); for (const scene of Object.values(state.scenes)) scene.dispose?.(); });
 initScenes();
+window.TynysDemoFutures = {
+  ready:()=>state.online && !state.pending && !['running','queued'].includes(state.serviceStatus),
+  async start(onPrepared){
+    if(!this.ready())throw new Error('Сервис занят или недоступен');
+    const current=await api('GET','future-request');
+    const raw=feature(current,'request_json','');
+    const queued=raw?JSON.parse(raw):null;
+    if(queued?.id && queued.id!==state.serviceId && queued.mode!=='cancel')throw new Error('Другой запрос ожидает обработки');
+    syncForm({reduction_mw:80,duration_h:4,lead_h:2,recovery_h:24,max_copper_loss_pct:2,lull:false,bess_fault:false,hard_ore:false});
+    markDirty();await submitRequest('evaluate',onPrepared);
+    if(!state.pending?.id)throw new Error('Запрос не принят');
+    return state.pending.id;
+  },
+  status:id=>state.result?.request?.id===id?'complete':state.pending?.id===id||(state.serviceId===id&&state.serviceStatus==='running')?'running':'error',
+  async cancelOwn(id){
+    const twin=await api('GET','future-request');
+    const raw=feature(twin,'request_json','');
+    if(raw && JSON.parse(raw).id===id && state.serviceStatus==='running') {state.pending={id};await cancelRequest();}
+  }
+};
 poll();

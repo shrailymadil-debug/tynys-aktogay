@@ -46,7 +46,7 @@ class Totals:
         if st is not None:
             if self.pile0 is None:
                 self.pile0 = {d: p.pile_cap_t * p.pile_init_frac for d in st.pile}   # все варианты стартуют с init_state
-            self.cu_adj = self.cu + r["cu_t"] + sum((st.pile_cu[d] - self.pile0[d]*p.cu_grade[d]) * p.r150[d] for d in st.pile)
+            self.cu_adj = self.cu + r["cu_t"] + sum((st.pile_recovery_cu[d] if p.geomet else st.pile_cu[d]*p.r150[d]) - self.pile0[d]*p.cu_grade[d]*p.r150[d] for d in st.pile)
         self.cu += r["cu_t"]; self.grid += r["grid"]; self.co2 += r["grid"] * p.grid_co2_t_mwh
         self.curt += r["curtail"]; self.renew += r["renew"] - r["curtail"]; self.cost += r["grid"] * r["price"]
         self.feed += r["feed"]; self.hours += 1
@@ -108,7 +108,7 @@ def main():
                 c = get_things(["coordinator"])["coordinator"]
                 if prop(c, "for_t") == t and prop(c, "scenario_rev") == (ev_rev or 0):
                     dec = {"x": json.loads(prop(c, "x_json")), "charge_mw": float(prop(c, "charge_mw")),
-                           "bess_mw": float(prop(c, "bess_mw"))}
+                           "bess_mw": float(prop(c, "bess_mw")), "maintenance": json.loads(prop(c, "maintenance_json", "{}"))}
                     source = "coordinator"; break
             except Exception:
                 pass
@@ -133,6 +133,8 @@ def main():
 
 
 def publish_hour(bus, p, env, st, r, t, source, fleet):
+    from tynys.geology import telemetry
+    bus.send("geology", telemetry(env, t))
     bus.send("pit", {"ore_tph": round(r["mine"]), "ore_plan_tph": round(r["mine_plan"]),
                      "hard_frac": round(r["hard_frac"], 3), "spilled_tph": round(r["spilled"], 1), "waste_tph": r["waste_tph"]})
     bus.send("plant", {"feed_tph": round(r["feed"]), "feed_soft_tph": round(r["feed_soft"]),
@@ -142,10 +144,12 @@ def publish_hour(bus, p, env, st, r, t, source, fleet):
     for d in ("soft", "hard"):
         bus.send(f"pile-{d}", {"tonnes": round(st.pile[d]), "fill_pct": round(100 * st.pile[d] / p.pile_cap_t, 1),
                                "cu_t": st.pile_cu[d], "grade_pct": 100*st.pile_cu[d]/st.pile[d] if st.pile[d] > 0 else 0,
-                               "bwi_est": round(st.bwi_est[d], 2), "bwi_true": round(float(env.bwi_true[d][t]), 2)})
+                               "bwi_est": round(st.bwi_est[d], 2), "bwi_true": st.pile_bwi_mass[d]/st.pile[d] if st.pile[d] else p.bwi[d],
+                               "recovery_pct": 100*st.pile_recovery_cu[d]/st.pile_cu[d] if st.pile_cu[d] else 0})
     for name, features in r["assets"].items():
         bus.send(name, features)
     bus.send("energy", {"load_mw": round(r["load"], 1), "renew_mw": round(r["renew"], 1),
+                        "grid_no_lull_mw": r["grid_no_lull_mw"], "lull_grid_delta_mw": r["lull_grid_delta_mw"],
                         "curtail_mw": round(r["curtail"], 1), "grid_mw": round(r["grid"], 1),
                         "charge_mw": round(r["charge"], 1), "unserved_mw": round(r["unserved"], 1),
                         "renew_share_pct": round(100 * (r["renew"] - r["curtail"]) / max(r["load"], 1e-6), 1)})

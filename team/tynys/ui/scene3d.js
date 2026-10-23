@@ -8,7 +8,7 @@ import { CSS2DRenderer, CSS2DObject } from './vendor/CSS2DRenderer.js';
 import { installSceneDetails, mergeStaticMeshes } from './scene-details.js';
 
 const NS = 'kz.tynys';
-const NAMES = ['site', 'pit', 'plant', 'energy', 'coordinator', 'scenario', 'shadow-v0', 'shadow-v1', 'pile-soft', 'pile-hard', 'line-1', 'line-2',
+const NAMES = ['site', 'pit', 'plant', 'energy', 'geology', 'coordinator', 'scenario', 'shadow-v0', 'shadow-v1', 'pile-soft', 'pile-hard', 'line-1', 'line-2',
   'flotation', 'wind', 'pv', 'bess', 'substation', 'shovel-1', 'shovel-2',
   'crusher','conveyor-crushed','conveyor-feed','waste-dump','water','tailings','concentrate',
   ...Array.from({ length: 4 }, (_, i) => `charger-${i+1}`), ...Array.from({ length: 14 }, (_, i) => `truck-${String(i + 1).padStart(2, '0')}`)];
@@ -142,6 +142,41 @@ scene.add(stars);
 
 // ---------- рельеф ----------
 const PIT = new THREE.Vector3(-130, 0, 10), PIT_R = 100, PIT_D = 78, BENCH = 12, SITE_R = 520;
+let geologyPit, geologyCells = [];
+const geologyMarkers = new THREE.Group(); scene.add(geologyMarkers);
+async function loadGeology() {
+  if(window.TYNYS_TRACE)return; // archival standalone scene has no live geology
+  try {
+    const response=await fetch('ditto/api/2/things/kz.tynys:geology/attributes/model');
+    if(!response.ok)throw new Error('GeoMet недоступен');
+    const data=await response.json();
+    if(!Array.isArray(data.cells)||!data.cells.length)throw new Error('Нет проб');
+    geologyCells=data.cells;
+    const min=Math.min(...geologyCells.map(c=>c.bwi)),max=Math.max(...geologyCells.map(c=>c.bwi));
+    const positions=geologyPit.geometry.attributes.position, colors=geologyPit.geometry.attributes.color;
+    const color=new THREE.Color();
+    for(let i=0;i<positions.count;i++){
+      const u=positions.getX(i)/PIT_R,vv=positions.getZ(i)/PIT_R,depth=-positions.getY(i)/PIT_D;
+      let closest=null,distance=Infinity;
+      for(const c of geologyCells){const d=(u-c.u)**2+(vv-c.v)**2+(depth-c.depth)**2;if(d<distance){distance=d;closest=c;}}
+      color.setHSL(.48*(1-(closest.bwi-min)/(max-min)),.62,.48);
+      colors.setXYZ(i,color.r,color.g,color.b);
+    }
+    colors.needsUpdate=true;
+    for(const c of geologyCells){
+      const marker=new THREE.Mesh(new THREE.SphereGeometry(2.5,8,6),new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false}));
+      marker.position.set(PIT.x+c.u*PIT_R,-c.depth*PIT_D,PIT.z+c.v*PIT_R);
+      marker.userData.cellId=c.id;marker.visible=false;marker.renderOrder=50;geologyMarkers.add(marker);
+    }
+    const legend=document.createElement('aside');legend.id='geology-legend';
+    Object.assign(legend.style,{position:'fixed',left:'16px',bottom:'100px',zIndex:5,maxWidth:'330px',padding:'10px 14px',background:'#102830e8',color:'#fff',font:'12px system-ui',borderRadius:'10px',pointerEvents:'none'});
+    const title=document.createElement('strong');title.textContent=`GeoMet · BWi ${fmt(min,1)}–${fmt(max,1)} кВт·ч/т`;
+    const gradient=document.createElement('div');Object.assign(gradient.style,{height:'6px',margin:'6px 0',background:'linear-gradient(90deg,#2ec4a0,#d7cd30,#d74b30)'});
+    const active=document.createElement('p');active.id='geology-active';
+    const note=document.createElement('small');note.textContent='Мягче → твёрже. Белые точки — текущие забои. Пространственный аналог, не геология Актогая. Hoffimann et al. · CC BY 4.0';
+    legend.append(title,gradient,active,note);document.body.appendChild(legend);
+  } catch(e) { console.info('GeoMet: '+e.message); }
+}
 function terrainH(x, z) {
   const r = Math.hypot(x - PIT.x, z - PIT.z); const k = THREE.MathUtils.smoothstep(r, SITE_R, SITE_R + 420);
   return k * (fbm(x / 300, z / 300) * 170 - 50 + fbm(x / 70, z / 70) * 14);
@@ -170,7 +205,7 @@ function terrainH(x, z) {
     col.push(c.r, c.g, c.b); uvs.setXY(i, ang / Math.PI * 14, y / 9);
   }
   lg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); lg.computeVertexNormals();
-  mesh(lg, M(0xffffff,{ vertexColors: true, map: rock, side: THREE.BackSide, roughness: 1, metalness: 0, flatShading: true }), PIT.x, 0, PIT.z, scene, false);
+  geologyPit = mesh(lg, M(0xffffff,{ vertexColors: true, map: rock, side: THREE.BackSide, roughness: 1, metalness: 0, flatShading: true }), PIT.x, 0, PIT.z, scene, false);
   mesh(new THREE.CircleGeometry(27, 48).rotateX(-Math.PI / 2), M(0x8a7a66, { map: gravel }), PIT.x, -PIT_D + 0.1, PIT.z, scene, false);
   mesh(new THREE.CircleGeometry(10, 40).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x3d8f86, roughness: 0.06, metalness: 0.5 }), PIT.x + 12, -PIT_D + 0.3, PIT.z - 9, scene, false);
   // террасированные отвалы пустой породы
@@ -413,7 +448,8 @@ const rigidMergeStats=LOW?[
   ...turbines.map(hub=>mergeStaticMeshes(hub,[],{local:true,bakeColors:true})),
   ...mills.map(m=>mergeStaticMeshes(m.drum,[],{local:true,bakeColors:true})),
 ]:[];
-const mergeStats = mergeStaticMeshes(scene,details.dynamicRoots,{bakeColors:LOW});
+const mergeStats = mergeStaticMeshes(scene,[...details.dynamicRoots,geologyPit,geologyMarkers],{bakeColors:LOW});
+loadGeology();
 mergeStats.rigid={batches:0,mergedMeshes:0,savedMeshes:0};
 for(const stat of rigidMergeStats){mergeStats.before+=stat.before-stat.after;mergeStats.batches+=stat.batches;mergeStats.mergedMeshes+=stat.mergedMeshes;mergeStats.rigid.batches+=stat.batches;mergeStats.rigid.mergedMeshes+=stat.mergedMeshes;mergeStats.rigid.savedMeshes+=stat.before-stat.after;}
 
@@ -421,6 +457,11 @@ for(const stat of rigidMergeStats){mergeStats.before+=stat.before-stat.after;mer
 const set = (id, h) => { const e = document.getElementById(id); if (e) e.innerHTML = h; };
 function hud() {
   if (!D.site) return;
+  for (const marker of geologyMarkers.children) {
+    const active = marker.userData.cellId===v('geology','active_soft') || marker.userData.cellId===v('geology','active_hard');
+    marker.visible=active; marker.scale.setScalar(active?1:0);
+  }
+  const geoLabel=$('geology-active'); if(geoLabel)geoLabel.textContent=`Забои ${v('geology','active_soft','—')} / ${v('geology','active_hard','—')} · BWi ${fmt(v('geology','bwi_soft',null),1)} / ${fmt(v('geology','bwi_hard',null),1)} кВт·ч/т`;
   const e = E(), mode = v('coordinator', 'mode', '—');
   if (view === 'now') { $('mode').textContent = 'КАК СЕЙЧАС · без координации'; $('mode').className = 'now'; }
   else { $('mode').textContent = mode === 'вдох' ? 'ТЫНЫС · ВДОХ — копим энергию' : 'ТЫНЫС · ВЫДОХ — экономим'; $('mode').className = mode === 'вдох' ? 'inhale' : 'exhale'; }

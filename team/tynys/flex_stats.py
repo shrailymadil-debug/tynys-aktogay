@@ -1,4 +1,4 @@
-"""Reproducible physics-v3 reserve statistics; preserves legacy data/flex.csv.
+"""Reproducible physics-v4 reserve statistics; preserves prior CSV versions.
 
 Run from team/tynys: python flex_stats.py
 Four seasons x 14 days, seed 7, V2 with deterministic 16-node budget, as in
@@ -20,7 +20,7 @@ SEASONS = {15: 'winter', 105: 'spring', 196: 'summer', 288: 'autumn'}
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--days', type=int, default=14)
-    parser.add_argument('--output', type=Path, default=Path('data/flex-physics-v3.csv'))
+    parser.add_argument('--output', type=Path, default=Path('data/flex-physics-v4.csv'))
     args = parser.parse_args()
     if not 1 <= args.days <= 30:
         parser.error('--days must be between 1 and 30')
@@ -48,7 +48,7 @@ def main():
     out = pd.DataFrame(rows).round(2)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(args.output, index=False)
-    args.output.with_suffix('.json').write_text(json.dumps(dict(model_version='physics-v3', seed=7,
+    args.output.with_suffix('.json').write_text(json.dumps(dict(model_version='physics-v4-geomet-maintenance', seed=7,
         days_per_season=args.days, hours=len(df), solver_options=options, params=asdict(p),
         diagnostics=diagnostics, note='Includes zero-import hours. Duration is a resource ceiling at unchanged conditions.'),
         ensure_ascii=False, indent=2), encoding='utf-8')

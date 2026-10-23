@@ -15,6 +15,7 @@ from .params import Params, DOMAINS, P80_MODES
 from . import physics as ph
 from . import weather as wx
 from .assets import capacity_factor, asset_specs, process_factor, mining_capacity, load_coefficients
+from .maintenance import schedule, feed_limit
 
 NG = len(P80_MODES)
 G150 = P80_MODES.index(150)
@@ -43,11 +44,12 @@ class V0Traditional:
     segregated = False
 
     def decide(self, p, env, st, t):
+        maintenance = schedule(p, env, st, t, coordinated=False)
         x = _empty_x(p)
         for l in range(p.n_lines):
             if _line_ok(env, st, l, t):
-                x[l][0][G150] = p.line_q_nom
-        return {"x": x, "charge_mw": _fleet_charge_rule(p, env, st, t), "bess_mw": 0.0}
+                x[l][0][G150] = min(p.line_q_nom, feed_limit(p, st, f"line-{l+1}", t))
+        return {"x": x, "charge_mw": _fleet_charge_rule(p, env, st, t), "bess_mw": 0.0, "maintenance": maintenance}
 
 
 class V1Reactive:
@@ -55,6 +57,7 @@ class V1Reactive:
     segregated = False
 
     def decide(self, p, env, st, t):
+        maintenance = schedule(p, env, st, t, coordinated=False)
         charge = _fleet_charge_rule(p, env, st, t)
         renew = env.w["wind_pu"][t] * p.wind_mw + env.w["pv_pu"][t] * p.pv_mwp
         tot = sum(st.pile.values())
@@ -91,7 +94,9 @@ class V1Reactive:
                 x[l][0][G150] = q / len(lines)
         elif lines and q >= p.line_q_min:
             x[lines[0]][0][G150] = min(q, q_max / len(lines))
-        return {"x": x, "charge_mw": charge, "bess_mw": 0.0}
+        for l in range(p.n_lines):
+            x[l][0][G150] = min(x[l][0][G150], feed_limit(p, st, f"line-{l+1}", t))
+        return {"x": x, "charge_mw": charge, "bess_mw": 0.0, "maintenance": maintenance}
 
 
 class _VarIndex:
@@ -133,6 +138,7 @@ class V2Tynys:
     def decide(self, p, env, st, t):
         import time
         ph.ensure_process_state(p, st)
+        maintenance = schedule(p, env, st, t, coordinated=self.use_forecast)
         self.last_plan = None
         self.last_fallback = False
         H = min(p.mpc_horizon_h, env.sc.n() - t)
@@ -160,12 +166,15 @@ class V2Tynys:
         else:
             price = np.array([p.price_kzt_mwh((t + h) % 24) + p.co2_price_kzt_t * p.grid_co2_t_mwh for h in range(H)])
         bwi = st.bwi_est if self.segregated else p.bwi
+        if p.geomet:
+            bwi = {d: st.pile_bwi_mass[d]/st.pile[d] if st.pile[d] > 1e-9 else p.bwi[d] for d in DOMAINS}
         grinds = ([g for g in range(NG) if P80_MODES[g] in self.grind_modes] if self.grind_modes else range(NG)) if self.elastic_grind else [G150]
         e = {(d, g): ph.mill_variable_mwh_t(p, bwi[d], P80_MODES[g]) for d in DOMAINS for g in range(NG)}
         grade = {d: st.pile_cu[d]/st.pile[d] if st.pile[d] > 1e-9 else p.cu_grade[d] for d in DOMAINS}
         # Assay persistence forecast; future true grades are deliberately unknown.
         idle = ph.mill_idle_mw(p)
-        R = {(d, g): ph.recovery_inf(p, d, P80_MODES[g]) for d in DOMAINS for g in range(NG)}
+        recovery = {d: st.pile_recovery_cu[d]/st.pile_cu[d] if p.geomet and st.pile_cu[d] > 1e-9 else p.r150[d] for d in DOMAINS}
+        R = {(d, g): ph.recovery_inf(p, d, P80_MODES[g], recovery[d]) for d in DOMAINS for g in range(NG)}
         V = p.cu_value_kzt_t
         haul = ph.haul_mwh_per_t_ore(p)
         eta_b = np.sqrt(p.bess_eta_rt)
@@ -253,6 +262,7 @@ class V2Tynys:
         for h in range(H):
             for l in range(p.n_lines):
                 xs = [X[l, d, g, h] for d in DOMAINS for g in range(NG)]
+                con([(j, 1) for j in xs], -np.inf, feed_limit(p, st, f"line-{l+1}", t+h))
                 con([(j, 1) for j in xs] + [(ON[l, h], -p.line_q_max*line_factors[l,h])], -np.inf, 0)
                 con([(j, -1) for j in xs] + [(ON[l, h], p.line_q_min)], -np.inf, 0)
                 con([(j, 1) for j in xs] + [(ON[l, h], -p.line_q_nom), (XO[l, h], -1)], -np.inf, 0)
@@ -387,7 +397,7 @@ class V2Tynys:
                     x[l][di][g] = max(0., float(s[X[l, d, g, 0]])) if s[MODE[l,g,0]] > .5 else 0.
         if self.explain:
             self.last_plan = self._plan(p, s, A, lo, hi, vi, H, X, ON, CH, BD, BC, GR, CU, S, F, B, PB, renew, gcap, price, MW)
-        return {"x": x, "charge_mw": float(s[CH[0]]), "bess_mw": float(s[BD[0]] - s[BC[0]])}
+        return {"x": x, "charge_mw": float(s[CH[0]]), "bess_mw": float(s[BD[0]] - s[BC[0]]), "maintenance": maintenance}
 
     def _plan(self, p, s, A, lo, hi, vi, H, X, ON, CH, BD, BC, GR, CU, S, F, B, PB, renew, gcap, price, MW):
         """План на горизонт + теневая цена энергии (двойственная оценка баланса мощности

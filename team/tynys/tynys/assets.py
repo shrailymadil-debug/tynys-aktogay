@@ -53,6 +53,8 @@ class Equipment:
     available_h: float = 0.0
     repair_remaining_h: int = 0
     maintenance_count: int = 0
+    liner_operating_h: float = 0.0
+    liner_replacements: int = 0
 
 
 def equipment_state(p):
@@ -69,7 +71,7 @@ def external_stop(env, name, t):
     # Deterministic calendar shared by all controllers and counterfactuals.
     # No look-ahead into random failures: these are announced planned stops.
     if env.p.planned_stops:
-        if name.startswith("line-"):
+        if name.startswith("line-") and not env.p.flexible_maintenance:
             phase = (t - 72 - 84*(int(name.split('-')[1])-1)) % 168
         elif name == "crusher":
             phase = (t - 240) % 336
@@ -87,7 +89,8 @@ def external_stop(env, name, t):
 def capacity_factor(env, st, name, t, offset=0):
     """Known faults and remaining service time; used by both plant and controllers."""
     e = st.equipment.get(name, Equipment())
-    if external_stop(env, name, t)[0] or e.repair_remaining_h > offset:
+    from .maintenance import stop
+    if external_stop(env, name, t)[0] or stop(st, name, t)[0] or e.repair_remaining_h > offset:
         return 0.0
     if e.since_service_h >= env.p.service_interval_h and offset < env.p.service_duration_h:
         return 0.0
@@ -104,10 +107,13 @@ def prepare_equipment(p, env, st, t):
 
 
 def finish_equipment(p, env, st, t, telemetry, factors):
+    from .maintenance import stop
     for name, e in st.equipment.items():
         f = telemetry.setdefault(name, {})
         reason, remaining = external_stop(env, name, t)
-        if reason == "maintenance" and e.repair_remaining_h == 0 and (t == 0 or external_stop(env, name, t-1)[0] != "maintenance"):
+        if stop(st, name, t)[0]:
+            reason, remaining = stop(st, name, t)
+        if reason == "maintenance" and e.repair_remaining_h == 0 and (t == 0 or not (external_stop(env, name, t-1)[0] == "maintenance" or stop(st, name, t-1)[0])):
             e.maintenance_count += 1
         if e.repair_remaining_h:
             reason, remaining = "maintenance", max(remaining, e.repair_remaining_h)
@@ -117,6 +123,7 @@ def finish_equipment(p, env, st, t, telemetry, factors):
         if active:
             e.operating_h += 1
             e.since_service_h += 1
+            e.liner_operating_h += float(name.startswith("line-"))
             e.health = max(0.0, e.health - p.equipment_wear_per_h)
         f.update(available=factors[name] > 0, health_pct=0.0 if reason == "fault" else 100 * e.health,
                  availability_pct=100 * e.available_h / e.elapsed_h,
@@ -130,6 +137,15 @@ def finish_equipment(p, env, st, t, telemetry, factors):
                 e.health, e.since_service_h = 1.0, 0.0
         if reason == "maintenance" and remaining == 1:
             e.health, e.since_service_h = 1.0, 0.0
+            if st.maintenance.get(name, {}).get("kind") == "liner":
+                e.liner_operating_h = 0.
+                e.liner_replacements += 1
+        if name.startswith("line-"):
+            item = st.maintenance.get(name, {})
+            f.update(maintenance_start_h=item.get("start", -1), maintenance_deadline_h=item.get("deadline", -1),
+                     maintenance_kind=item.get("kind", ""), maintenance_strategy=item.get("strategy", ""),
+                     liner_remaining_pct=max(0., 100*(1-e.liner_operating_h/(4*168))),
+                     liner_replacements=e.liner_replacements)
 
 
 def auxiliary_coefficients(p, factors=None):

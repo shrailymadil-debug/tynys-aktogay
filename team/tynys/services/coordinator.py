@@ -52,6 +52,10 @@ def explain(p, st, dec, plan, t):
         why.append(f"Через {h} ч сеть ограничена до {min(plan['grid_cap_mw']):.0f} МВт (KEGOC) — план учитывает.")
     if not any(st.line_lock) and sum(plan["lines_on"][l][0] for l in range(p.n_lines)) < p.n_lines:
         why.append("В плане есть остановленная линия; учитываются доступность, ремонт и ограничения подачи.")
+    for line, item in dec.get("maintenance", {}).items():
+        if item["start"]+item["duration"] > t:
+            title = "замена футеровки" if item["kind"] == "liner" else "плановое ТО"
+            why.append(f"Ремонт на выдохе: {line}, {title} с часа {item['start']} на {item['duration']} ч; крайний старт {item['deadline']}. Окно выбрано по прогнозу стоимости сети.")
     return mode, " ".join(why)
 
 
@@ -100,6 +104,7 @@ def main():
         sh0 = compact.get("shadow_kzt_kwh", [None])[0]
         bus.send("coordinator", {"for_t": t, "scenario_rev": rev, "x_json": dumps(dec["x"]),
                                  "charge_mw": round(dec["charge_mw"], 2), "bess_mw": round(dec["bess_mw"], 2),
+                                 "maintenance_json": dumps(dec.get("maintenance", {})),
                                  "mode": mode, "why": why, "goal": goal, "shadow_kzt_kwh": sh0 if sh0 is not None else 0.0,
                                  "solve_ms": round(ms), "plan_json": dumps(compact),
                                  "feed_plan_tph": round(sum(map(sum, map(lambda l: map(sum, l), dec["x"]))))})

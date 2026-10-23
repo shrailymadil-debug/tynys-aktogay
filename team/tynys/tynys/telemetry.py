@@ -7,6 +7,7 @@ UNITS = {
     "sim_hour": "h", "elapsed_hours": "h", "for_t": "h", "start_hour": "h",
     "start_doy": "d", "co2_t_h": "t/h", "co2_per_t_cu": "t CO2/t Cu",
     "price_kzt_mwh": "KZT/MWh", "shadow_kzt_kwh": "KZT/kWh", "solve_ms": "ms",
+    "bwi_soft": "kWh/t", "bwi_hard": "kWh/t", "x_m": "m", "y_m": "m", "z_m": "m",
     "grid_cost_mkzt": "million KZT", "rate_tph": "t/h", "route_pos": "1",
 }
 
@@ -50,6 +51,8 @@ KIND_FEATURES = {
     "concentrate": {"inflow_tph": 0., "tonnes": 0., "cu_tph": 0., "grade_pct": 25.},
     "mill_line": {"feed_tph": 0., "mill_mw": 0., "p80_um": 0., "cu_tph": 0.,
                   "idle_mw": 0., "stop_reason": "",
+                  "maintenance_start_h": -1, "maintenance_deadline_h": -1,
+                  "maintenance_kind": "", "maintenance_strategy": "", "liner_remaining_pct": 100., "liner_replacements": 0,
                   "running": False, "lock_h": 0, "load_pct": 0., "speed_rpm": 0.},
     "flotation": {"feed_tph": 0., "recovery": 0., "cu_tph": 0., "feed_cu_tph": 0.},
     "wind_farm": {"capacity_mw": 0., "cf_pct": 0.}, "pv_farm": {"capacity_mw": 0.},

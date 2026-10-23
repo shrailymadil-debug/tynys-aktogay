@@ -21,6 +21,7 @@ js = js.replace("'./vendor/CSS2DRenderer.js'", f"'{CDN}/examples/jsm/renderers/C
 html = html.replace('{"imports":{"three":"./vendor/three.module.js"}}', '{"imports":{"three":"%s/build/three.module.js"}}' % CDN)
 html = html.replace('<a class="btn" href="./" id="to2d">Схема и «что если» →</a>', '')
 html = html.replace('<a style="color:#5fe3a1" href="./">2D‑схему рудника</a>', '2D‑схему на стенде')
+html = html.replace('<script src="demo.js"></script>', '')  # live-only guided demo
 html = html.replace('<script type="module" src="scene3d.js"></script>',
                     '<script>window.TYNYS_TRACE=' + trace + ';</script>\n<script type="module">\n' + js + '\n</script>')
 open(os.path.join(here, "demo.html"), "w", encoding="utf-8").write(html)
