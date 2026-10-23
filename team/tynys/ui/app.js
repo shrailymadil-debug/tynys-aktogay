@@ -2,8 +2,10 @@
 const NS = 'kz.tynys';
 const NAMES = ['site','pit','plant','energy','coordinator','scenario','shadow-v0','shadow-v1','pile-soft','pile-hard',
   'line-1','line-2','flotation','wind','pv','bess','substation', ...Array.from({length:14},(_,i)=>`truck-${String(i+1).padStart(2,'0')}`)];
-const EVENTS = {lull:['Штиль на сутки',3,24], line_trip:['Авария линии 2',0,8], kegoc:['Запрос KEGOC: −80 МВт',2,4],
-  hard_ore:['Пошла твёрдая руда',0,72], plan_up:['План добычи +10 %',0,48], bess_fault:['Отказ накопителя',0,12]};
+const EVENTS = {lull:['Штиль на сутки',3,24], line_trip:['Авария линии',0,8], kegoc:['Ограничение KEGOC',2,4],
+  hard_ore:['Пошла твёрдая руда',0,72], plan_up:['План добычи +10 %',0,48], bess_fault:['Отказ накопителя',0,12],
+  truck_failure:['Поломка самосвала',0,8], excavator_failure:['Поломка экскаватора',0,8],
+  grade_drop:['Падение содержания меди',0,24], tariff_change:['Смена тарифа сети',0,24]};
 const $ = id => document.getElementById(id);
 const SVGNS = 'http://www.w3.org/2000/svg';
 let T = {};
@@ -28,6 +30,16 @@ for (let i = 0; i < 6; i++) {
 for (let i = 0; i < 8; i++) { const r = document.createElementNS(SVGNS, 'rect');
   r.setAttribute('x', (i % 4) * 20); r.setAttribute('y', Math.floor(i / 4) * 22); r.setAttribute('width', 17); r.setAttribute('height', 18);
   r.setAttribute('fill', '#2b4b78'); r.setAttribute('class', 'pvp'); $('pvfield').appendChild(r); }
+const tune = document.createElement('div');
+tune.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;font-size:11px;color:var(--muted)';
+tune.innerHTML = '<label>Линия аварии <select id="ev-line"><option value="1">1</option><option value="2" selected>2</option></select></label>' +
+  '<label>Длительность, ч <input id="ev-duration" type="number" min="1" max="168" value="24"></label>' +
+  '<label>Снижение KEGOC, МВт <input id="ev-grid-drop" type="number" min="0" max="300" step="5" value="80"></label>' +
+  '<label>Отказ самосвалов, % <input id="ev-truck-loss" type="number" min="0" max="100" value="25"></label>' +
+  '<label>Отказ экскаватора, % <input id="ev-exc-loss" type="number" min="0" max="100" value="50"></label>' +
+  '<label>Падение содержания, % <input id="ev-grade-drop" type="number" min="0" max="100" value="10"></label>' +
+  '<label>Изменение тарифа, % <input id="ev-tariff-change" type="number" min="-90" max="500" value="50"></label>';
+$('btns').before(tune);
 for (const [k, [title]] of Object.entries(EVENTS)) {
   const b = document.createElement('button'); b.textContent = title; b.onclick = () => addEvent(k); $('btns').appendChild(b);
 }
@@ -41,8 +53,17 @@ async function writeScenario(events, goal) {
 }
 function curEvents() { try { return JSON.parse(v('scenario', 'events', '[]') || '[]'); } catch (e) { return []; } }
 async function addEvent(kind) {
-  const [, lead, dur] = EVENTS[kind]; const t = v('site', 'sim_hour', 0);
-  await writeScenario([...curEvents().filter(e => e.t0 + e.dur > t), {kind, t0: t + 1 + lead, dur, id: Date.now()}]);
+  const [, lead, defaultDur] = EVENTS[kind]; const t = v('site', 'sim_hour', 0);
+  const num = (id, fallback) => Number.isFinite(+$(id).value) ? +$(id).value : fallback;
+  const dur = Math.max(1, Math.min(168, num('ev-duration', defaultDur)));
+  const ev = {kind, t0: t + 1 + lead, dur, id: Date.now()};
+  if (kind === 'line_trip') ev.line = num('ev-line', 2);
+  if (kind === 'kegoc') ev.grid_drop_mw = num('ev-grid-drop', 80);
+  if (kind === 'truck_failure') ev.loss_pct = num('ev-truck-loss', 25);
+  if (kind === 'excavator_failure') ev.loss_pct = num('ev-exc-loss', 50);
+  if (kind === 'grade_drop') ev.drop_pct = num('ev-grade-drop', 10);
+  if (kind === 'tariff_change') ev.change_pct = num('ev-tariff-change', 50);
+  await writeScenario([...curEvents().filter(e => e.t0 + e.dur > t), ev]);
 }
 async function cancelEvent(id) { await writeScenario(curEvents().filter(e => e.id !== id)); }
 
