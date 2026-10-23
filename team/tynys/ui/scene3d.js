@@ -9,7 +9,9 @@ import { installSceneDetails, mergeStaticMeshes } from './scene-details.js';
 
 const NS = 'kz.tynys';
 const NAMES = ['site', 'pit', 'plant', 'energy', 'coordinator', 'scenario', 'shadow-v0', 'shadow-v1', 'pile-soft', 'pile-hard', 'line-1', 'line-2',
-  'flotation', 'wind', 'pv', 'bess', 'substation', ...Array.from({ length: 4 }, (_, i) => `charger-${i+1}`), ...Array.from({ length: 14 }, (_, i) => `truck-${String(i + 1).padStart(2, '0')}`)];
+  'flotation', 'wind', 'pv', 'bess', 'substation', 'shovel-1', 'shovel-2',
+  'crusher','conveyor-crushed','conveyor-feed','waste-dump','water','tailings','concentrate',
+  ...Array.from({ length: 4 }, (_, i) => `charger-${i+1}`), ...Array.from({ length: 14 }, (_, i) => `truck-${String(i + 1).padStart(2, '0')}`)];
 const $ = id => document.getElementById(id);
 const fmt = (x, k = 0) => (x == null || isNaN(x)) ? '—' : Number(x).toLocaleString('ru-RU', { maximumFractionDigits: k, minimumFractionDigits: k });
 
@@ -454,11 +456,11 @@ function hud() {
   belts[0].rate = v('plant', 'feed_soft_tph') / 4000; belts[1].rate = v('plant', 'feed_hard_tph') / 4000;
   for (let l = 0; l < 2; l++) {
     const n = `line-${l + 1}`, ok = v(n, 'available', true), q = v(n, 'feed_tph', 3330);
-    mills[l].speed = ok ? q / 3330 : 0; const c = !ok ? 0xe0675a : q > 0 ? 0x4fd18b : 0x888888; mills[l].lamp.material.color.set(c); mills[l].lamp.material.emissive.set(c);mills[l].lamp.material.emissiveIntensity=2;
+    mills[l].speed = ok ? v(n,'speed_rpm',q>0?10.5:0) * 2*Math.PI/60 : 0; const c = !ok ? 0xe0675a : q > 0 ? 0x4fd18b : 0x888888; mills[l].lamp.material.color.set(c); mills[l].lamp.material.emissive.set(c);mills[l].lamp.material.emissiveIntensity=2;
   }
   panelMat.emissiveIntensity = Math.min(1, v('pv', 'power_mw') / 250) * 0.45;
   const soc = v('bess', 'soc', 0) / 100; bessLights.forEach(x => { x.scale.y = Math.max(0.05, soc); });
-  const nch = Math.round(v('energy','charge_mw') / 18); chargers.forEach((c, i) => c.material.emissiveIntensity = i < nch ? 2.5 : 0);
+  chargers.forEach((c, i) => c.material.emissiveIntensity = v(`charger-${i+1}`,'power_mw',0)>0 ? 2.5 : 0);
   details.update(D);
 }
 setInterval(hud, 400);
@@ -549,16 +551,16 @@ function frame(now) {
   const lull=details.events.some(e=>e.active&&e.kind==='lull');
   rot += dt * (lull ? 0 : 3.4 * Math.max(0,v('wind', 'cf_pct', 0)) / 100);
   turbines.forEach((hh, i) => { if (i >= Math.round(feather * turbines.length)) hh.rotation.z = rot + i; });
-  mills.forEach(m => m.drum.rotation.x += dt * 1.2 * (m.speed || 0));
-  shovels.forEach((s, i) => s.rotation.y = Math.sin(now / 1500 + i * 2) * 0.9);
+  mills.forEach(m => m.drum.rotation.x += dt * (m.speed || 0));
+  shovels.forEach((s, i) => { if(v(`shovel-${i+1}`,'rate_tph',0)>0 && v(`shovel-${i+1}`,'available',true)) s.rotation.y = Math.sin(now / 1500 + i * 2) * 0.9; });
   const hf = v('pit', 'hard_frac', 0.5);
   const slots = { c: 0, w: 0 };
   trucks.forEach((tr, i) => {
     const n = `truck-${String(i + 1).padStart(2, '0')}`; let st = v(n, 'state', 'empty');
     tr.glow.intensity = st === 'charging' ? 5 : 0;
     if(!LOW)for (let k = 0; k < 8; k++) setInst(dustIM, i * 8 + k, 0, -500, 0, 0, 0, 0);
-    if (st === 'charging') { const k = slots.c++ % 4; tr.g.position.set(CHARGE.x - 30 + k * 20, 0.4, CHARGE.z - 5); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
-    if (st === 'waiting') { const k = slots.w++; tr.g.position.set(CHARGE.x - 34 + (k % 8) * 10, 0.4, CHARGE.z + 9 + Math.floor(k / 8) * 9); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
+    if (st === 'charging') { const k = Number(String(v(n,'assigned_charger',`charger-${i%4+1}`)).split('-').pop())-1; tr.g.position.set(CHARGE.x - 30 + k * 20, 0.4, CHARGE.z - 5 + Math.floor(i/4)*8); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
+    if (['waiting','idle','unavailable','fault','maintenance'].includes(st)) { const k = slots.w++; tr.g.position.set(CHARGE.x - 34 + (k % 8) * 10, 0.4, CHARGE.z + 32 + Math.floor(k / 8) * 9); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
     // Скорость — как у карьерного самосвала: гружёный в подъём ≈ 12 км/ч, порожний ≈ 30 км/ч
     // (1 ед. сцены ≈ 10 м), показ ускорен в TRUCK_TIMELAPSE раз. Модель часовая, поэтому
     // положение на дороге — анимация; заряд, состояние и груз звена — из двойника.

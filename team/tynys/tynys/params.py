@@ -36,7 +36,7 @@ class Params:
     # ---------- флотация ----------
     k_flot_per_min: float = 0.25   # константа кинетики 1-го порядка (ASSUMPTION)
     tau_nom_min: float = 16.0      # время пребывания при номинальной нагрузке линии
-    flot_kwh_t: float = 3.5        # флотация+доизмельчение+насосы, кВт·ч/т (ASSUMPTION)
+    flot_kwh_t: float = 3.5        # ячейки флотации и доизмельчение, кВт·ч/т (ASSUMPTION)
 
     # ---------- линии измельчения (2 параллельные SABC) ----------
     n_lines: int = 2
@@ -44,12 +44,23 @@ class Params:
     line_q_min: float = 425.0      # 50 % номинала — нижняя граница устойчивой работы (ASSUMPTION)
     line_q_max: float = 1100.0     # объёмное ограничение
     line_p_max_mw: float = 15.0
+    mill_speed_rpm: float = 10.5  # ASSUMPTION: постоянная скорость привода при работе
     restart_cost_kzt: float = 5.0e6   # износ + потери при повторном пуске (ASSUMPTION)
     trip_lockout_h: int = 1           # после аварийного отключения линия 1 ч недоступна
 
     # ---------- дробление, база ----------
     crush_kwh_t: float = 0.4
-    base_load_mw: float = 3.0      # вахтовый посёлок, водоснабжение, освещение и пр.
+    auxiliary_nominal_mw: float = 3.0  # сумма паспортных нагрузок assets.py, не постоянная нагрузка
+    # ASSUMPTION: часовая модель; паспортные мощности/ресурс требуют данных АСУ ТП.
+    shovel_capacity_factor: float = 1.2  # суммарная погрузка / план горной массы
+    crusher_capacity_factor: float = 1.2
+    conveyor_capacity_factor: float = 1.2
+    concentrate_grade: float = 0.25     # массовая доля Cu в сухом концентрате
+    process_water_m3_t: float = 1.8
+    recycle_water_fraction: float = 0.65
+    service_interval_h: float = 720.0   # моточасы между ТО
+    service_duration_h: int = 4
+    equipment_wear_per_h: float = 0.00001
 
     # ---------- склады ----------
     pile_cap_t: float = 60_000.0   # живая ёмкость КАЖДОГО из двух складов (soft/hard)
@@ -166,7 +177,7 @@ def aktogay() -> Params:
         crush_kwh_t=0.6,
         # ASSUMPTION/калибровка: остаток до 35 кВт·ч/т (водовод с Балхаша, насосы,
         # хвостовое хозяйство, фильтрация, мастерские, посёлок) ≈ 100 МВт
-        base_load_mw=100.0,
+        auxiliary_nominal_mw=100.0,
         pile_cap_t=200_000.0,
         mine_ore_tph=6700.0, strip_ratio=1.2,
         n_trucks=42, charger_n=12,

@@ -1,5 +1,8 @@
 """Минимальный клиент платформы OpenEgiz: Ditto HTTP API и MQTT (telemetry/<twin>)."""
 import base64, json, os, time, urllib.request, urllib.error
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from tynys.telemetry import features as feature_document
 
 NS = "kz.tynys"
 DITTO_URL = os.environ.get("DITTO_URL", "http://localhost:8080").rstrip("/")
@@ -32,7 +35,7 @@ def prop(thing, feature, default=None):
 def modify(name, features):
     """Ditto-протокол: заменить все свойства двойника (как в Примере рудника)."""
     return {"topic": f"{NS}/{name}/things/twin/commands/modify", "path": "/features",
-            "value": {f: {"properties": v if isinstance(v, dict) else {"value": v}} for f, v in features.items()}}
+            "value": feature_document(features)}
 
 
 class Bus:

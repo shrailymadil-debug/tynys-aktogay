@@ -1,14 +1,8 @@
-"""Звенья электросамосвалов: заряд каждого звена отдельно.
+"""Часовая диспетчеризация 14 звеньев с собственными батареями.
 
-Модель рудника (sim.step) считает энергию парка одним числом st.fleet_e.
-Здесь эта энергия раскладывается по 14 звеньям (по n_trucks/14 самосвалов):
-- энергия, отданная зарядными станциями за час, достаётся звеньям с самым низким
-  зарядом (до максимального заряда звена);
-- энергия, израсходованная на рейсы, списывается с остальных звеньев поровну,
-  но не ниже минимального заряда;
-- остаток расхождения (ограничения модели) раскладывается так, чтобы сумма по
-  звеньям в точности равнялась st.fleet_e.
-Поэтому заряды звеньев различаются из‑за того, кто стоял на зарядке, а кто возил.
+Звенья закреплены за экскаватором и зарядной группой. Ограничения энергии,
+времени зарядки, исправности и производительности применяются до добычи.
+Энергия парка — сумма звеньев; остаток не распределяется искусственно.
 """
 from dataclasses import dataclass, field
 from typing import List
@@ -22,6 +16,10 @@ class Fleet:
     charging: List[bool] = field(default_factory=lambda: [False] * N_GROUPS)
     starved: List[bool] = field(default_factory=lambda: [False] * N_GROUPS)
     util: float = 1.0                   # загрузка хода самосвалов, 0..1
+    charge_mw: List[float] = field(default_factory=lambda: [0.0] * N_GROUPS)
+    ore_tph: List[float] = field(default_factory=lambda: [0.0] * N_GROUPS)
+    waste_tph: List[float] = field(default_factory=lambda: [0.0] * N_GROUPS)
+    available: List[bool] = field(default_factory=lambda: [True] * N_GROUPS)
 
     @classmethod
     def from_total(cls, total):
@@ -35,70 +33,83 @@ def group_caps(p):
 
 
 def step_fleet(p, fl: Fleet, prev_total, rec, new_total):
-    """Обновить звенья за модельный час. rec — запись sim.step."""
-    k, cap, lo, hi = group_caps(p)
-    charged = max(0.0, rec["charge"]) * p.eta_charge * p.dt_h
-    consumed = max(0.0, prev_total + charged - new_total)
-    per_group_charge = k * p.charger_mw * p.eta_charge * p.dt_h
-    max_groups = int(p.charger_n // k)
-    # 1) зарядка: сначала самые разряженные звенья. Звено дозаряжается за минуты
-    #    (станция 3 × 6 МВт), поэтому за час через станции проходит несколько звеньев;
-    #    «на зарядке» на экране — те, кто получил больше всего (не больше числа мест).
-    got = [0.0] * N_GROUPS
-    left = charged
-    for i in sorted(range(N_GROUPS), key=lambda j: fl.e[j]):
-        if left <= 1e-9:
-            break
-        add = min(left, per_group_charge, max(0.0, hi - fl.e[i]))
-        fl.e[i] += add; left -= add; got[i] = add
-    top = sorted(range(N_GROUPS), key=lambda j: -got[j])[:max_groups]
-    fl.charging = [(i in top and got[i] > 0.05 * cap) for i in range(N_GROUPS)]
-    # 2) расход на рейсы: звенья, которые не заряжались, возят весь час; заряжавшиеся —
-    #    остаток часа. Расход делим пропорционально запасу над минимумом, сначала
-    #    между возившими, затем (если их запаса не хватило) — с заряжавшихся.
-    fl.starved = [False] * N_GROUPS
-    need = consumed
-    for group in ([i for i in range(N_GROUPS) if got[i] <= 0], [i for i in range(N_GROUPS) if got[i] > 0]):
-        avail = {i: max(0.0, fl.e[i] - lo) for i in group}
-        tot = sum(avail.values())
-        if need <= 1e-9 or tot <= 1e-9:
-            continue
-        take_all = min(need, tot)
-        for i in group:
-            fl.e[i] -= take_all * avail[i] / tot
-        need -= take_all
-    for i in range(N_GROUPS):
-        # «ждёт зарядки» — только если модель действительно урезала добычу из‑за энергии парка;
-        # иначе звено на минимуме ещё возит (модель считает энергию парка общим запасом)
-        mining_cut = rec.get("mine_plan", rec["mine"]) - (rec["mine"] + rec.get("spilled", 0.0)) > 1.0
-        fl.starved[i] = mining_cut and (not fl.charging[i]) and fl.e[i] <= lo + 0.02 * cap
-    # 3) точное сохранение энергии парка (ограничения модели): сначала за счёт запаса
-    #    над минимумом / до максимума, и только потом — ниже минимума
-    diff = new_total - sum(fl.e)
-    for bound in ((lo, hi), (0.0, cap)):
-        if abs(diff) <= 1e-9:
-            break
-        room = [max(0.0, bound[1] - x) for x in fl.e] if diff > 0 else [max(0.0, x - bound[0]) for x in fl.e]
-        tot = sum(room)
-        if tot <= 1e-12:
-            continue
-        d = diff if abs(diff) <= tot else tot * (1 if diff > 0 else -1)
-        fl.e = [x + d * r / tot for x, r in zip(fl.e, room)]
-        diff -= d
-    cap_tph = (p.n_trucks - rec["charge"] / p.charger_mw) * p.truck_tph
-    fl.util = min(1.0, rec["mine"] * (1 + p.strip_ratio) / max(cap_tph, 1e-6))
+    """Compatibility adapter for consumers of sim.step records."""
+    import copy
+    fl.__dict__.update(copy.deepcopy(rec["fleet"]))
     return fl
 
 
 def group_view(p, fl: Fleet, i, phase):
     """Состояние звена для двойника. phase — только анимационная фаза рейса (0..1)."""
     k, cap, lo, hi = group_caps(p)
-    if fl.charging[i]:
+    if not fl.available[i]:
+        state = "unavailable"
+    elif fl.charging[i]:
         state = "charging"
     elif fl.starved[i]:
         state = "waiting"           # заряд на минимуме — ждёт зарядки
+    elif fl.ore_tph[i] + fl.waste_tph[i] <= 1e-9:
+        state = "idle"
     else:
         state = "loaded" if phase < 0.5 else "empty"
-    payload = k * p.truck_payload_t * fl.util if state == "loaded" else 0.0
+    haul_time = max(1e-9, 1-fl.charge_mw[i]/(k*p.charger_mw))
+    utilization = min(1, (fl.ore_tph[i]+fl.waste_tph[i])/(k*p.truck_tph*haul_time))
+    payload = k * p.truck_payload_t * utilization if state == "loaded" else 0.0
+    from .assets import shovel_for, charger_for
     return {"state": state, "soc": round(100 * fl.e[i] / cap, 1), "energy_mwh": round(fl.e[i], 3),
-            "payload_t": round(payload, 1), "route_pos": round(phase, 3)}
+            "payload_t": round(payload, 1), "route_pos": round(phase, 3),
+            "ore_tph": fl.ore_tph[i], "waste_tph": fl.waste_tph[i],
+            "charge_mw": fl.charge_mw[i], "assigned_shovel": shovel_for(i),
+            "assigned_charger": charger_for(i), "available": fl.available[i]}
+
+
+def dispatch(p, fl, factors, charge_request, mine_limit, haul_mwh_t):
+    """Pure hourly dispatch: station -> assigned groups -> assigned shovel.
+
+    No residual energy is invented or spread after the fact. A group spends
+    charging energy/rated power hours charging and the rest hauling. Each
+    group's own battery reserve bounds its ore and waste movements.
+    """
+    import copy
+    from .assets import shovel_for, charger_for, N_CHARGER_GROUPS
+    out = copy.deepcopy(fl)
+    k, cap, lo, hi = group_caps(p)
+    powers = [0.0] * N_GROUPS
+    station_left = {f"charger-{j+1}": p.charge_mw_max / N_CHARGER_GROUPS * factors[f"charger-{j+1}"]
+                    for j in range(N_CHARGER_GROUPS)}
+    remaining = max(0.0, charge_request)
+    for i in sorted(range(N_GROUPS), key=lambda i: fl.e[i]):
+        if factors[f"truck-{i+1:02d}"] <= 0:
+            continue
+        station = charger_for(i)
+        power = min(remaining, station_left[station], k * p.charger_mw,
+                    max(0.0, hi - fl.e[i]) / p.eta_charge)
+        powers[i] = power
+        station_left[station] -= power
+        remaining -= power
+    capacities = []
+    for i in range(N_GROUPS):
+        f = factors[f"truck-{i+1:02d}"]
+        time_hauling = max(0.0, 1 - powers[i] / (k * p.charger_mw))
+        capacity = k * p.truck_tph * f * time_hauling / (1 + p.strip_ratio)
+        energy = max(0.0, fl.e[i] + powers[i] * p.eta_charge - lo)
+        capacities.append(min(capacity, energy / haul_mwh_t))
+    for shovel in ("shovel-1", "shovel-2"):
+        group = [i for i in range(N_GROUPS) if shovel_for(i) == shovel]
+        total = sum(capacities[i] for i in group)
+        limit = p.mine_ore_tph * p.shovel_capacity_factor / 2 * factors[shovel]
+        scale = min(1.0, limit / total) if total else 0.0
+        for i in group:
+            capacities[i] *= scale
+    total = sum(capacities)
+    scale = min(1.0, max(0.0, mine_limit) / total) if total else 0.0
+    out.ore_tph = [q * scale for q in capacities]
+    out.waste_tph = [q * p.strip_ratio for q in out.ore_tph]
+    out.charge_mw = powers
+    out.available = [factors[f"truck-{i+1:02d}"] > 0 for i in range(N_GROUPS)]
+    out.e = [fl.e[i] + powers[i] * p.eta_charge - out.ore_tph[i] * haul_mwh_t for i in range(N_GROUPS)]
+    out.charging = [power > 1e-6 for power in powers]
+    out.starved = [out.available[i] and out.e[i] <= lo + 1e-6 and out.ore_tph[i] < capacities[i] + 1e-6
+                   for i in range(N_GROUPS)]
+    out.util = min(1.0, sum(out.ore_tph) * (1 + p.strip_ratio) / (p.n_trucks * p.truck_tph))
+    return out

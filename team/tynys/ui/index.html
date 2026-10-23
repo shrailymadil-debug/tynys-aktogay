@@ -161,6 +161,14 @@
         <div class="legend"><span><i style="background:#6ce0cc"></i>самосвал гружёный</span><span><i style="background:#9aa6b2"></i>порожний</span><span><i style="background:#5ec8e5"></i>на зарядке</span><span><i style="background:#ebcb88"></i>ждёт зарядки</span><span><i style="background:var(--soft)"></i>мягкая руда</span><span><i style="background:var(--hard)"></i>твёрдая руда</span><span><i style="background:var(--grid)"></i>сеть</span><span><i style="background:var(--wind)"></i>ветер и солнце</span></div>
       </section>
 
+      <section class="panel" aria-labelledby="equipment-title">
+        <div class="section-label"><span id="equipment-title">ОБОРУДОВАНИЕ И МАТЕРИАЛЬНЫЕ ПОТОКИ</span></div>
+        <p class="note">Экскаваторы → закреплённые самосвалы → дробилка → конвейер → склады → конвейер питания → мельницы → флотация → концентрат и хвосты. Вскрыша поступает в отвал; вода возвращается из хвостового хозяйства.</p>
+        <div class="table-wrap"><table><thead><tr><th>Объект</th><th>Состояние</th><th>Поток</th><th>МВт</th><th>об/мин</th><th>Исправность, %</th><th>Готовность, %</th></tr></thead><tbody id="equipment-rows"></tbody></table></div>
+        <p class="note" id="material-stocks">Ожидание телеметрии</p>
+        <p class="note">Готовность — доля доступных часов с начала прогона. Исправность, ресурс до ТО и скорость привода — параметры учебной модели, не измерения на Актогае. Остановка оборудования ограничивает потоки и меняет нагрузку.</p>
+      </section>
+
       <section class="panel why" id="whybox" aria-labelledby="why-title">
         <div class="section-label"><span id="why-title">ПОЧЕМУ ТАК · РЕШЕНИЕ КООРДИНАТОРА</span></div>
         <p id="why">—</p><div id="src"></div>
@@ -201,7 +209,7 @@
         <div class="section-label"><span id="sz-title">СКОЛЬКО СТРОИТЬ ВЭС И СЭС</span><span class="tiny-badge">ПРЕДРАСЧЁТ</span></div>
         <div class="sz-pick"><label>ВЭС <select id="sz-w"></select> МВт</label><label>СЭС <select id="sz-p"></select> МВт</label></div>
         <div class="table-wrap"><table><tbody id="sizing"><tr><td class="mute">расчёт не загружен</td></tr></tbody></table></div>
-        <p class="note">Предрасчёт (sizing.py), не пересчитывается на стенде. Год на реальной погоде Актогая 2024 (Open‑Meteo ERA5): 4 сезона × 14 суток. «Сегодня» — без ВИЭ и без координатора. «P80 150» — координатор с той же крупностью помола, что сейчас: показывает вклад одной лишь подстройки под ВИЭ. * CO₂ с учётом запасов в конце прогонов (склады, заряд батарей).</p>
+        <p class="note">Архивный предрасчёт прежней агрегированной модели (sizing.py). После детализации оборудования не пересчитан; не использовать как результат текущей модели. Год на реальной погоде Актогая 2024 (Open‑Meteo ERA5): 4 сезона × 14 суток. «Сегодня» — без ВИЭ и без координатора. «P80 150» — координатор с той же крупностью помола, что сейчас: показывает вклад одной лишь подстройки под ВИЭ. * CO₂ с учётом запасов в конце прогонов (склады, заряд батарей).</p>
       </section>
       <section class="panel" aria-labelledby="now-title">
         <div class="section-label"><span id="now-title">СЕЙЧАС</span></div>
