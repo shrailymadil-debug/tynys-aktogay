@@ -11,7 +11,7 @@
 ## Запуск (Ubuntu 24.04, Docker)
 
 ```bash
-sudo apt-get install -y make
+sudo apt-get update && sudo apt-get install -y make
 make tynys
 ```
 
