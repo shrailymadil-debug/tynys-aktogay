@@ -17,7 +17,7 @@ jobs:
           set -o pipefail
           { lscpu | grep '^CPU(s)'; free -g | head -2; lsb_release -d; docker --version; docker compose version; } | tee ci.log
           start=$(date +%s)
-          sudo apt-get install -y make
+          sudo apt-get update && sudo apt-get install -y make
           make tynys 2>&1 | tail -5 | tee -a ci.log
           echo "Время запуска по README: $(( $(date +%s) - start )) с" | tee -a ci.log
       - name: What-if на стенде (включить → след в двойниках → отменить)
