@@ -8,7 +8,8 @@ const fmt = n => typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString(
 const TITLES = {pit:'Карьер',plant:'Фабрика',flotation:'Флотация','pile-soft':'Склад мягкой руды','pile-hard':'Склад твёрдой руды',wind:'Ветровая станция',pv:'Солнечная станция',bess:'Накопитель',substation:'Подстанция','line-1':'Линия 1','line-2':'Линия 2'};
 const FIELDS = {soc:['Заряд','%'],power_mw:['Мощность','МВт'],capacity_mw:['Установлено','МВт'],grid_mw:['Из сети','МВт'],grid_cap_mw:['Предел сети','МВт'],feed_tph:['Подача','т/ч'],ore_tph:['Добыча','т/ч'],ore_plan_tph:['План добычи','т/ч'],load_pct:['Загрузка','%'],tonnes:['Руды на складе','т'],fill_pct:['Заполнение','%'],bwi_est:['Оценка твёрдости','кВт·ч/т'],bwi_true:['Твёрдость','кВт·ч/т'],available:['Доступен',''],running:['Работает',''],lock_h:['До перезапуска','ч'],hard_frac:['Доля твёрдой руды',''],cu_tph:['Медь','т/ч'],recovery:['Извлечение','%'],cf_pct:['Мощность / установленная','%'],energy_mwh:['Энергия','МВт·ч'],payload_t:['Груз звена','т'],state:['Состояние',''],feed_soft_tph:['Мягкая руда','т/ч'],feed_hard_tph:['Твёрдая руда','т/ч'],mill_mw:['Мельницы','МВт'],p80_um:['P80','мкм'],spilled_tph:['Переполнение','т/ч']};
 const STATES = {charging:'заряжается',waiting:'ожидает зарядки',loaded:'с грузом',empty:'порожний',digging:'добыча',idle:'остановлен'};
-const EVENT_NAMES = {lull:'Штиль',line_trip:'Авария линии 2',kegoc:'Ограничение KEGOC',hard_ore:'Твёрдая руда',plan_up:'План добычи +10 %',bess_fault:'Отказ накопителя'};
+const EVENT_NAMES = {lull:'Штиль',line_trip:'Авария линии',kegoc:'Ограничение KEGOC',hard_ore:'Твёрдая руда',plan_up:'План добычи +10 %',bess_fault:'Отказ накопителя',truck_failure:'Поломка самосвала',excavator_failure:'Поломка экскаватора',grade_drop:'Падение содержания меди',tariff_change:'Смена тарифа сети'};
+const eventName=e=>e.kind==='line_trip'?'Авария линии '+(Number(e.line)||2):(EVENT_NAMES[e.kind]||e.kind);
 
 export function scenarioEvents(data) {
   const raw = data.scenario?.events;
@@ -184,11 +185,13 @@ export function installSceneDetails(ctx) {
   const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();let press=null;
   renderer.domElement.addEventListener('pointerdown',e=>{press={x:e.clientX,y:e.clientY,button:e.button};});
   renderer.domElement.addEventListener('pointerup',e=>{if(!press||press.button!==0||Math.hypot(e.clientX-press.x,e.clientY-press.y)>5)return;const rect=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);scene.updateMatrixWorld(true);raycaster.setFromCamera(pointer,camera);const hit=raycaster.intersectObjects(proxies,false)[0];if(hit)selectObject(hit.object.userData.objectId);else clearSelection();press=null;});
+  const eventObjectBadges=[['pit','l-pit','excavator_failure'],['flotation','l-fl','grade_drop']].map(([id,spanId,kind])=>{const parent=$(spanId)?.closest('.lbl');if(!parent)return null;const badge=document.createElement('span');badge.className='event-badge';badge.hidden=true;parent.appendChild(badge);return{id,kind,parent,badge};}).filter(Boolean);
+
   function update(data) {
     lastData=data;events=scenarioEvents(data);const active=events.filter(e=>e.active),kinds=new Set(active.map(e=>e.kind));
     const readable=getSource()==='live';const key=JSON.stringify([events,readable,getSource()]);
     if(key!==bannerKey){bannerKey=key;$('scenario-banner').hidden=!events.length;$('scenario-list').replaceChildren();
-      for(const e of events){const row=document.createElement('div');row.className='scenario-row';row.dataset.kind=e.kind;const title=document.createElement('span');title.textContent=`${EVENT_NAMES[e.kind]||e.kind} · ${e.active?'ещё '+fmt(e.remaining)+' ч':'через '+fmt(e.startsIn)+' ч'}`;const b=document.createElement('button');b.className='scenario-cancel';b.dataset.id=String(e.id);b.textContent='отменить';b.disabled=!readable;b.onclick=async()=>{b.disabled=true;try{await cancelEvent(e.id);}catch(err){$('scenario-note').textContent='Не удалось отменить: '+err.message;b.disabled=getSource()!=='live';}};row.append(title,b);$('scenario-list').appendChild(row);}
+      for(const e of events){const row=document.createElement('div');row.className='scenario-row';row.dataset.kind=e.kind;const title=document.createElement('span');title.textContent=`${eventName(e)} · ${e.active?'ещё '+fmt(e.remaining)+' ч':'через '+fmt(e.startsIn)+' ч'}`;const b=document.createElement('button');b.className='scenario-cancel';b.dataset.id=String(e.id);b.textContent='отменить';b.disabled=!readable;b.onclick=async()=>{b.disabled=true;try{await cancelEvent(e.id);}catch(err){$('scenario-note').textContent='Не удалось отменить: '+err.message;b.disabled=getSource()!=='live';}};row.append(title,b);$('scenario-list').appendChild(row);}
       $('scenario-note').textContent=readable?'Из сценария двойника · отмена изменяет сценарий стенда':getSource()==='stale'?'Связь потеряна. Снимок сохранён; отмена недоступна.':'События из записи. Отмена доступна на подключённом стенде.';
     }
     for(const b of bars){const raw=b.read(data),valid=typeof raw==='number'&&Number.isFinite(raw),value=valid?clamp(raw,0,b.maximum):0;b.fill.style.width=`${100*value/b.maximum}%`;if(valid)b.bar.setAttribute('aria-valuenow',String(value));else b.bar.removeAttribute('aria-valuenow');b.bar.setAttribute('aria-valuetext',valid?`${fmt(raw)} %`:'нет данных');
@@ -196,10 +199,11 @@ export function installSceneDetails(ctx) {
       const warning=unavailable||(valid&&(lowEnergy||highFill)),caution=!warning&&valid&&((energyBar&&value>=20&&value<40)||(!energyBar&&value>=85));
       b.bar.dataset.warning=String(warning);b.bar.dataset.caution=String(caution);b.bar.dataset.status=unavailable?'unavailable':!valid?'unknown':warning?'warning':caution?'caution':'normal';
       if(unavailable)b.bar.setAttribute('aria-valuetext',`${valid?fmt(raw)+' % · ':''}оборудование недоступно`);
-      const kind=({'wind':'lull','substation':'kegoc','line-2':'line_trip','bess':'bess_fault','pile-hard':'hard_ore'})[b.id],ev=active.find(e=>e.kind===kind);b.badge.hidden=!ev;b.badge.textContent=ev?`${EVENT_NAMES[ev.kind]} · ${fmt(ev.remaining)} ч`:'';b.parent.classList.toggle('event-on',!!ev);
+      const kind=({'wind':'lull','substation':'kegoc','line-2':'line_trip','bess':'bess_fault','pile-hard':'hard_ore','truck-01':'truck_failure'})[b.id],ev=active.find(e=>b.id.startsWith('line-')?e.kind==='line_trip'&&Number(e.line??2)===Number(b.id.slice(-1)):e.kind===kind||(b.id==='substation'&&e.kind==='tariff_change'));b.badge.hidden=!ev;b.badge.textContent=ev?eventName(ev)+' · '+fmt(ev.remaining)+' ч':'';b.parent.classList.toggle('event-on',!!ev);
     }
     for(let i=0;i<2;i++){const d=data[`line-${i+1}`];$(`l-line${i+1}`).textContent=d?`${fmt(d.feed_tph)} т/ч · ${d.available?'доступна':'авария'}`:'—';}
     for(let i=0;i<trucks.length;i++){const id=`truck-${String(i+1).padStart(2,'0')}`;$(`l-${id}`).textContent=data[id]?`${fmt(data[id].soc)} %`:'—';}
+    for(const item of eventObjectBadges){const ev=active.find(e=>e.kind===item.kind);item.badge.hidden=!ev;item.badge.textContent=ev?eventName(ev)+' · '+fmt(ev.remaining)+' ч':'';item.parent.classList.toggle('event-on',!!ev);}
     hardHalo.visible=kinds.has('hard_ore');
     hardHalo.scale.setScalar(Math.max(1,piles.hard.scale.x*1.15));
     const planEvent=active.find(e=>e.kind==='plan_up');planHalo.visible=!!planEvent;planLabel.style.display=planEvent?'':'none';
