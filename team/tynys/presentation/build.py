@@ -91,7 +91,7 @@ def slides():
     S.append(f"""<div class="s"><p class="eb">ПРОБЛЕМА</p><h2>Рудник круглосуточно берёт ≈ 230 МВт из сети, где 66 % — уголь</h2>
 <div class="grid g3" style="margin-top:30px">
 <div class="box"><h3>ЭНЕРГИЯ</h3><div class="big">{n['gwh_today']} ГВт·ч</div><p>в год по модели (отчёт KAZ Minerals 2024: ≈ 2 030 ГВт·ч)</p></div>
-<div class="box"><h3>CO₂ ИЗ СЕТИ</h3><div class="big bad">{n['co2_today']} тыс. т</div><p>в год при 0,79 т CO₂ на МВт·ч (угольная сеть Казахстана)</p></div>
+<div class="box"><h3>CO₂ С ЗАПАСАМИ</h3><div class="big bad">{n['co2_today_adj']} тыс. т</div><p>в год с учётом запасов в конце прогонов (склады и заряд батарей)</p></div>
 <div class="box"><h3>ВЕТЕР И СОЛНЦЕ</h3><div class="big">непостоянны</div><p>рудник работает «ровно»; построенные ВЭС и СЭС будут сбрасывать энергию, когда она не нужна</p></div></div>
 <p style="margin-top:34px">Нужно решить: <b>сколько ВЭС и СЭС строить</b>, <b>как руднику подстраиваться под них каждый час</b> и <b>что рудник может пообещать энергосистеме</b>.</p><div class="n">2</div></div>""")
     S.append(f"""<div class="s"><p class="eb">КТО ПОЛЬЗУЕТСЯ И КАКИЕ РЕШЕНИЯ ПРИНИМАЕТ</p><h2>Три решения — три экрана стенда</h2>
@@ -148,7 +148,7 @@ def slides():
 <tr><td>ВИЭ + «Тыныс», цель «CO₂»</td><td><em>{n['co2_green']}</em></td><td>{n['cu_green']}</td><td><em>{n['curt_green']}</em></td></tr>
 <tr><td>ВИЭ + «Тыныс», цель «медь»</td><td class="cu">{n['co2_cu']}</td><td class="cu">{n['cu_cu']}</td><td>{n['curt_cu']}</td></tr></table>
 <ul style="margin-top:16px"><li>Режим «CO₂» к управлению «как сейчас» при тех же ВИЭ: {n['green_vs_res']} % CO₂, по 25 сочетаниям от {n['green_min']} до {n['green_max']} %; сброс ВИЭ меньше на {n['curt_min']}–{n['curt_max']} %.</li>
-<li>Режим «медь»: +{n['cu_gain']} % меди за счёт более тонкого помола, но CO₂ {n['cuco2']} %.</li></ul>
+<li>Режим «медь»: +{n['cu_gain']} % меди за счёт более тонкого помола, но CO₂ +{n['cuco2']} %.</li></ul>
 <p class="sm">* С учётом запасов в конце прогонов (склады, заряд батарей). Источник: <code>team/tynys/sizing.py</code> → <code>data/sizing.csv</code>, сводка — <code>analyze_sizing.py</code>.</p><div class="n">10</div></div>""")
     S.append(f"""<div class="s"><p class="eb">ЧЕСТНО О ГРАНИЦАХ</p><h2>Что модель утверждает — и чего нет</h2>
 <ul><li>Прирост меди {n['cu_min']}…{n['cu_max']} % — эффект тонкого помола, а не подстройки под ВИЭ: координатор с крупностью «как сейчас» даёт ту же медь, что V0.</li>
