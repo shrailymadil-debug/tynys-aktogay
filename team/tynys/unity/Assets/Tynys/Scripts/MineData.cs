@@ -37,7 +37,8 @@ namespace Tynys
     public class MineData : MonoBehaviour
     {
         public MineState State { get; private set; }
-        public bool LiveMode, IsConnected, IsStale;
+        public bool LiveMode = true;
+        public bool IsConnected, IsStale;
         public string Endpoint = "http://localhost:8095/ditto/api/2/";
         public string Status;
         public float SecondsPerHour = 10;
@@ -45,6 +46,7 @@ namespace Tynys
         public DemoScenario Scenario;
         public bool CanSetScenario { get { return !LiveMode; } }
         public bool HasSnapshot { get { return !LiveMode || lastLive != null; } }
+        public int SnapshotCount { get; private set; }
 
         private static readonly string[] Names = {
             "site", "plant", "energy", "coordinator", "shadow-v0", "shadow-v1",
@@ -64,6 +66,16 @@ namespace Tynys
         private void Awake()
         {
             State = EmptyState();
+#if UNITY_WEBGL && !UNITY_EDITOR
+            Endpoint = "/ditto/api/2/";
+#else
+            var args = Environment.GetCommandLineArgs();
+            // Offline illustration and verification are deliberate opt-ins.
+            if (Array.IndexOf(args, "--tynys-demo") >= 0 || Array.IndexOf(args, "--tynys-verify") >= 0)
+                LiveMode = false;
+            int apiArg = Array.IndexOf(args, "--tynys-api");
+            if (apiArg >= 0 && apiArg + 1 < args.Length) Endpoint = args[apiArg + 1];
+#endif
         }
 
         private void OnEnable()
@@ -165,6 +177,8 @@ namespace Tynys
             {
                 Uri baseUri;
                 string baseUrl = (Endpoint ?? "").Trim().TrimEnd('/') + "/";
+                if (baseUrl.StartsWith("/") && Uri.TryCreate(Application.absoluteURL, UriKind.Absolute, out var pageUri))
+                    baseUrl = new Uri(pageUri, baseUrl).AbsoluteUri;
                 if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out baseUri) ||
                     (baseUri.Scheme != "http" && baseUri.Scheme != "https"))
                 {
@@ -208,6 +222,7 @@ namespace Tynys
                         lastReceived = Time.realtimeSinceStartup;
                         IsConnected = true;
                         IsStale = false;
+                        SnapshotCount++;
                         Status = "DITTO · данные платформы · только чтение";
                     }
                     else MarkFailure(error);
@@ -389,7 +404,8 @@ namespace Tynys
                     string name = "truck-" + (i + 1).ToString("00", CultureInfo.InvariantCulture);
                     TruckState t = s.trucks[i];
                     t.state = f.Text(name, "state");
-                    if (t.state != "charging" && t.state != "loaded" && t.state != "empty")
+                    // Exact states published by tynys/fleet.py::group_view.
+                    if (t.state != "charging" && t.state != "waiting" && t.state != "loaded" && t.state != "empty")
                         throw new FormatException(name + ".state неизвестно");
                     t.soc = f.Percent(name, "soc");
                     t.routePos = f.Number(name, "route_pos");
