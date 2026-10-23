@@ -81,7 +81,7 @@
     <div class="panel kpi good"><span>Ветер и солнце</span><b id="k-ren">—</b><small>доля потребления сейчас</small></div>
     <div class="panel kpi"><span>Сброс ВИЭ</span><b id="k-cur">—</b><small>МВт выбрасывается сейчас</small></div>
     <div class="panel kpi good"><span>Медь к «как сейчас»</span><b id="k-cu">—</b><small>с начала прогона, с учётом склада</small></div>
-    <div class="panel kpi"><span>Резерв для KEGOC</span><b id="k-res">—</b><small>МВт можно снизить сейчас</small></div>
+    <div class="panel kpi"><span>Оценка резерва KEGOC</span><b id="k-res">—</b><small>МВт снижения за следующий час</small></div>
   </section>
 
   <div class="grid">
@@ -164,7 +164,7 @@
       <section class="panel" aria-labelledby="equipment-title">
         <div class="section-label"><span id="equipment-title">ОБОРУДОВАНИЕ И МАТЕРИАЛЬНЫЕ ПОТОКИ</span></div>
         <p class="note">Экскаваторы → закреплённые самосвалы → дробилка → конвейер → склады → конвейер питания → мельницы → флотация → концентрат и хвосты. Вскрыша поступает в отвал; вода возвращается из хвостового хозяйства.</p>
-        <div class="table-wrap"><table><thead><tr><th>Объект</th><th>Состояние</th><th>Поток</th><th>МВт</th><th>об/мин</th><th>Исправность, %</th><th>Готовность, %</th></tr></thead><tbody id="equipment-rows"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>Объект</th><th>Состояние</th><th>Поток</th><th>МВт</th><th>об/мин</th><th>P80, мкм</th><th>Исправность, %</th><th>Готовность, %</th></tr></thead><tbody id="equipment-rows"></tbody></table></div>
         <p class="note" id="material-stocks">Ожидание телеметрии</p>
         <p class="note">Готовность — доля доступных часов с начала прогона. Исправность, ресурс до ТО и скорость привода — параметры учебной модели, не измерения на Актогае. Остановка оборудования ограничивает потоки и меняет нагрузку.</p>
       </section>
@@ -200,8 +200,8 @@
       </section>
       <section class="panel" aria-labelledby="flex-title">
         <div class="section-label"><span id="flex-title">ОЦЕНКА ГИБКОСТИ ДЛЯ KEGOC</span></div>
-        <div>Мгновенный потенциал: <span class="big" id="flex">—</span> МВт</div>
-        <div class="mute" style="font-size:12px">Оценка запаса времени: <b id="flexh">—</b> ч. Обещание проверяется в «Двух будущих».</div>
+        <div>Снижение за следующий час: <span class="big" id="flex">—</span> МВт</div>
+        <div class="mute" style="font-size:12px">Предел по запасам: <b id="flexh">—</b> ч при неизменных условиях. Проверка траектории и восстановления — в «Двух будущих».</div>
         <a href="futures.html" style="color:var(--teal);font-size:12px;font-weight:600">Проверить обещание →</a>
         <p class="note" id="flexstat"></p>
       </section>

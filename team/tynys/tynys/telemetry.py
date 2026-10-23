@@ -49,6 +49,7 @@ KIND_FEATURES = {
     "tailings": {"inflow_tph": 0., "tonnes": 0., "cu_tph": 0., "cu_t": 0., "retained_water_m3": 0.},
     "concentrate": {"inflow_tph": 0., "tonnes": 0., "cu_tph": 0., "grade_pct": 25.},
     "mill_line": {"feed_tph": 0., "mill_mw": 0., "p80_um": 0., "cu_tph": 0.,
+                  "idle_mw": 0., "stop_reason": "",
                   "running": False, "lock_h": 0, "load_pct": 0., "speed_rpm": 0.},
     "flotation": {"feed_tph": 0., "recovery": 0., "cu_tph": 0., "feed_cu_tph": 0.},
     "wind_farm": {"capacity_mw": 0., "cf_pct": 0.}, "pv_farm": {"capacity_mw": 0.},

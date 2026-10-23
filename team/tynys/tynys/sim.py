@@ -12,7 +12,7 @@ import numpy as np
 from .params import Params, DOMAINS, P80_MODES
 from . import physics as ph
 from . import weather as wx
-from .fleet import Fleet, dispatch, group_view
+from .fleet import Fleet, dispatch, group_view, group_caps
 from .assets import (equipment_state, prepare_equipment, finish_equipment,
                      auxiliary_coefficients, load_coefficients, process_factor,
                      mining_capacity, shovel_for, charger_for, N_GROUPS, N_CHARGER_GROUPS)
@@ -68,12 +68,19 @@ class Env:
         self.mine_plan = p.mine_ore_tph * mm
         # фактическая твёрдость: BWi домена × (1 + AR(1)-шум) — контроллеру неизвестна
         self.bwi_true = {}
+        self.grade_true = {}
         for i, d in enumerate(DOMAINS):
             r = np.random.default_rng(seed * 31 + i)
             e = np.zeros(n)
             for t in range(1, n):
                 e[t] = p.bwi_noise_phi * e[t - 1] + math.sqrt(1 - p.bwi_noise_phi ** 2) * p.bwi_noise_sd * r.standard_normal()
             self.bwi_true[d] = p.bwi[d] * (1 + e)
+            grade_rng = np.random.default_rng(seed * 37 + i + 1000)
+            grade = np.empty(n)
+            grade[0] = p.grade_noise_sd * grade_rng.standard_normal()
+            for t in range(1, n):
+                grade[t] = p.grade_noise_phi * grade[t-1] + math.sqrt(1-p.grade_noise_phi**2) * p.grade_noise_sd * grade_rng.standard_normal()
+            self.grade_true[d] = p.cu_grade[d] * np.clip(1 + grade, .5, 1.5)
         self.line_avail = np.ones((p.n_lines, n), dtype=bool)
         for l, (a, b) in sc.line_down.items():
             self.line_avail[l, a:b] = False
@@ -110,10 +117,13 @@ class State:
     equipment: dict = field(default_factory=dict)
     materials: dict = field(default_factory=dict)
     fleet: Fleet | None = None
+    pile_cu: dict = field(default_factory=dict)  # contained copper tonnes, not recoverable product
+    line_x: list = field(default_factory=list)   # previous actual [line, domain, P80] t/h
+    line_mw: list = field(default_factory=list)  # previous metered MW, includes rotating draw
 
 
 def init_state(p: Params) -> State:
-    return State(
+    st = State(
         pile={d: p.pile_cap_t * p.pile_init_frac for d in DOMAINS},
         fleet_e=0.6 * p.n_trucks * p.truck_batt_mwh,
         bess_e=0.5 * p.bess_mwh,
@@ -123,12 +133,19 @@ def init_state(p: Params) -> State:
         equipment=equipment_state(p),
         fleet=Fleet.from_total(0.6 * p.n_trucks * p.truck_batt_mwh),
     )
+    ph.ensure_process_state(p, st)
+    return st
 
 
 def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
     """One hour, with causal equipment, ore/copper/water and power balances."""
     if p.dt_h != 1:
         raise ValueError("The mine model uses one-hour steps (dt_h=1)")
+    ph.ensure_process_state(p, st)
+    previous_x = np.asarray(st.line_x, dtype=float)
+    previous_q = previous_x.sum(axis=(1, 2))
+    previous_mw = np.asarray(st.line_mw)
+    grades = {d: st.pile_cu[d]/st.pile[d] if st.pile[d] > 1e-9 else p.cu_grade[d] for d in DOMAINS}
     factors = prepare_equipment(p, env, st, t)
     for l in range(p.n_lines):
         if st.line_lock[l] > 0:
@@ -141,6 +158,9 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
     if x.shape != (p.n_lines, len(DOMAINS), len(P80_MODES)) or not np.isfinite(x).all():
         raise ValueError("Invalid mill setpoints")
     x = np.maximum(x, 0)
+    x[x < 1e-5] = 0  # MILP feasibility tolerance, not a second grind mode
+    if any(np.count_nonzero(line.sum(axis=0) > 0) > 1 for line in x):
+        raise ValueError("Only one P80 mode per line per hour is physically possible")
     for key in ("charge_mw", "bess_mw"):
         if not math.isfinite(float(dec.get(key, 0))):
             raise ValueError(f"Invalid {key}")
@@ -151,26 +171,69 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
             if di == 0:
                 requested = x.sum(axis=1).copy()
             x[:, di, :] = requested * (st.pile[d] / total if total else 0.5)
-    energy = np.array([[ph.bond_kwh_t(p, env.bwi_true[d][t], g) / 1000
+    energy = np.array([[ph.mill_variable_mwh_t(p, env.bwi_true[d][t], g)
                         for g in P80_MODES] for d in DOMAINS])
+    idle = ph.mill_idle_mw(p)
+    qramp, pramp = p.line_q_nom*p.line_q_ramp_fraction, p.line_p_max_mw*p.line_power_ramp_fraction
+    ramp_floor = np.zeros(p.n_lines)
+    stop_reason = [""] * p.n_lines
     downstream = process_factor(factors)
     for l in range(p.n_lines):
         factor = min(factors[f"line-{l+1}"], downstream)
-        if st.line_lock[l] > 0:
-            factor = 0
-        q, mw = x[l].sum(), (x[l] * energy).sum()
-        scale = min(1.0, p.line_q_max * factor / q if q else 1,
-                    p.line_p_max_mw * factor / mw if mw else 1)
-        x[l] *= scale
+        want = x[l].sum()
+        if factor <= 0:
+            x[l] = 0
+            stop_reason[l] = "equipment_unavailable"
+            continue
+        if want == 0 and previous_q[l] <= p.line_q_min + qramp + 1e-7:
+            x[l] = 0
+            stop_reason[l] = "controlled_stop"
+            continue
+        # First try the requested single mode. If a mode change would violate
+        # the power ramp, retain the previous mode/composition for this hour.
+        fallback = previous_x[l].copy()
+        if not segregated and fallback.sum() > 0:
+            mode_feed = fallback.sum(axis=0)
+            stock = sum(st.pile.values())
+            for di,d in enumerate(DOMAINS):
+                fallback[di] = mode_feed*(st.pile[d]/stock if stock else .5)
+        candidates = [x[l], fallback] if want else [fallback]
+        accepted = False
+        for candidate in candidates:
+            if candidate.sum() <= 0:
+                continue
+            mix = candidate/candidate.sum()
+            slope = float((mix*energy).sum())
+            lo = max(p.line_q_min, previous_q[l]-qramp) if previous_q[l] else p.line_q_min
+            hi = min(p.line_q_max*factor, previous_q[l]+qramp if previous_q[l] else p.line_q_min)
+            plo = max(0, previous_mw[l]-pramp) if previous_q[l] else 0
+            phi = min(p.line_p_max_mw*factor, previous_mw[l]+pramp) if previous_q[l] else p.line_p_max_mw*factor
+            lo, hi = max(lo, (plo-idle)/slope), min(hi, (phi-idle)/slope)
+            if hi >= lo-1e-7:
+                x[l] = mix*np.clip(want, lo, max(lo, hi))
+                ramp_floor[l] = lo
+                accepted = True
+                break
+        if not accepted:
+            x[l] = 0
+            stop_reason[l] = "capacity_trip"
     # Only opening stock is available to the mills. Today's mined ore enters
     # the piles at hour end; no assumed half-hour feed can create phantom ore.
+    before_stock_q = x.sum(axis=(1,2))
     for di, d in enumerate(DOMAINS):
         want = x[:, di, :].sum()
         if want > st.pile[d]:
             x[:, di, :] *= st.pile[d] / want
     for l in range(p.n_lines):
-        if x[l].sum() < p.line_q_min * .999:
+        # A domain shortfall changes both throughput AND mixture hardness.
+        # Recheck the power floor after stock clipping; q alone is insufficient.
+        ql = x[l].sum()
+        if ql > 0 and previous_q[l] > 0:
+            slope = float((x[l]*energy).sum()/ql)
+            ramp_floor[l] = max(ramp_floor[l], (previous_mw[l]-pramp-idle)/slope)
+        if before_stock_q[l] > 0 and x[l].sum() < max(p.line_q_min, ramp_floor[l]) - 1e-6:
             x[l] = 0
+            stop_reason[l] = "stockout_trip"
 
     charge_request = float(np.clip(dec["charge_mw"], 0, p.charge_mw_max))
     requested_charge = charge_request
@@ -191,8 +254,8 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
         fleet = dispatch(p, st.fleet, factors, charge_request, min(mine_power_limit, max(0, room)), haul)
         mine, charge = sum(fleet.ore_tph), sum(fleet.charge_mw)
         line_q = x.sum(axis=(1, 2))
-        mill = (x * energy).sum(axis=(1, 2))
-        cu_lines = [sum(x[l, di, gi] * p.cu_grade[d] * ph.recovery_inf(p, d, g)
+        mill = (x * energy).sum(axis=(1, 2)) + idle*(line_q > 0)
+        cu_lines = [sum(x[l, di, gi] * grades[d] * ph.recovery_inf(p, d, g)
                         for di, d in enumerate(DOMAINS) for gi, g in enumerate(P80_MODES))
                     * ph.kinetic_factor(p, line_q[l]) for l in range(p.n_lines)]
         return dict(fed=fed, fleet=fleet, mine=mine, charge=charge,
@@ -211,7 +274,7 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
     bess_set = float(np.clip(dec.get("bess_mw", 0), -chg_max, dis_max))
     f = flows()
     bess_set += min(dis_max-bess_set, max(0, f["load"]-renew-bess_set-gcap))
-    tripped = []
+    tripped = [l for l in range(p.n_lines) if stop_reason[l].endswith("_trip") and previous_q[l] > 0]
     # Recompute all flows after each protection action; reducing charge may
     # remove haulage energy, and reducing mill feed may fill a stockpile.
     for _ in range(20):
@@ -227,17 +290,18 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
         active = [l for l in range(p.n_lines) if f["line_q"][l] > 0]
         if not active:
             break
-        head = {l: (f["mill"][l] + feed_coef*f["line_q"][l]) *
-                   max(0, 1-p.line_q_min/f["line_q"][l]) for l in active}
+        head = {l: (f["mill"][l] - idle + feed_coef*f["line_q"][l]) *
+                   max(0, 1-ramp_floor[l]/f["line_q"][l]) for l in active}
         reducible = sum(head.values())
         if reducible > 1e-8:
             share = min(1, deficit/reducible)
             for l in active:
-                x[l] *= 1 - share * max(0, 1-p.line_q_min/f["line_q"][l])
+                x[l] *= 1 - share * max(0, 1-ramp_floor[l]/f["line_q"][l])
         else:
             l = min(active, key=lambda l: f["line_q"][l])
             x[l] = 0
             tripped.append(l)
+            stop_reason[l] = "power_trip"
         f = flows()
     # If even mining auxiliaries cannot be supplied, stop/reduce extraction.
     deficit = f["load"] - renew - bess_set - gcap
@@ -257,9 +321,11 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
     st.fleet_e = sum(st.fleet.e)
     mine, q, fed = f["mine"], f["q"], f["fed"]
     for d in DOMAINS:
+        st.pile_cu[d] += mine*fractions[d]*env.grade_true[d][t] - fed[d]*grades[d]
+        st.pile_cu[d] = max(0.0, st.pile_cu[d])
         st.pile[d] += mine*fractions[d] - fed[d]
     cu = float(sum(f["cu_lines"]))
-    feed_cu = sum(fed[d]*p.cu_grade[d] for d in DOMAINS)
+    feed_cu = sum(fed[d]*grades[d] for d in DOMAINS)
     concentrate = cu / p.concentrate_grade
     tailings = q - concentrate
     waste = mine*p.strip_ratio
@@ -273,7 +339,7 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
     for di, d in enumerate(DOMAINS):
         if fed[d] > 50 and segregated:
             measured_mwh = float((x[:, di, :] * energy[di]).sum())
-            per_bwi = sum(x[l, di, gi] * ph.bond_kwh_t(p, 1., g)/1000
+            per_bwi = sum(x[l, di, gi] * ph.mill_variable_mwh_t(p, 1., g)
                           for l in range(p.n_lines) for gi, g in enumerate(P80_MODES))
             measured_bwi = measured_mwh/per_bwi * (1+.01*np.random.default_rng(t).standard_normal())
             st.bwi_est[d] = .8*st.bwi_est[d] + .2*float(measured_bwi)
@@ -283,6 +349,7 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
         restarts += int(on and not st.line_on[l])
         st.line_on[l] = on
         st.line_lock[l] = p.trip_lockout_h if l in tripped else max(0, st.line_lock[l]-1)
+    st.line_x, st.line_mw = x.tolist(), f["mill"].tolist()
 
     assets = {name: {"power_mw": a + b*mine + c*q, "active": a+b*mine+c*q > 0}
               for name, (a, b, c) in auxiliary_coefficients(p, factors).items()}
@@ -308,6 +375,7 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
         ql = float(f["line_q"][l])
         assets[f"line-{l+1}"] = {"feed_tph": ql, "power_mw": float(f["mill"][l]),
                                    "mill_mw": float(f["mill"][l]), "running": ql > 0,
+                                   "idle_mw": idle if ql else 0., "stop_reason": stop_reason[l],
                                    "speed_rpm": p.mill_speed_rpm if ql else 0.,
                                    "p80_um": float((x[l]*np.array(P80_MODES)).sum()/ql) if ql else 0,
                                    "cu_tph": float(f["cu_lines"][l]), "lock_h": st.line_lock[l],
@@ -352,6 +420,9 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
                p80=float((x*np.array(P80_MODES)).sum()/q) if q else 0,
                trips=len(tripped), restarts=restarts, unserved=unserved, price=p.price_kzt_mwh(t%24),
                hard_frac=hf, bwi_est_soft=st.bwi_est["soft"], bwi_est_hard=st.bwi_est["hard"],
+               grade_soft=grades["soft"], grade_hard=grades["hard"],
+               mined_cu_t=sum(mine*fractions[d]*env.grade_true[d][t] for d in DOMAINS),
+               pile_cu_soft=st.pile_cu["soft"], pile_cu_hard=st.pile_cu["hard"],
                waste_tph=waste, tailings_tph=tailings, concentrate_tph=concentrate,
                fresh_water_m3_h=fresh_water, assets=assets, fleet=asdict(st.fleet))
     rec.update({f"line{l}": float(f["line_q"][l]) for l in range(p.n_lines)})
@@ -361,36 +432,52 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
 
 
 def flexibility(p: Params, st: State, rec):
-    """«Тыныс‑резерв»: на сколько МВт рудник может снизить потребление из сети
-    и сколько часов удержать это снижение целиком, не теряя добычу и не
-    останавливая мельницы.
+    """Conditional next-hour grid reduction, at unchanged ore/P80/weather.
 
-    Снижение = зарядка самосвалов + разряд накопителя + сброс мельниц до минимума
-    (при грубом помоле). Длительность — минимум из трёх запасов:
-      h_fleet — сколько часов самосвалы возят руду без зарядки;
-      h_pile  — сколько часов склады принимают добытую, но не переработанную руду;
-      h_bess  — сколько часов накопитель держит свою долю разряда.
-    Верхняя граница — 48 ч.
+    Not an instantaneous KEGOC offer. Keep rotating draw, both ramp limits,
+    individual truck reserves and *incremental* BESS response. No export credit.
+    Duration is a resource ceiling, not a forecast of future power/availability.
     """
-    active = sum(1 for k in ("line0", "line1") if rec.get(k, 0) > 0)
-    process_kwh_t = 1000*load_coefficients(p)[2]
-    e_coarse = ph.bond_kwh_t(p, p.bwi["soft"], max(P80_MODES)) + process_kwh_t
-    mills_now = rec["mill_mw"] + process_kwh_t * rec["feed"] / 1000.0
-    mills_to_min = max(0.0, mills_now - active * p.line_q_min * e_coarse / 1000.0)
+    if rec["grid"] <= 0 or rec["unserved"] > 1e-7:
+        return 0.0, 0.0
+    idle = ph.mill_idle_mw(p)
+    feed_coef = load_coefficients(p)[2]
+    mills_down = 0.0
+    remaining_feed = {d: rec[f"feed_{d}"] for d in DOMAINS}
+    for l in range(p.n_lines):
+        asset = rec["assets"][f"line-{l+1}"]
+        q = asset["feed_tph"]
+        if q <= 0:
+            continue
+        slope = max(1e-9, (asset["mill_mw"]-idle)/q)
+        dq = max(0, min(q-p.line_q_min, p.line_q_nom*p.line_q_ramp_fraction,
+                        p.line_p_max_mw*p.line_power_ramp_fraction/slope))
+        mills_down += dq*(slope+feed_coef)
+        for di,d in enumerate(DOMAINS):
+            remaining_feed[d] -= dq*sum(st.line_x[l][di])/q
     eta = math.sqrt(p.bess_eta_rt)
     bess_available = rec.get("bess_available", True)
     bess_usable = max(0.0, st.bess_e - p.bess_e_min) * eta if bess_available else 0.0
-    bess_dis = min(p.bess_mw, bess_usable)
-    down_mw = rec["charge"] + bess_dis + mills_to_min
-    haul_e = ph.haul_mwh_per_t_ore(p) * max(rec["mine"], 1.0)
-    h_fleet = max(0.0, st.fleet_e - p.fleet_e_min) / max(haul_e, 1e-6)
-    free = 2 * p.pile_cap_t - (st.pile["soft"] + st.pile["hard"])
-    surplus_rate = max(1.0, rec["mine"] - p.n_lines * p.line_q_min)
-    h_pile = free / surplus_rate
-    h_bess = bess_usable / bess_dis if bess_dis > 0 else 48.0
-    # Это мгновенная оценка, не обещание: совместно заявленная мощность
-    # заканчивается, когда исчерпан хотя бы один из использованных резервов.
-    return down_mw, float(min(h_fleet if rec["charge"] > 0 else 48.0, h_pile, h_bess, 48.0))
+    target_bess = min(p.bess_mw*st.equipment["bess"].health, bess_usable)
+    bess_delta = max(0, target_bess-rec["bess"]) if bess_available else 0
+    haul = ph.haul_mwh_per_t_ore(p)
+    lo = group_caps(p)[2]
+    h_fleet = min([max(0, st.fleet.e[i]-lo)/(rate*haul)
+                   for i,rate in enumerate(st.fleet.ore_tph) if rate > 1e-8] or [48.])
+    charge_down = rec["charge"] if h_fleet >= 1 else 0.0
+    h_pile = 48.
+    for d in DOMAINS:
+        frac = rec["hard_frac"] if d == "hard" else 1-rec["hard_frac"]
+        surplus = rec["mine"]*frac-remaining_feed[d]
+        if surplus > 1e-8:
+            h_pile = min(h_pile, max(0, p.pile_cap_t-st.pile[d])/surplus)
+    # A one-hour offer cannot rely on a stockpile that fills before hour end.
+    if h_pile < 1:
+        mills_down = 0.0
+    h_bess = bess_usable/target_bess if bess_delta > 0 and target_bess > 0 else 48.
+    duration = min(h_fleet if charge_down else 48., h_pile if mills_down else 48., h_bess, 48.)
+    down = min(rec["grid"], charge_down+bess_delta+mills_down)
+    return float(down), float(duration if down > 1e-8 else 0.)
 
 
 def run(p: Params, sc: Scenario, controller, seed: int):

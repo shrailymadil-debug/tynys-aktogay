@@ -66,6 +66,17 @@ def external_stop(env, name, t):
     for a, b in env.sc.equipment_maintenance.get(name, []):
         if a <= t < b:
             return "maintenance", b - t
+    # Deterministic calendar shared by all controllers and counterfactuals.
+    # No look-ahead into random failures: these are announced planned stops.
+    if env.p.planned_stops:
+        if name.startswith("line-"):
+            phase = (t - 72 - 84*(int(name.split('-')[1])-1)) % 168
+        elif name == "crusher":
+            phase = (t - 240) % 336
+        else:
+            phase = 336
+        if phase < env.p.service_duration_h:
+            return "maintenance", env.p.service_duration_h - phase
     if name.startswith("line-") and not env.line_avail[int(name.split('-')[1])-1, t]:
         return "fault", 1
     if name == "bess" and not env.bess_avail[t]:

@@ -46,7 +46,7 @@ class Totals:
         if st is not None:
             if self.pile0 is None:
                 self.pile0 = {d: p.pile_cap_t * p.pile_init_frac for d in st.pile}   # все варианты стартуют с init_state
-            self.cu_adj = self.cu + r["cu_t"] + sum((st.pile[d] - self.pile0[d]) * p.cu_grade[d] * p.r150[d] for d in st.pile)
+            self.cu_adj = self.cu + r["cu_t"] + sum((st.pile_cu[d] - self.pile0[d]*p.cu_grade[d]) * p.r150[d] for d in st.pile)
         self.cu += r["cu_t"]; self.grid += r["grid"]; self.co2 += r["grid"] * p.grid_co2_t_mwh
         self.curt += r["curtail"]; self.renew += r["renew"] - r["curtail"]; self.cost += r["grid"] * r["price"]
         self.feed += r["feed"]; self.hours += 1
@@ -117,7 +117,7 @@ def main():
             dec = V1Reactive().decide(p, env, st["v2"], t)
             log.warning("t=%d: no coordinator decision, V1 fallback", t)
         # --- 3. шаг «правды» и теней ---
-        rec = step(p, env, st["v2"], t, dec, True)
+        rec = step(p, env, st["v2"], t, dec, source != "fallback_v1")
         tot["v2"].add(p, rec, st["v2"])
         for k in ("v0", "v1"):
             r = step(p, env, st[k], t, ctl[k].decide(p, env, st[k], t), ctl[k].segregated)
@@ -141,6 +141,7 @@ def publish_hour(bus, p, env, st, r, t, source, fleet):
                        "decision_source": source})
     for d in ("soft", "hard"):
         bus.send(f"pile-{d}", {"tonnes": round(st.pile[d]), "fill_pct": round(100 * st.pile[d] / p.pile_cap_t, 1),
+                               "cu_t": st.pile_cu[d], "grade_pct": 100*st.pile_cu[d]/st.pile[d] if st.pile[d] > 0 else 0,
                                "bwi_est": round(st.bwi_est[d], 2), "bwi_true": round(float(env.bwi_true[d][t]), 2)})
     for name, features in r["assets"].items():
         bus.send(name, features)

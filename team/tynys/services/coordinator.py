@@ -32,7 +32,10 @@ def explain(p, st, dec, plan, t):
            f"(ВИЭ {renew0:.0f} МВт) — {'«вдыхаем»' if cheap else '«выдыхаем»'}."]
     if feed > 1:
         dom = "твёрдую" if hard > 0.55 * feed else "мягкую" if soft > 0.55 * feed else "смесь"
-        why.append(f"Мелем {dom} руду: твёрдой {hard:.0f}, мягкой {soft:.0f} т/ч, крупность P80 {p80:.0f} мкм.")
+        why.append(f"Мелем {dom} руду: твёрдой {hard:.0f}, мягкой {soft:.0f} т/ч.")
+        for l, values in enumerate(plan.get("line_p80_um", [])):
+            if values[0] is not None:
+                why.append(f"Линия {l+1}: P80 {values[0]:.0f} мкм.")
         if dom == "мягкую":
             why.append("Твёрдую копим на складе до дешёвой энергии.")
     why.append(f"Самосвалы заряжаются {dec['charge_mw']:.0f} МВт." if dec["charge_mw"] > 5 else "Самосвалы ездят на заряде батарей.")
@@ -48,7 +51,7 @@ def explain(p, st, dec, plan, t):
         h = int(np.argmin(plan["grid_cap_mw"]))
         why.append(f"Через {h} ч сеть ограничена до {min(plan['grid_cap_mw']):.0f} МВт (KEGOC) — план учитывает.")
     if not any(st.line_lock) and sum(plan["lines_on"][l][0] for l in range(p.n_lines)) < p.n_lines:
-        why.append("Одна линия остановлена: так дешевле, чем молоть на минимуме.")
+        why.append("В плане есть остановленная линия; учитываются доступность, ремонт и ограничения подачи.")
     return mode, " ".join(why)
 
 
@@ -87,6 +90,10 @@ def main():
         compact = {k: r(plan[k]) for k in ("renew_mw", "grid_cap_mw", "feed_tph", "hard_tph", "p80_um", "charge_mw",
                                          "bess_mw", "grid_mw", "curtail_mw", "fleet_mwh", "bess_mwh")} if plan else {}
         if plan:
+            for key in ("line_p80_um", "line_feed_tph", "line_mw"):
+                compact[key] = [r(line) for line in plan[key]]
+            for key in ("bess_charge_mw", "bess_discharge_mw"):
+                compact[key] = r(plan[key])
             compact["shadow_kzt_kwh"] = r(np.array(plan["shadow_kzt_mwh"], float) / 1000, 2)
             compact["pile_soft_kt"] = r(np.array(plan["pile_soft_t"]) / 1000)
             compact["pile_hard_kt"] = r(np.array(plan["pile_hard_t"]) / 1000)

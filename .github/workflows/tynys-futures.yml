@@ -26,6 +26,7 @@ jobs:
           pip install -r team/tynys/requirements.txt pytest==9.1.1
           python -m pytest team/tynys/tests -q
           (cd team/tynys && python regress.py)
+          (cd team/tynys && python regress.py --legacy)
       - name: Start the documented stand
         run: |
           sudo apt-get update && sudo apt-get install -y make
