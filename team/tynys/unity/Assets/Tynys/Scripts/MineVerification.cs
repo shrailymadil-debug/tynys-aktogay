@@ -31,7 +31,7 @@ namespace Tynys
             var data=FindFirstObjectByType<MineData>();
             var world=FindFirstObjectByType<MineWorld>();
             var hud=FindFirstObjectByType<MineHUD>();
-            data.ResetDemo();data.Paused=true;
+            data.SetLive(false);data.ResetDemo();data.Paused=true;
             if(Debug.isDebugBuild)errors.Add("Expected release player without Development Build");
             if(Mathf.Abs(data.State.hour-9)>0.001f)errors.Add("Demo must start at 09:00");
             if(world.steam.Length!=2||world.truckHeadlights.Length!=28)errors.Add("Missing steam or headlights");
@@ -42,6 +42,7 @@ namespace Tynys
                     if(float.IsNaN(v.x)||float.IsInfinity(v.x)||float.IsNaN(v.z)||float.IsInfinity(v.z))
                         errors.Add("Nonfinite mesh: "+mf.name);
             VerifyTruckRouting(world,errors);
+            VerifyLiveTruckCadence(world,data,errors);
             world.ResetTruckPoses();
             yield return null;
             var initialTruck=world.trucks[7].position;
@@ -100,6 +101,7 @@ namespace Tynys
             File.WriteAllText(Path.Combine(dir,"verification.txt"),
                 errors.Count==0?"PASS: all 7 demo modes, finite geometry, truck animation, missing live server, mode reset and framebuffer captures.\n"+
                 "PASS: route interpolation stays on-road for a 0.28 phase jump and 0.99 to 0.01 wrap; pause and charge/wait transitions.\n"+
+                "PASS: LIVE hourly +0.7 phase aliases never reverse or stop motion; 90-second local lap, stale/pause freeze and resume, charging/waiting park.\n"+
                 (liveArg>=0?"PASS: HTTP fixture from repository publisher, live BESS/grid values, retained stale snapshot.\n":""):
                 "FAIL:\n"+string.Join("\n",errors));
             Debug.Log("TYNYS_RUNTIME_VERIFICATION "+(errors.Count==0?"PASS":"FAIL"));
@@ -141,6 +143,63 @@ namespace Tynys
                 state.state="empty";world.UpdateTruckPose(truck,state,true,1f/30);
                 if(DistanceToRoad(world.trucks[truck].position,world.route)>.75f)errors.Add("Truck did not rejoin road after "+stoppedState);
             }
+        }
+
+        static void VerifyLiveTruckCadence(MineWorld world,MineData data,List<string> errors)
+        {
+            const int truck=7;
+            const float dt=.05f;
+            bool previousLive=data.LiveMode;
+            // Synchronous pose test: no MonoBehaviour Update/poll runs while this temporary mode is set.
+            data.LiveMode=true;
+            try
+            {
+                var state=new TruckState{state="loaded",routePos=.92f}; // Cross the cycle seam during the test.
+                world.ResetTruckPoses();world.UpdateTruckPose(truck,state,true,dt);
+                float initial=world.TruckVisualPhase(truck),before=initial;
+                for(int frame=1;frame<=360;frame++) // Three 6-second publications, repeated 1Hz polls in between.
+                {
+                    if(frame%120==0)
+                    {
+                        state.routePos=Mathf.Repeat(state.routePos+.7f,1);
+                        state.state=state.state=="loaded"?"empty":"loaded";
+                    }
+                    world.UpdateTruckPose(truck,state,true,dt);
+                    float phase=world.TruckVisualPhase(truck),advance=Mathf.Repeat(phase-before,1);
+                    if(advance<.0001f||advance>.002f)
+                    {errors.Add("LIVE coarse snapshot caused a stop, reverse or phase jump");break;}
+                    if(DistanceToRoad(world.trucks[truck].position,world.route)>.75f)
+                    {errors.Add("LIVE local animation left the road");break;}
+                    before=phase;
+                }
+                if(Mathf.Abs(Mathf.Repeat(world.TruckVisualPhase(truck)-initial,1)-18f/90f)>.001f)
+                    errors.Add("LIVE lap speed is not one lap per 90 real seconds");
+                foreach(string reason in new[]{"stale","paused"})
+                {
+                    float frozenPhase=world.TruckVisualPhase(truck);
+                    var frozenPosition=world.trucks[truck].position;
+                    state.routePos=Mathf.Repeat(state.routePos+.7f,1);
+                    for(int frame=0;frame<120;frame++)world.UpdateTruckPose(truck,state,false,dt);
+                    if(world.TruckVisualPhase(truck)!=frozenPhase||Vector3.Distance(frozenPosition,world.trucks[truck].position)>.001f)
+                        errors.Add("LIVE "+reason+" advanced local motion");
+                    world.UpdateTruckPose(truck,state,true,dt);
+                    float resumed=Mathf.Repeat(world.TruckVisualPhase(truck)-frozenPhase,1);
+                    if(Mathf.Abs(resumed-dt/90f)>.00001f)errors.Add("LIVE "+reason+" recovery snapped to the published alias");
+                }
+                foreach(string stopped in new[]{"charging","waiting"})
+                {
+                    state.state=stopped;world.UpdateTruckPose(truck,state,true,dt);
+                    var parked=world.trucks[truck].position;
+                    state.routePos=Mathf.Repeat(state.routePos+.7f,1);
+                    for(int frame=0;frame<120;frame++)world.UpdateTruckPose(truck,state,true,dt);
+                    if(Vector3.Distance(parked,world.trucks[truck].position)>.001f)
+                        errors.Add("LIVE "+stopped+" did not remain parked");
+                    state.state="loaded";world.UpdateTruckPose(truck,state,true,dt);
+                    if(DistanceToRoad(world.trucks[truck].position,world.route)>.75f)
+                        errors.Add("LIVE truck did not rejoin the road after "+stopped);
+                }
+            }
+            finally {data.LiveMode=previousLive;world.ResetTruckPoses();}
         }
 
         static float DistanceToRoad(Vector3 point,Vector3[] road)

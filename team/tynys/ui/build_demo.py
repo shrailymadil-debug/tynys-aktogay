@@ -1,6 +1,7 @@
 """Собирает demo.html — автономную 3D‑сцену (без стенда) на записи trace.json.
 three.js берётся с jsDelivr. Запуск: python build_demo.py"""
 import os
+import re
 here = os.path.dirname(os.path.abspath(__file__))
 html = open(os.path.join(here, "3d.html"), encoding="utf-8").read()
 js = open(os.path.join(here, "scene3d.js"), encoding="utf-8").read()
@@ -19,8 +20,9 @@ js = js.replace("import { installSceneDetails, mergeStaticMeshes } from './scene
 js = js.replace("'./vendor/OrbitControls.js'", f"'{CDN}/examples/jsm/controls/OrbitControls.js'")
 js = js.replace("'./vendor/CSS2DRenderer.js'", f"'{CDN}/examples/jsm/renderers/CSS2DRenderer.js'")
 html = html.replace('{"imports":{"three":"./vendor/three.module.js"}}', '{"imports":{"three":"%s/build/three.module.js"}}' % CDN)
-html = html.replace('<a class="btn" href="./" id="to2d">Схема и «что если» →</a>', '')
-html = html.replace('<a style="color:#5fe3a1" href="./">2D‑схему рудника</a>', '2D‑схему на стенде')
+# A single-file replay has no sibling Unity, dashboard or experiment pages.
+html = re.sub(r'<a class="btn" href="(?:\./|\./dashboard\.html|futures\.html)"(?: id="[^"]+")?>[^<]+</a>', '', html)
+html = html.replace('<a style="color:#5fe3a1" href="./dashboard.html">2D‑схему рудника</a>', '2D‑схему на стенде')
 html = html.replace('<script type="module" src="scene3d.js"></script>',
                     '<script>window.TYNYS_TRACE=' + trace + ';</script>\n<script type="module">\n' + js + '\n</script>')
 open(os.path.join(here, "demo.html"), "w", encoding="utf-8").write(html)

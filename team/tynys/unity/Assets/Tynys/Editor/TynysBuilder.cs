@@ -23,13 +23,14 @@ namespace Tynys.Editor
             AssetDatabase.Refresh();
             var root=new GameObject("TYNYS · Digital Mine");
             var data=root.AddComponent<MineData>();
+            data.LiveMode=true;
             var world=root.AddComponent<MineWorld>();
             var hud=root.AddComponent<MineHUD>();
             var camera=new GameObject("Обзорная камера",typeof(Camera),typeof(AudioListener),typeof(MineCamera));
             camera.tag="MainCamera";
             var cam=camera.GetComponent<Camera>();
-            cam.clearFlags=CameraClearFlags.Skybox;
-            cam.backgroundColor=new Color(.64f,.78f,.86f);
+            cam.clearFlags=CameraClearFlags.SolidColor;
+            cam.backgroundColor=new Color(.025f,.045f,.065f);
             cam.orthographic=true;cam.orthographicSize=55;cam.farClipPlane=500;cam.nearClipPlane=.1f;
             cam.allowHDR=true;cam.allowMSAA=true;
             camera.transform.position=new Vector3(0,108,-112);
@@ -38,10 +39,11 @@ namespace Tynys.Editor
             world.data=data;world.hud=hud;world.viewCamera=cam;world.cameraRig=rig;
             hud.data=data;hud.cameraRig=rig;
             world.Build();
+            var command=root.AddComponent<MineCommandView>();command.world=world;command.Build();hud.command=command;
             var sun=new GameObject("Солнце · мягкие тени",typeof(Light));
             sun.transform.rotation=Quaternion.Euler(52,-28,0);
             var light=sun.GetComponent<Light>();light.type=LightType.Directional;light.color=new Color(1,.94f,.82f);
-            light.intensity=.92f;light.shadows=LightShadows.Soft;light.shadowStrength=.58f;light.shadowBias=.03f;
+            light.intensity=1.05f;light.shadows=LightShadows.Soft;light.shadowStrength=.58f;light.shadowBias=.03f;
             RenderSettings.sun=light;
             RenderSettings.ambientMode=AmbientMode.Trilight;
             RenderSettings.ambientSkyColor=new Color(.68f,.77f,.83f);
@@ -51,8 +53,8 @@ namespace Tynys.Editor
             sky.SetFloat("_SunSize",.025f);sky.SetFloat("_AtmosphereThickness",.8f);sky.SetFloat("_Exposure",1.1f);
             sky.SetColor("_SkyTint",new Color(.6f,.72f,.82f));sky.SetColor("_GroundColor",new Color(.55f,.58f,.55f));
             AssetDatabase.CreateAsset(sky,"Assets/Tynys/Generated/DaylightSky.mat");RenderSettings.skybox=sky;
-            RenderSettings.fog=true;RenderSettings.fogMode=FogMode.Linear;RenderSettings.fogColor=new Color(.7f,.8f,.84f);
-            RenderSettings.fogStartDistance=155f;RenderSettings.fogEndDistance=340f;
+            RenderSettings.fog=true;RenderSettings.fogMode=FogMode.Linear;RenderSettings.fogColor=new Color(.09f,.14f,.19f);
+            RenderSettings.fogStartDistance=210f;RenderSettings.fogEndDistance=420f;
             RenderSettings.reflectionIntensity=.7f;DynamicGI.UpdateEnvironment();
             var reflection=new GameObject("Дневные отражения",typeof(ReflectionProbe));reflection.transform.position=new Vector3(0,12,0);
             var probe=reflection.GetComponent<ReflectionProbe>();probe.size=new Vector3(220,80,150);probe.mode=ReflectionProbeMode.Realtime;
@@ -129,7 +131,7 @@ namespace Tynys.Editor
             }
         }
 
-        [MenuItem("Tynys/Build Windows demo")]
+        [MenuItem("Tynys/Build Windows LIVE")]
         public static void BuildWindows()
         {
             if(!File.Exists(ScenePath))CreateScene();
@@ -151,6 +153,40 @@ namespace Tynys.Editor
             BuildWindows();
         }
 
+        [MenuItem("Tynys/Build Web LIVE")]
+        public static void CreateAndBuildWeb()
+        {
+            CreateScene();
+            ValidateScene();
+            PlayerSettings.WebGL.compressionFormat=WebGLCompressionFormat.Disabled;
+            PlayerSettings.WebGL.decompressionFallback=false;
+            PlayerSettings.WebGL.nameFilesAsHashes=false;
+            PlayerSettings.WebGL.template="PROJECT:Tynys";
+            PlayerSettings.WebGL.threadsSupport=false;
+            PlayerSettings.SetManagedStrippingLevel(UnityEditor.Build.NamedBuildTarget.WebGL,ManagedStrippingLevel.Low);
+            EditorUserBuildSettings.development=false;
+            EditorUserBuildSettings.allowDebugging=false;
+            // Stable basename regardless of the external delivery folder.
+            string staging="Builds/Tynys";
+            Directory.CreateDirectory(staging);
+            var report=BuildPipeline.BuildPlayer(new BuildPlayerOptions {
+                scenes=new[]{ScenePath},locationPathName=staging,target=BuildTarget.WebGL,options=BuildOptions.None
+            });
+            if(report.summary.result!=BuildResult.Succeeded)
+                throw new Exception("Web build failed: "+report.summary.result);
+            File.Copy("Assets/Resources/Fonts/DejaVu-LICENSE.txt",Path.Combine(staging,"DejaVu-LICENSE.txt"),true);
+            string output=Environment.GetEnvironmentVariable("TYNYS_WEB_BUILD_PATH");
+            if(!string.IsNullOrEmpty(output))CopyTree(staging,output);
+            Debug.Log("TYNYS_WEB_BUILD_OK "+(string.IsNullOrEmpty(output)?staging:output));
+        }
+
+        static void CopyTree(string source,string destination)
+        {
+            Directory.CreateDirectory(destination);
+            foreach(var file in Directory.GetFiles(source))File.Copy(file,Path.Combine(destination,Path.GetFileName(file)),true);
+            foreach(var directory in Directory.GetDirectories(source))CopyTree(directory,Path.Combine(destination,Path.GetFileName(directory)));
+        }
+
         [MenuItem("Tynys/Validate scene")]
         public static void ValidateScene()
         {
@@ -164,6 +200,8 @@ namespace Tynys.Editor
                 if(f.sharedMesh==null)throw new Exception("Missing persisted mesh: "+f.name);
             if(world.GetComponentsInChildren<MineObject>().Length<30)throw new Exception("Missing selection IDs");
             if(world.steam.Length!=2||world.truckHeadlights.Length!=28)throw new Exception("Missing particle or headlight bindings");
+            var command=UnityEngine.Object.FindFirstObjectByType<MineCommandView>();
+            if(command==null||command.trucks.Length!=14||command.wires.Length!=15)throw new Exception("Missing command-view transport or digital layer");
             if(RenderSettings.skybox==null||!RenderSettings.fog)throw new Exception("Missing daylight environment");
             if(world.viewCamera.GetComponent<PostProcessLayer>()==null)throw new Exception("Missing post processing");
             if(PlayerSettings.insecureHttpOption!=InsecureHttpOption.AlwaysAllowed)throw new Exception("Release local HTTP is disabled");
