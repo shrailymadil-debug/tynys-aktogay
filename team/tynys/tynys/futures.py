@@ -103,6 +103,18 @@ def _snapshot(snapshot, request, p):
             "kind": k, "t0": _number(ev.get("t0"), "event.t0", 0, DAYS * 24, True),
             "dur": _number(ev.get("dur", EVENTS[k]["dur"]), "event.dur", 1, DAYS * 24, True),
         })
+        limits = {
+            "line_trip": ("line", 1, p.n_lines, True),
+            "kegoc": ("grid_drop_mw", 0, p.grid_cap_mw, False),
+            "plan_up": ("mine_mult", 0, 3, False),
+            "truck_failure": ("loss_pct", 0, 100, False),
+            "excavator_failure": ("loss_pct", 0, 100, False),
+            "grade_drop": ("drop_pct", 0, 100, False),
+            "tariff_change": ("change_pct", -90, 500, False),
+        }
+        if k in limits:
+            key, lo, hi, integer = limits[k]
+            out["events"][-1][key] = _number(ev.get(key, EVENTS[k][key]), "event."+key, lo, hi, integer)
     d = snapshot.get("state")
     if not isinstance(d, dict):
         raise ValueError("snapshot.state: требуется состояние из Ditto")
@@ -215,7 +227,7 @@ def _environment(p, snapshot, request):
         if ev["kind"] == "bess_fault":
             env.bess_avail[a:b] = False
         elif ev["kind"] == "line_trip":
-            env.line_avail[1, a:b] = False
+            env.line_avail[ev.get("line", 2)-1, a:b] = False
     a = snapshot["sim_hour"] + request["lead_h"]
     if request["lull"]:
         env.w["wind_pu"][a:a + 24] *= 0.08
@@ -450,7 +462,8 @@ def evaluate(request, snapshot, progress=None, cancelled=None):
     n = len(tynys)
     t0 = snapshot["sim_hour"]
     fingerprint = hashlib.sha256()
-    for a in (env.w["wind_pu"], env.w["pv_pu"], env.hard_frac, env.mine_plan, env.bess_avail):
+    for a in (env.w["wind_pu"], env.w["pv_pu"], env.hard_frac, env.mine_plan, env.bess_avail,
+              env.truck_mult, env.shovel_mult, env.tariff_mult):
         fingerprint.update(np.asarray(a[t0:t0 + n]).tobytes())
     fingerprint.update(env.line_avail[:,t0:t0+n].tobytes())
     for d in DOMAINS:

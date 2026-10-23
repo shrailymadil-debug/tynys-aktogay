@@ -94,7 +94,14 @@ def capacity_factor(env, st, name, t, offset=0):
         return 0.0
     if e.since_service_h >= env.p.service_interval_h and offset < env.p.service_duration_h:
         return 0.0
-    return max(0.0, min(1.0, e.health))
+    available = 1.0
+    if name.startswith("truck-"):
+        # Retain a deterministic subset of actual groups; no reassignment of
+        # their stored energy to working trucks when a group fails.
+        available = max(0., min(1., env.truck_mult[t]*N_GROUPS-(int(name.split("-")[1])-1)))
+    elif name.startswith("shovel-"):
+        available = env.shovel_mult[t]
+    return max(0.0, min(1.0, e.health)) * available
 
 
 def prepare_equipment(p, env, st, t):

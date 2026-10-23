@@ -84,7 +84,7 @@ def schedule(p, env, st, t, coordinated):
         renew = wf*env.wind_mult[t:t+horizon]*p.wind_mw+pf*p.pv_mwp
         nominal_load = p.n_lines*p.line_p_max_mw+p.auxiliary_nominal_mw
         avoided = np.minimum(p.line_p_max_mw, np.maximum(0., nominal_load-renew))
-        prices = np.array([p.price_kzt_mwh((t+h)%24) for h in range(horizon)])
+        prices = np.array([p.price_kzt_mwh((t+h)%24) for h in range(horizon)]) * env.tariff_mult[t:t+horizon]
         candidates = []
         for start in range(max(t, item["earliest"]), min(item["deadline"], t+horizon-item["duration"])+1):
             end = start+item["duration"]

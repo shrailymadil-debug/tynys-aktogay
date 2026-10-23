@@ -20,6 +20,14 @@ jobs:
           sudo apt-get update && sudo apt-get install -y make
           make tynys 2>&1 | tail -5 | tee -a ci.log
           echo "Время запуска по README: $(( $(date +%s) - start )) с" | tee -a ci.log
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Последствия сценариев для меди и CO₂
+        run: |
+          set -o pipefail
+          python -m pip install --disable-pip-version-check numpy scipy pandas
+          PYTHONPATH=team/tynys python team/tynys/scripts/scenario_effect_check.py | tee -a ci.log
       - name: What-if на стенде (включить → след в двойниках → отменить)
         run: |
           set -o pipefail
@@ -34,24 +42,12 @@ jobs:
           python team/tynys/scripts/check3d.py http://127.0.0.1:8095/3d.html screen3d.png --mode functional --expect-source live 2>&1 | tee -a ci.log
       - name: Снимок пульта (материал для команды)
         if: always()
-        continue-on-error: true
-        run: python team/tynys/scripts/screenshot.py http://127.0.0.1:8095 screen.png
-      - uses: actions/upload-artifact@v4
-        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: live-scene-evidence
+          name: tynys-ci-evidence
           path: |
-            screen3d*.png
-            screen3d.json
             ci.log
-          if-no-files-found: ignore
-      - name: Снимок в ветку ci-screens
-        if: always()
-        continue-on-error: true
-        run: |
-          git config user.name github-actions; git config user.email github-actions@users.noreply.github.com
-          git checkout --orphan ci-screens; git rm -rfq --cached . ; git add -f screen.png screen3d.png ci.log || git add -f screen.png ci.log
-          git commit -qm "screen ${GITHUB_SHA::7}"; git push -qf origin ci-screens
-      - name: Логи
-        if: failure()
-        run: docker compose -f deploy/compose/docker-compose.yml -f team/tynys/compose.yml logs --tail=200
+            screen3d.png
+            screen2d.png
+          if-no-files-found: warn
+          retention-days: 14

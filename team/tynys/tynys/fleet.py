@@ -82,7 +82,7 @@ def dispatch(p, fl, factors, charge_request, mine_limit, haul_mwh_t):
         if factors[f"truck-{i+1:02d}"] <= 0:
             continue
         station = charger_for(i)
-        power = min(remaining, station_left[station], k * p.charger_mw,
+        power = min(remaining, station_left[station], k * p.charger_mw * factors[f"truck-{i+1:02d}"],
                     max(0.0, hi - fl.e[i]) / p.eta_charge)
         powers[i] = power
         station_left[station] -= power
