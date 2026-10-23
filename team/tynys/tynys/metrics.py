@@ -20,7 +20,9 @@ def summarize(p: Params, df: pd.DataFrame, init_pile: float) -> dict:
     """Сводка прогона. Изменение запасов на складах пересчитано в «медь в запасе»,
     чтобы вариант не выглядел лучше просто за счёт того, что съел склад."""
     end = {"soft": df.pile_soft.iloc[-1], "hard": df.pile_hard.iloc[-1]}
-    d_inv_cu = sum((end[d] - init_pile) * p.cu_grade[d] * p.r150[d] for d in DOMAINS)
+    d_inv_cu = sum((df[f"pile_cu_{d}"].iloc[-1] - init_pile*p.cu_grade[d]) * p.r150[d]
+                   if f"pile_cu_{d}" in df else (end[d]-init_pile)*p.cu_grade[d]*p.r150[d]
+                   for d in DOMAINS)
     cu = df.cu_t.sum()
     load = df.load.sum()
     renew_used = (df.renew - df.curtail).sum()

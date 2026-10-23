@@ -145,6 +145,9 @@ Object.assign(FIELDS,{throughput_tph:['Пропускная способност
   flow_m3_h:['Вода в процесс','м³/ч'],fresh_m3_h:['Свежая вода','м³/ч'],recycle_m3_h:['Оборотная вода','м³/ч'],
   grade_pct:['Содержание Cu','%'],assigned_shovel:['Экскаватор',''],assigned_charger:['Зарядная группа','']});
 FIELDS.tonnes=['Накоплено','т'];
+Object.assign(FIELDS,{idle_mw:['Постоянная часть мощности','МВт'],stop_reason:['Причина остановки',''],cu_t:['Cu в запасе','т']});
+Object.assign(STATES,{equipment_unavailable:'оборудование недоступно',controlled_stop:'штатная остановка',
+  capacity_trip:'защита по мощности / производительности',stockout_trip:'недостаточно руды',power_trip:'дефицит электропитания'});
 const EVENT_NAMES = {lull:'Штиль',line_trip:'Авария линии 2',kegoc:'Ограничение KEGOC',hard_ore:'Твёрдая руда',plan_up:'План добычи +10 %',bess_fault:'Отказ накопителя'};
 Object.assign(EVENT_NAMES,{crusher_fault:'Отказ дробилки',shovel_fault:'Отказ экскаватора 1',
   conveyor_fault:'Отказ конвейера питания',water_fault:'Отказ водовода',

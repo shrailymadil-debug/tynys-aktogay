@@ -73,7 +73,7 @@ function render() {
     const speed = v(id,'speed_rpm',null);
     const cells = [title,states[v(id,'state')] || '—',
       flow === null ? '—' : fmt(flow,1)+(id==='water'?' м³/ч':' т/ч'),
-      fmt(v(id,'power_mw',null),2), speed===null?'—':fmt(speed,1),
+      fmt(v(id,'power_mw',null),2), speed===null?'—':fmt(speed,1),fmt(v(id,'p80_um',null)),
       fmt(v(id,'health_pct',null),1),fmt(v(id,'availability_pct',null),1)];
     for (const value of cells) { const cell=document.createElement('td');cell.textContent=value;row.appendChild(cell); }
     body.appendChild(row);
@@ -234,11 +234,12 @@ async function loadSizing() {
 loadSizing();
 async function loadFlex() {
   try {
-    const F = await api('GET', `things/${NS}:substation/attributes/flex_stats`) || [];
-    const y = F.find(r => r.season.startsWith('весь год')); if (!y) return;
-    $('flexstat').textContent = `Архив прежней модели, не пересчитан: погода 2024 (flex_stats.py, 4 × 14 суток): медиана ${fmt(y.mw_median ?? y.mw_mean)} МВт ` +
+    const attrs = await api('GET', `things/${NS}:substation/attributes`) || {};
+    const y = (attrs.flex_stats || []).find(r => r.season === 'all' || r.season.startsWith('весь год')); if (!y) return;
+    const source = attrs.flex_stats_model === 'physics-v3' ? 'Расчёт physics-v3' : 'Архив прежней модели';
+    $('flexstat').textContent = `${source}: погода 2024, 4 × 14 суток, включая часы без импорта. Среднее ${fmt(y.mw_mean,1)} МВт; медиана ${fmt(y.mw_median ?? y.mw_mean)} МВт ` +
       `(p10–p90: ${fmt(y.mw_p10)}–${fmt(y.mw_p90)}) на ${fmt(y.h_median ?? y.h_mean, 1)} ч (p10–p90: ${fmt(y.h_p10, 1)}–${fmt(y.h_p90, 1)}). ` +
-      `Чаще всего длительность ограничивает накопитель (69 % часов), реже — заряд самосвалов (31 %).`;
+      `Длительность — предел по запасам при неизменных условиях, а не гарантия выдачи резерва.`;
   } catch (e) { setTimeout(loadFlex, 5000); }
 }
 loadFlex();

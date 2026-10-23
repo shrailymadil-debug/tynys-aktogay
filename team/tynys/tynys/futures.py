@@ -121,6 +121,28 @@ def _snapshot(snapshot, request, p):
     if len(state["line_lock"]) != p.n_lines:
         raise ValueError("line_lock: по одному счётчику на линию")
     state["line_lock"] = [_number(x, "line_lock", 0, 24, True) for x in state["line_lock"]]
+    process_fields = {"pile_cu", "line_x", "line_mw"}
+    if process_fields & set(d):
+        if not process_fields <= set(d):
+            raise ValueError("process state: неполная история процесса")
+        from .params import P80_MODES
+        try:
+            state["pile_cu"] = {k: _number(d["pile_cu"][k], f"pile_cu.{k}", 0, state["pile"][k]) for k in DOMAINS}
+            a = np.asarray(d["line_x"], dtype=float)
+            if a.shape != (p.n_lines, len(DOMAINS), len(P80_MODES)) or not np.isfinite(a).all() or np.any(a < 0):
+                raise ValueError("line_x: неверная история подачи")
+            if np.any(a.sum(axis=(1,2)) > p.line_q_max+1e-6) or np.any((a.sum(axis=1) > 1e-5).sum(axis=1) > 1):
+                raise ValueError("line_x: несколько P80 или превышение подачи")
+            if list(a.sum(axis=(1,2)) > 0) != state["line_on"]:
+                raise ValueError("line_x: несовместимо с line_on")
+            if len(d["line_mw"]) != p.n_lines:
+                raise ValueError("line_mw: неверное число линий")
+            state["line_x"] = a.tolist()
+            state["line_mw"] = [_number(v, "line_mw", 0, p.line_p_max_mw) for v in d["line_mw"]]
+            if any(bool(v > 0) != state["line_on"][l] for l,v in enumerate(state["line_mw"])):
+                raise ValueError("line_mw: несовместимо с line_on")
+        except (KeyError, TypeError) as exc:
+            raise ValueError("process state: неполная история процесса") from exc
     # Preserve and validate all causal state. Dropping equipment or group
     # batteries here would silently repair the counterfactual mine on replay.
     if "equipment" in d:
@@ -409,10 +431,13 @@ def evaluate(request, snapshot, progress=None, cancelled=None):
     for a in (env.w["wind_pu"], env.w["pv_pu"], env.hard_frac, env.mine_plan, env.bess_avail):
         fingerprint.update(np.asarray(a[t0:t0 + n]).tobytes())
     fingerprint.update(env.line_avail[:,t0:t0+n].tobytes())
+    for d in DOMAINS:
+        fingerprint.update(env.grade_true[d][t0:t0+n].tobytes())
+        fingerprint.update(env.bwi_true[d][t0:t0+n].tobytes())
     fingerprint.update(json.dumps([env.sc.equipment_down, env.sc.equipment_maintenance],
                                   sort_keys=True, separators=(",",":")).encode())
     result = {
-        "schema_version": SCHEMA_VERSION, "model_version": "equipment-v2", "request": request,
+        "schema_version": SCHEMA_VERSION, "model_version": "physics-v3", "request": request,
         "snapshot": {**copy.deepcopy(snapshot),
                      "weather_source": env.w.get("source", "Синтетическая погода"),
                      "disturbance_sha256": fingerprint.hexdigest()},

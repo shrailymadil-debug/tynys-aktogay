@@ -25,7 +25,7 @@ def twins():
     p = aktogay()
     out = [
         t("site", SITE, "mine", None, {"sim_hour": 0, "cu_t": 0.0}, lat=p.lat, lon=p.lon,
-          source="KAZ Minerals Annual Report 2024; Open-Meteo ERA5"),
+          source="KAZ Minerals Annual Report 2024; Open-Meteo ERA5", model_version="physics-v3"),
         t("pit", "Карьер Актогай", "pit", "site", {"ore_tph": 0., "waste_tph": 0., "hard_frac": .5}),
         t("plant", "Обогатительные фабрики", "plant", "site", {"feed_tph": 0.}),
         t("energy", "Энергосистема рудника", "energy", "site", {"load_mw": 0.}),
@@ -47,10 +47,15 @@ def twins():
             i = int(name.split('-')[1])-1
             attrs.update(assigned_shovel=f"{NS}:{shovel_for(i)}", assigned_charger=f"{NS}:{charger_for(i)}",
                          trucks_per_group=p.n_trucks/14, payload_per_truck_t=p.truck_payload_t)
+        if kind == "mill_line":
+            from tynys.physics import mill_idle_mw
+            attrs.update(idle_mw=mill_idle_mw(p), q_ramp_tph_h=p.line_q_nom*p.line_q_ramp_fraction,
+                         power_ramp_mw_h=p.line_p_max_mw*p.line_power_ramp_fraction)
         out.append(t(name, title, kind, parent, initial_features(kind), **attrs))
     for domain in ("soft", "hard"):
         out.append(t(f"pile-{domain}", f"Склад руды {domain}", "stockpile", "plant",
-                     {"tonnes": 0., "fill_pct": 0., "bwi_est": p.bwi[domain], "bwi_true": p.bwi[domain]},
+                     {"tonnes": 0., "fill_pct": 0., "cu_t": 0., "grade_pct": 100*p.cu_grade[domain],
+                      "bwi_est": p.bwi[domain], "bwi_true": p.bwi[domain]},
                      domain=domain, capacity_t=p.pile_cap_t))
     d = dict(out)
     ref = lambda *names: [f"{NS}:{name}" for name in names]
@@ -91,7 +96,9 @@ def twins():
             types[type_name]["features"].update(copy.deepcopy(body["features"]))
     # Historical sizing/flex results remain accessible, explicitly versioned.
     d["energy"]["attributes"].update(sizing=sizing(), sizing_model="legacy-aggregate-v1")
-    d["substation"]["attributes"].update(flex_stats=csv_rows("flex.csv"), flex_stats_model="legacy-aggregate-v1")
+    current_flex = csv_rows("flex-physics-v3.csv")
+    d["substation"]["attributes"].update(flex_stats=current_flex or csv_rows("flex.csv"),
+        flex_stats_model="physics-v3" if current_flex else "legacy-aggregate-v1")
     return {**types, **d}
 
 

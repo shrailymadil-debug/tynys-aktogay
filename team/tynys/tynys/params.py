@@ -32,6 +32,8 @@ class Params:
     # Внутридоменная изменчивость твёрдости, которую контроллер заранее не знает
     bwi_noise_sd: float = 0.04
     bwi_noise_phi: float = 0.98
+    grade_noise_sd: float = 0.10   # ASSUMPTION: relative within-domain Cu variability
+    grade_noise_phi: float = 0.98
 
     # ---------- флотация ----------
     k_flot_per_min: float = 0.25   # константа кинетики 1-го порядка (ASSUMPTION)
@@ -45,6 +47,11 @@ class Params:
     line_q_max: float = 1100.0     # объёмное ограничение
     line_p_max_mw: float = 15.0
     mill_speed_rpm: float = 10.5  # ASSUMPTION: постоянная скорость привода при работе
+    # ASSUMPTIONS, not Aktogay commissioning measurements. Nominal reference
+    # power is retained; unloading removes only the variable component.
+    mill_idle_fraction: float = 0.35
+    line_q_ramp_fraction: float = 0.10  # nominal throughput per hour
+    line_power_ramp_fraction: float = 0.10  # installed power per hour
     restart_cost_kzt: float = 5.0e6   # износ + потери при повторном пуске (ASSUMPTION)
     trip_lockout_h: int = 1           # после аварийного отключения линия 1 ч недоступна
 
@@ -61,6 +68,7 @@ class Params:
     service_interval_h: float = 720.0   # моточасы между ТО
     service_duration_h: int = 4
     equipment_wear_per_h: float = 0.00001
+    planned_stops: bool = True  # staggered 4 h weekly line / fortnightly crusher stops
 
     # ---------- склады ----------
     pile_cap_t: float = 60_000.0   # живая ёмкость КАЖДОГО из двух складов (soft/hard)
