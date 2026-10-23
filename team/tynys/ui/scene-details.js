@@ -25,6 +25,8 @@ const EVENT_NAMES = {lull:'Штиль',line_trip:'Авария линии 2',keg
 Object.assign(EVENT_NAMES,{crusher_fault:'Отказ дробилки',shovel_fault:'Отказ экскаватора 1',
   conveyor_fault:'Отказ конвейера питания',water_fault:'Отказ водовода',
   charger_fault:'Отказ зарядной группы 1',crusher_service:'ТО дробилки'});
+Object.assign(EVENT_NAMES,{truck_failure:'Поломка самосвала',excavator_failure:'Поломка экскаватора',grade_drop:'Падение содержания меди',tariff_change:'Смена тарифа сети'});
+const eventName=e=>e.kind==='line_trip'?'Авария линии '+(Number(e.line)||2):(EVENT_NAMES[e.kind]||e.kind);
 
 export function scenarioEvents(data) {
   const raw = data.scenario?.events;
@@ -216,6 +218,8 @@ export function installSceneDetails(ctx) {
   fixedShadows.forEach((p,i)=>shadowAt(i,...p));
   const hardHalo=mesh(new THREE.RingGeometry(20,22,40).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffa94b,transparent:true,opacity:.8,side:THREE.DoubleSide,depthWrite:false}),PILES.x,.3,PILES.z+20,scene,false);hardHalo.visible=false;hardHalo.userData.noMerge=true;
   const gridBeacon=mesh(new THREE.SphereGeometry(2.2,10,8),M(0xffa34e,{emissive:0xff8b32,emissiveIntensity:0}),SUB.x,20,SUB.z,scene,false);gridBeacon.userData.noMerge=true;dynamicRoots.push(gridBeacon);
+  const planHalo=mesh(new THREE.RingGeometry(PIT_R-4,PIT_R,64).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffc65c,transparent:true,opacity:.85,side:THREE.DoubleSide,depthWrite:false}),PIT.x,.55,PIT.z,scene,false);planHalo.visible=false;planHalo.userData.noMerge=true;dynamicRoots.push(planHalo);
+  const planLabel=label('<b>Изменение плана добычи</b><span id="l-plan">—</span>',PIT.x,34,PIT.z-PIT_R-28);planLabel.hidden=true;
   const steamMaterial=new THREE.SpriteMaterial({map:glowMap,color:0xd8e8f2,transparent:true,opacity:.13,depthWrite:false});
   const steam= mills.map((m,i)=>{const s=new THREE.Sprite(steamMaterial.clone());s.position.set(PLANT.x-30,25,PLANT.z+(i?14:-14));s.scale.set(11,18,1);scene.add(s);return s;});
 
@@ -231,6 +235,8 @@ export function installSceneDetails(ctx) {
   const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();let press=null;
   renderer.domElement.addEventListener('pointerdown',e=>{press={x:e.clientX,y:e.clientY,button:e.button};});
   renderer.domElement.addEventListener('pointerup',e=>{if(!press||press.button!==0||Math.hypot(e.clientX-press.x,e.clientY-press.y)>5)return;const rect=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);scene.updateMatrixWorld(true);raycaster.setFromCamera(pointer,camera);const hit=raycaster.intersectObjects(proxies,false)[0];if(hit)selectObject(hit.object.userData.objectId);else clearSelection();press=null;});
+  const eventObjectBadges=[['pit','l-pit','excavator_failure'],['flotation','l-fl','grade_drop']].map(([id,spanId,kind])=>{const parent=$(spanId)?.closest('.lbl');if(!parent)return null;const badge=document.createElement('span');badge.className='event-badge';badge.hidden=true;parent.appendChild(badge);return{id,kind,parent,badge};}).filter(Boolean);
+
   function update(data) {
     for(const[id]of processObjects){
       const d=data[id],el=document.getElementById(`l-${id}`);
@@ -240,7 +246,7 @@ export function installSceneDetails(ctx) {
     lastData=data;events=scenarioEvents(data);const active=events.filter(e=>e.active),kinds=new Set(active.map(e=>e.kind));
     const readable=getSource()==='live';const key=JSON.stringify([events,readable,getSource()]);
     if(key!==bannerKey){bannerKey=key;$('scenario-banner').hidden=!events.length;$('scenario-list').replaceChildren();
-      for(const e of events){const row=document.createElement('div');row.className='scenario-row';row.dataset.kind=e.kind;const title=document.createElement('span');title.textContent=`${EVENT_NAMES[e.kind]||e.kind} · ${e.active?'ещё '+fmt(e.remaining)+' ч':'через '+fmt(e.startsIn)+' ч'}`;const b=document.createElement('button');b.className='scenario-cancel';b.dataset.id=String(e.id);b.textContent='отменить';b.disabled=!readable;b.onclick=async()=>{b.disabled=true;try{await cancelEvent(e.id);}catch(err){$('scenario-note').textContent='Не удалось отменить: '+err.message;b.disabled=getSource()!=='live';}};row.append(title,b);$('scenario-list').appendChild(row);}
+      for(const e of events){const row=document.createElement('div');row.className='scenario-row';row.dataset.kind=e.kind;const title=document.createElement('span');title.textContent=`${eventName(e)} · ${e.active?'ещё '+fmt(e.remaining)+' ч':'через '+fmt(e.startsIn)+' ч'}`;const b=document.createElement('button');b.className='scenario-cancel';b.dataset.id=String(e.id);b.textContent='отменить';b.disabled=!readable;b.onclick=async()=>{b.disabled=true;try{await cancelEvent(e.id);}catch(err){$('scenario-note').textContent='Не удалось отменить: '+err.message;b.disabled=getSource()!=='live';}};row.append(title,b);$('scenario-list').appendChild(row);}
       $('scenario-note').textContent=readable?'Из сценария двойника · отмена изменяет сценарий стенда':getSource()==='stale'?'Связь потеряна. Снимок сохранён; отмена недоступна.':'События из записи. Отмена доступна на подключённом стенде.';
     }
     for(const b of bars){const raw=b.read(data),valid=typeof raw==='number'&&Number.isFinite(raw),value=valid?clamp(raw,0,b.maximum):0;b.fill.style.width=`${100*value/b.maximum}%`;if(valid)b.bar.setAttribute('aria-valuenow',String(value));else b.bar.removeAttribute('aria-valuenow');b.bar.setAttribute('aria-valuetext',valid?`${fmt(raw)} %`:'нет данных');
@@ -248,19 +254,23 @@ export function installSceneDetails(ctx) {
       const warning=unavailable||(valid&&(lowEnergy||highFill)),caution=!warning&&valid&&((energyBar&&value>=20&&value<40)||(!energyBar&&value>=85));
       b.bar.dataset.warning=String(warning);b.bar.dataset.caution=String(caution);b.bar.dataset.status=unavailable?'unavailable':!valid?'unknown':warning?'warning':caution?'caution':'normal';
       if(unavailable)b.bar.setAttribute('aria-valuetext',`${valid?fmt(raw)+' % · ':''}оборудование недоступно`);
-      const kind=({'wind':'lull','substation':'kegoc','line-2':'line_trip','bess':'bess_fault','pile-hard':'hard_ore'})[b.id],ev=active.find(e=>e.kind===kind);b.badge.hidden=!ev;b.badge.textContent=ev?`${EVENT_NAMES[ev.kind]} · ${fmt(ev.remaining)} ч`:'';b.parent.classList.toggle('event-on',!!ev);
+      const kind=({'wind':'lull','substation':'kegoc','line-2':'line_trip','bess':'bess_fault','pile-hard':'hard_ore','truck-01':'truck_failure'})[b.id],ev=active.find(e=>b.id.startsWith('line-')?e.kind==='line_trip'&&Number(e.line??2)===Number(b.id.slice(-1)):e.kind===kind||(b.id==='substation'&&e.kind==='tariff_change'));b.badge.hidden=!ev;b.badge.textContent=ev?eventName(ev)+' · '+fmt(ev.remaining)+' ч':'';b.parent.classList.toggle('event-on',!!ev);
     }
     for(let i=0;i<2;i++){const d=data[`line-${i+1}`];$(`l-line${i+1}`).textContent=d?`${fmt(d.feed_tph)} т/ч · ${d.available?'доступна':'авария'}`:'—';}
     for(let i=0;i<trucks.length;i++){const id=`truck-${String(i+1).padStart(2,'0')}`;$(`l-${id}`).textContent=data[id]?`${fmt(data[id].soc)} %`:'—';}
+    for(const item of eventObjectBadges){const ev=active.find(e=>e.kind===item.kind);item.badge.hidden=!ev;item.badge.textContent=ev?eventName(ev)+' · '+fmt(ev.remaining)+' ч':'';item.parent.classList.toggle('event-on',!!ev);}
     hardHalo.visible=kinds.has('hard_ore');
     hardHalo.scale.setScalar(Math.max(1,piles.hard.scale.x*1.15));
+    const planEvent=active.find(e=>e.kind==='plan_up');planHalo.visible=!!planEvent;planLabel.hidden=!planEvent;
+    const planRate=data.pit?.ore_plan_tph;const actualRate=data.pit?.ore_tph;$('l-plan').textContent=typeof planRate==='number'?fmt(planRate)+' т/ч по плану · факт '+fmt(actualRate)+' т/ч':'повышенная подача · модельное событие';
     bessLights.forEach(l=>l.material.emissive.set(data.bess?.available===false?0xff3d31:0x4fd18b));
     ctx.bessBodyMat.color.set(data.bess?.available===false?0xbc493f:0xeef1f3);
     refreshSelection();
   }
   function tick(now,dayK) {
     const kinds=new Set(events.filter(e=>e.active).map(e=>e.kind));
-    const gridLimited=kinds.has('kegoc');gridBeacon.material.emissiveIntensity=gridLimited?(Math.sin(now/160)>0?3:.15):0;gridBeacon.visible=gridLimited;
+    const gridLimited=kinds.has('kegoc');
+    if(planHalo.visible)planHalo.material.opacity=.55+.3*(.5+.5*Math.sin(now/320));gridBeacon.material.emissiveIntensity=gridLimited?(Math.sin(now/160)>0?3:.15):0;gridBeacon.visible=gridLimited;
     flows.grid.im.material.color.set(gridLimited?(Math.sin(now/220)>0?0xffa23d:0xb77a35):0x9a9a9a);
     const wirePulse=gridLimited&&Math.sin(now/220)>0;
     ctx.gridWireMat.color.set(wirePulse?0xffa23d:0x3a3f44);

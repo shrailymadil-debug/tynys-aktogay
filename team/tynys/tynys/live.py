@@ -16,12 +16,16 @@ DAYS = 365
 
 # Типы событий what-if. dur — длительность (ч), lead — через сколько часов начнётся.
 EVENTS = {
-    "lull":       {"title": "Штиль на сутки",          "lead": 3, "dur": 24},
-    "line_trip":  {"title": "Авария линии 2",          "lead": 0, "dur": 8},
-    "kegoc":      {"title": "Запрос KEGOC: −80 МВт",   "lead": 2, "dur": 4},
-    "hard_ore":   {"title": "Пошла твёрдая руда",      "lead": 0, "dur": 72},
-    "plan_up":    {"title": "План добычи +10 %",       "lead": 0, "dur": 48},
-    "bess_fault": {"title": "Отказ накопителя",        "lead": 0, "dur": 12},
+    "lull":              {"title": "Штиль на сутки", "lead": 3, "dur": 24},
+    "line_trip":         {"title": "Авария линии", "lead": 0, "dur": 8, "line": 2},
+    "kegoc":             {"title": "Ограничение KEGOC", "lead": 2, "dur": 4, "grid_drop_mw": 80},
+    "hard_ore":          {"title": "Пошла твёрдая руда", "lead": 0, "dur": 72},
+    "plan_up":           {"title": "План добычи +10 %", "lead": 0, "dur": 48, "mine_mult": 1.10},
+    "bess_fault":        {"title": "Отказ накопителя", "lead": 0, "dur": 12},
+    "truck_failure":     {"title": "Поломка самосвала", "lead": 0, "dur": 8, "loss_pct": 25},
+    "excavator_failure": {"title": "Поломка экскаватора", "lead": 0, "dur": 8, "loss_pct": 50},
+    "grade_drop":        {"title": "Падение содержания меди", "lead": 0, "dur": 24, "drop_pct": 10},
+    "tariff_change":     {"title": "Смена тарифа сети", "lead": 0, "dur": 24, "change_pct": 50},
     "crusher_fault": {"title": "Отказ дробилки", "lead": 0, "dur": 8},
     "shovel_fault": {"title": "Отказ экскаватора 1", "lead": 0, "dur": 8},
     "conveyor_fault": {"title": "Отказ конвейера питания", "lead": 0, "dur": 4},
@@ -39,19 +43,35 @@ def scenario_from_events(p, events, start_doy):
         if k == "lull":
             sc.wind_mult[(a, b)] = 0.08
         elif k == "line_trip":
-            sc.line_down[1] = (a, b)
+            line = int(ev.get("line", EVENTS[k]["line"]))
+            if not 1 <= line <= p.n_lines:
+                raise ValueError(f"line must be between 1 and {p.n_lines}")
+            sc.line_down[line - 1] = (a, b)
         elif k == "kegoc":
-            sc.grid_cap[(a, b)] = p.grid_cap_mw - 80.0
+            drop = max(0.0, min(float(ev.get("grid_drop_mw", EVENTS[k]["grid_drop_mw"])), p.grid_cap_mw))
+            sc.grid_cap[(a, b)] = p.grid_cap_mw - drop
         elif k == "hard_ore":
             sc.hard_frac_shift[a] = 0.8
             sc.hard_frac_shift[b] = p.hard_frac_base
         elif k == "plan_up":
-            sc.mine_mult[(a, b)] = 1.10
+            sc.mine_mult[(a, b)] = float(ev.get("mine_mult", EVENTS[k]["mine_mult"]))
         elif k == "bess_fault":
             sc.bess_down = (a, b)
+        elif k == "truck_failure":
+            loss = max(0.0, min(float(ev.get("loss_pct", EVENTS[k]["loss_pct"])), 100.0))
+            sc.truck_mult[(a, b)] = 1.0 - loss / 100.0
+        elif k == "excavator_failure":
+            loss = max(0.0, min(float(ev.get("loss_pct", EVENTS[k]["loss_pct"])), 100.0))
+            sc.shovel_mult[(a, b)] = 1.0 - loss / 100.0
+        elif k == "grade_drop":
+            drop = max(0.0, min(float(ev.get("drop_pct", EVENTS[k]["drop_pct"])), 100.0))
+            sc.grade_mult[(a, b)] = 1.0 - drop / 100.0
+        elif k == "tariff_change":
+            change = max(-90.0, min(float(ev.get("change_pct", EVENTS[k]["change_pct"])), 500.0))
+            sc.tariff_mult[(a, b)] = 1.0 + change / 100.0
         equipment = {"crusher_fault": "crusher", "shovel_fault": "shovel-1",
                      "conveyor_fault": "conveyor-feed", "water_fault": "water",
-                     "charger_fault": "charger-1", "line_trip": "line-2", "bess_fault": "bess"}
+                     "charger_fault": "charger-1", "line_trip": f"line-{ev.get('line', 2)}", "bess_fault": "bess"}
         if k in equipment:
             sc.equipment_down.setdefault(equipment[k], []).append((a, b))
         elif k == "crusher_service":

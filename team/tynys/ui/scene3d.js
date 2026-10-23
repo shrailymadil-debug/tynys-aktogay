@@ -36,13 +36,42 @@ async function start() {
   catch (e) { try { TRACE = await loadTrace(); if(!Array.isArray(TRACE)||!TRACE.length)throw new Error('Нет записи');source='replay';tStart=performance.now();pollTrace();setInterval(pollTrace,250); }
     catch {source='unavailable';} sourceLabel(); }
 }
-function sourceLabel(){const text=source==='live'?'● живые двойники OpenEgiz':source==='replay'?'● запись стенда · не живые данные':source==='stale'?`● связь потеряна · снимок ${new Date(lastLiveAt).toLocaleTimeString('ru-RU')}`:source==='unavailable'?'● данные недоступны':'подключение…';$('src').textContent=text;$('source-line').textContent=text+' · движение самосвалов: схема, ускорено ×10';}
+function sourceLabel(){const text=source==='live'?'● живые двойники OpenEgiz':source==='replay'?'● запись стенда · не живые данные':source==='stale'?`● связь потеряна · снимок ${new Date(lastLiveAt).toLocaleTimeString('ru-RU')}`:source==='unavailable'?'● данные недоступны':'подключение…';$('src').textContent=text;$('source-line').textContent=text+' · движение самосвалов ускорено ×10';document.querySelectorAll('[data-scenario]').forEach(b=>b.disabled=source!=='live');}
 async function cancelScenarioEvent(id){
   if(source!=='live')throw new Error('Отмена доступна только при связи с Ditto');
   await pollLive();let events;try{const raw=v('scenario','events','[]');events=Array.isArray(raw)?raw:JSON.parse(raw);}catch{throw new Error('Некорректный сценарий');}
   const body={events:{properties:{value:JSON.stringify(events.filter(e=>String(e.id)!==String(id)))}},rev:{properties:{value:Number(v('scenario','rev',0))+1}},goal:{properties:{value:v('scenario','goal','copper')}}};
   const r=await fetch(`ditto/api/2/things/${NS}:scenario/features`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error(`Ditto: ${r.status}`);await pollLive();hud();
 }
+const SCENARIOS={lull:[3,24],line_trip:[0,8],kegoc:[2,4],hard_ore:[0,72],plan_up:[0,48],bess_fault:[0,12],truck_failure:[0,12],excavator_failure:[0,12],grade_drop:[0,24],tariff_change:[0,24]};
+async function addScenarioEvent(kind){
+  const feedback=$('scenario-feedback'),buttons=[...document.querySelectorAll('[data-scenario]')];
+  if(source!=='live'){feedback.textContent='Запуск доступен при связи с живыми двойниками Ditto.';return;}
+  buttons.forEach(b=>b.disabled=true);feedback.textContent='Передаю сценарий в Ditto…';
+  try{
+    await pollLive();const t=Number(v('site','sim_hour',0));let events;const raw=v('scenario','events','[]');events=Array.isArray(raw)?raw:JSON.parse(raw||'[]');
+    const [lead,dur]=SCENARIOS[kind];if(!Number.isFinite(t)||!Number.isFinite(dur))throw new Error('Нет модельного времени');
+    const parameter=(id,fallback)=>{
+      const el=$(id);if(!el)return fallback;
+      if(!el.value.trim()||!el.checkValidity()||!Number.isFinite(Number(el.value)))throw new Error('Проверьте параметры сценария');
+      return Number(el.value);
+    };
+    events=events.filter(e=>Number(e.t0)+Number(e.dur)>t);
+    const event={kind,t0:t+1+lead,dur:parameter('scenario-duration',dur),id:Date.now()};
+    if(kind==='line_trip')event.line=parameter('scenario-line',2);
+    if(kind==='kegoc')event.grid_drop_mw=parameter('scenario-kegoc-mw',80);
+    if(kind==='truck_failure'||kind==='excavator_failure')event.loss_pct=parameter('scenario-loss-pct',30);
+    if(kind==='grade_drop')event.drop_pct=parameter('scenario-grade-pct',10);
+    if(kind==='tariff_change')event.change_pct=parameter('scenario-tariff-pct',20);
+    if(kind==='plan_up')event.mine_mult=parameter('scenario-plan-pct',1.1);
+    events.push(event);
+    const body={events:{properties:{value:JSON.stringify(events)}},rev:{properties:{value:Number(v('scenario','rev',0))+1}},goal:{properties:{value:v('scenario','goal','copper')}}};
+    const r=await fetch('ditto/api/2/things/'+NS+':scenario/features',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error('Ditto: '+r.status);
+    await pollLive();hud();feedback.textContent='Сценарий записан в двойник; 3D покажет его по модельному времени.';
+  }catch(err){feedback.textContent='Не удалось запустить: '+err.message;}
+  finally{buttons.forEach(b=>b.disabled=source!=='live');}
+}
+document.querySelectorAll('[data-scenario]').forEach(b=>b.addEventListener('click',()=>addScenarioEvent(b.dataset.scenario)));
 start();
 
 // энергобаланс «как сейчас» (V0) или «Тыныс» (V2)
@@ -255,16 +284,17 @@ for (const [dx, dz] of [[-12, 6], [10, -12]]) {
 
 // ---------- зарядка и самосвалы ----------
 const CHARGE = new THREE.Vector3(10, 0, 110);
-mesh(new THREE.BoxGeometry(84, 0.4, 32), M(0x5f666e, { roughness: 0.9 }), CHARGE.x, 0.2, CHARGE.z, scene, false);
+const chargingArea = new THREE.Group(); scene.add(chargingArea);
+mesh(new THREE.BoxGeometry(84, 0.4, 32), M(0x5f666e, { roughness: 0.9 }), CHARGE.x, 0.2, CHARGE.z, chargingArea, false);
 const chargers = [];
 for (let i = 0; i < 4; i++) {
   const x = CHARGE.x - 30 + i * 20;
-  mesh(new THREE.BoxGeometry(4, 8, 3), M(0xe9edf0, { metalness: 0.3 }), x, 4, CHARGE.z - 14);
-  mesh(new THREE.BoxGeometry(14, 0.6, 10), M(0x9aa3ab, { metalness: 0.6 }), x, 11.5, CHARGE.z - 8);
-  for (const dz of [-12.5, -3.5]) mesh(new THREE.BoxGeometry(0.6, 11.5, 0.6), M(0x9aa3ab, { metalness: 0.6 }), x - 6.5, 5.7, CHARGE.z + dz);
-  chargers.push(mesh(new THREE.BoxGeometry(3.2, 1, 0.3), M(0x111111, { emissive: 0x2aa7d6, emissiveIntensity: 0 }), x, 6, CHARGE.z - 12.4));
+  mesh(new THREE.BoxGeometry(4, 8, 3), M(0xe9edf0, { metalness: 0.3 }), x, 4, CHARGE.z - 14, chargingArea);
+  mesh(new THREE.BoxGeometry(14, 0.6, 10), M(0x9aa3ab, { metalness: 0.6 }), x, 11.5, CHARGE.z - 8, chargingArea);
+  for (const dz of [-12.5, -3.5]) mesh(new THREE.BoxGeometry(0.6, 11.5, 0.6), M(0x9aa3ab, { metalness: 0.6 }), x - 6.5, 5.7, CHARGE.z + dz, chargingArea);
+  chargers.push(mesh(new THREE.BoxGeometry(3.2, 1, 0.3), M(0x111111, { emissive: 0x2aa7d6, emissiveIntensity: 0 }), x, 6, CHARGE.z - 12.4, chargingArea));
 }
-label('<b>Зарядка электросамосвалов</b><span id="l-ch">—</span>', CHARGE.x, 20, CHARGE.z);
+const chargeLabel=label('<b>Зарядка электросамосвалов</b><span id="l-ch">—</span>', CHARGE.x, 20, CHARGE.z);
 const trucks = [];
 const oreMat = { soft: M(0x86a873, { roughness: 1 }), hard: M(0xb0684a, { roughness: 1 }) };
 const yellow = M(0xffbf1a, { metalness: 0.25, roughness: 0.45 }), dark = M(0x1c1c1c, { roughness: 0.9 });
@@ -355,20 +385,21 @@ const PV = new THREE.Vector3(60, 0, 180);
 const panelMat = new THREE.MeshStandardMaterial({ color: 0x1b2f52, metalness: 0.85, roughness: 0.18, emissive: 0x1e5aa8, emissiveIntensity: 0 });
 const panels = new THREE.InstancedMesh(new THREE.BoxGeometry(12, 0.35, 5), panelMat, 240);
 const legs = new THREE.InstancedMesh(new THREE.BoxGeometry(0.4, 3, 0.4), M(0x9aa3ab, { metalness: 0.6 }), 240);
+const solarField = new THREE.Group(); scene.add(solarField);
 { let k = 0; for (let r = 0; r < 12; r++) for (let c = 0; c < 20; c++) { setInst(panels, k, PV.x + c * 13, 3, PV.z + r * 9, 1, 1, 1, 0.48); setInst(legs, k, PV.x + c * 13, 1.5, PV.z + r * 9); k++; }
-  panels.castShadow = !LOW; panels.receiveShadow = true; scene.add(panels, legs); }
-label('<b>СЭС 250 МВт</b><span id="l-pv">—</span>', PV.x + 125, 18, PV.z + 50);
+  panels.castShadow = !LOW; panels.receiveShadow = true; solarField.add(panels, legs); }
+const solarLabel=label('<b>СЭС 250 МВт</b><span id="l-pv">—</span>', PV.x + 125, 18, PV.z + 50);
 
 // ---------- накопитель, подстанция ----------
 const BESS = new THREE.Vector3(230, 0, 60);
-const bessLights = [];
+const bessLights = [], bessAssets = [];
 const bessBodyMat=M(0xeef1f3,{metalness:0.2});bessBodyMat.userData.batchKey='bess-enclosures';
 for (let i = 0; i < 8; i++) {
   const x = BESS.x + (i % 4) * 9, z = BESS.z + Math.floor(i / 4) * 18;
-  mesh(new THREE.BoxGeometry(7, 7, 15), bessBodyMat, x, 3.5, z);
-  bessLights.push(mesh(new THREE.BoxGeometry(0.3, 5, 11), M(0x111111, { emissive: 0x4fd18b, emissiveIntensity: 1.2 }), x + 3.6, 3.5, z));
+  bessAssets.push(mesh(new THREE.BoxGeometry(7, 7, 15), bessBodyMat, x, 3.5, z));
+  const indicator=mesh(new THREE.BoxGeometry(0.3, 5, 11), M(0x111111, { emissive: 0x4fd18b, emissiveIntensity: 1.2 }), x + 3.6, 3.5, z);bessAssets.push(indicator);bessLights.push(indicator);
 }
-label('<b>Накопитель 60 МВт</b><span id="l-bess">—</span>', BESS.x + 14, 18, BESS.z + 9);
+const bessLabel=label('<b>Накопитель 60 МВт</b><span id="l-bess">—</span>', BESS.x + 14, 18, BESS.z + 9);
 const SUB = new THREE.Vector3(260, 0, -60);
 mesh(new THREE.BoxGeometry(46, 0.8, 42), M(0xa69b8c, { map: gravel }), SUB.x, 0.4, SUB.z, scene, false);
 for (let i = 0; i < 4; i++) {
@@ -530,7 +561,7 @@ function skyUpd(immediate=false) {
 }
 
 // ---------- переключатель ----------
-function setView(x) { view = x; $('vnow').classList.toggle('on', x === 'now'); $('vtyn').classList.toggle('on', x === 'tynys'); document.body.dataset.view = x; hud(); }
+function setView(x) { view = x; const upgraded=x==='tynys'; solarField.visible=upgraded; solarLabel.style.display=upgraded?'':'none'; bessAssets.forEach(a=>a.visible=upgraded); bessLabel.style.display=upgraded?'':'none'; chargingArea.visible=upgraded; chargeLabel.style.display=upgraded?'':'none'; $('vnow').classList.toggle('on', x === 'now'); $('vtyn').classList.toggle('on', upgraded); document.body.dataset.view = x; $('mode').dataset.view=x; hud(); }
 $('vnow').onclick = () => setView('now'); $('vtyn').onclick = () => setView('tynys');
 
 // ---------- история: проблема → решение ----------
@@ -544,7 +575,7 @@ const STORY = [
   { v: 'tynys', p: [300, 280, 460], t: [20, -20, -20], h: 'Итог за год на реальной погоде 2024', s: 'ВЭС 300 + СЭС 250 МВт: CO₂ 1 601 → 937 тыс. т в год (−41 %). «Тыныс» в режиме «CO₂» сверху: сброс ветра и солнца −24 % и CO₂ ещё −2 %. Режим «медь»: +1,9 % меди тонким помолом, но CO₂ +4 %.' },
 ];
 let tour = null;
-function startStory() { tour = { i: 0, t0: performance.now(), from: { p: camera.position.clone(), t: controls.target.clone() } }; setView(STORY[0].v); }
+function startStory() { tour = { i: 0, t0: performance.now(), stepMs:Q.get('demo')==='1'?25000:11000, from: { p: camera.position.clone(), t: controls.target.clone() } }; setView(STORY[0].v); }
 function stopStory() { tour = null; $('caption').classList.remove('show'); $('dots').innerHTML = ''; }
 $('tour').onclick = startStory;
 $('reset').onclick = () => {
@@ -570,7 +601,7 @@ function tourStep(now) {
   if (view !== st.v) setView(st.v);
   $('caption').innerHTML = `<span class="${st.v === 'now' ? 'bad' : 'good'}">${st.h}</span><small>${st.s}</small>`; $('caption').classList.add('show');
   $('dots').innerHTML = STORY.map((s, i) => `<i class="${i === tour.i ? 'on' : ''} ${s.v}"></i>`).join('');
-  if (now - tour.t0 > 11000) {
+  if (now - tour.t0 > tour.stepMs) {
     tour.i++; if (tour.i >= STORY.length) { stopStory(); return; }
     tour.t0 = now; tour.from = { p: camera.position.clone(), t: controls.target.clone() };
   }
@@ -578,6 +609,7 @@ function tourStep(now) {
 $('go').onclick = () => { $('intro').classList.add('hide'); startStory(); };
 $('skip').onclick = () => { $('intro').classList.add('hide'); setView('tynys'); };
 setView('tynys');
+if(Q.get('demo')==='1'){$('intro').classList.add('hide');startStory();}
 
 // ---------- анимация ----------
 let last = performance.now(), rot = 0, smokeT = 0, fps = 60;
@@ -593,7 +625,12 @@ function frame(now) {
   rot += dt * (lull ? 0 : 3.4 * Math.max(0,v('wind', 'cf_pct', 0)) / 100);
   turbines.forEach((hh, i) => { if (i >= Math.round(feather * turbines.length)) hh.rotation.z = rot + i; });
   mills.forEach(m => m.drum.rotation.x += dt * (m.speed || 0));
-  shovels.forEach((s, i) => { if(v(`shovel-${i+1}`,'rate_tph',0)>0 && v(`shovel-${i+1}`,'available',true)) s.rotation.y = Math.sin(now / 1500 + i * 2) * 0.9; });
+  shovels.forEach((s, i) => {
+    const name=`shovel-${i+1}`, rate=Number(v(name,'rate_tph',0));
+    const load=v(name,'available',false)?Math.min(1,rate/Math.max(1,Number(v(name,'capacity_tph',1)))):0;
+    const phase=Math.sin(now/1800+i*2);
+    s.rotation.y=phase*0.28*load;s.position.y=2.6+Math.max(0,phase)*0.8*load;
+  });
   const hf = v('pit', 'hard_frac', 0.5);
   const slots = { c: 0, w: 0 };
   trucks.forEach((tr, i) => {

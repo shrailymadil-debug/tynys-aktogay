@@ -29,6 +29,10 @@ class Scenario:
     line_down: dict = field(default_factory=dict)      # {line: (t0,t1)}
     hard_frac_shift: dict = field(default_factory=dict)  # {t0: new_base}
     mine_mult: dict = field(default_factory=dict)      # {(t0,t1): mult}
+    truck_mult: dict = field(default_factory=dict)     # {(t0,t1): исправная доля самосвалов}
+    shovel_mult: dict = field(default_factory=dict)    # available loading capacity
+    grade_mult: dict = field(default_factory=dict)     # {(t0,t1): множитель содержания меди}
+    tariff_mult: dict = field(default_factory=dict)    # {(t0,t1): множитель тарифа}
     bess_down: tuple = ()                              # (t0,t1)
 
     equipment_down: dict = field(default_factory=dict)  # {asset: [(start, end), ...]}
@@ -66,6 +70,18 @@ class Env:
         for (a, b), m in sc.mine_mult.items():
             mm[a:b] *= m
         self.mine_plan = p.mine_ore_tph * mm
+        self.truck_mult = np.ones(n)
+        for (a, b), m in sc.truck_mult.items():
+            self.truck_mult[a:b] *= m
+        self.shovel_mult = np.ones(n)
+        for (a, b), m in sc.shovel_mult.items():
+            self.shovel_mult[a:b] *= m
+        self.grade_mult = np.ones(n)
+        for (a, b), m in sc.grade_mult.items():
+            self.grade_mult[a:b] *= m
+        self.tariff_mult = np.ones(n)
+        for (a, b), m in sc.tariff_mult.items():
+            self.tariff_mult[a:b] *= m
         # фактическая твёрдость: BWi домена × (1 + AR(1)-шум) — контроллеру неизвестна
         self.bwi_true = {}
         self.grade_true = {}
@@ -80,7 +96,7 @@ class Env:
             grade[0] = p.grade_noise_sd * grade_rng.standard_normal()
             for t in range(1, n):
                 grade[t] = p.grade_noise_phi * grade[t-1] + math.sqrt(1-p.grade_noise_phi**2) * p.grade_noise_sd * grade_rng.standard_normal()
-            self.grade_true[d] = p.cu_grade[d] * np.clip(1 + grade, .5, 1.5)
+            self.grade_true[d] = p.cu_grade[d] * np.clip(1 + grade, .5, 1.5) * self.grade_mult
         self.line_avail = np.ones((p.n_lines, n), dtype=bool)
         self.recovery_true = {d: np.full(n, p.r150[d]) for d in DOMAINS}
         self.geology_ids = {}
@@ -415,7 +431,7 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
     assets["bess"] = {"power_mw": bess_set, "soc": 100*st.bess_e/p.bess_mwh if p.bess_mwh else 0,
                         "active": abs(bess_set) > 0}
     assets["substation"] = {"grid_mw": grid, "grid_cap_mw": gcap, "grid_nominal_mw": p.grid_cap_mw,
-                              "price_kzt_mwh": p.price_kzt_mwh(t%24), "co2_t_h": grid*p.grid_co2_t_mwh,
+                              "price_kzt_mwh": p.price_kzt_mwh(t%24)*env.tariff_mult[t], "co2_t_h": grid*p.grid_co2_t_mwh,
                               "active": grid > 0}
     finish_equipment(p, env, st, t, assets, factors)
     for l in range(p.n_lines):
@@ -435,7 +451,8 @@ def step(p: Params, env: Env, st: State, t: int, dec: dict, segregated: bool):
                pile_soft=st.pile["soft"], pile_hard=st.pile["hard"], mill_mw=float(f["mill"].sum()),
                load=float(f["load"]), cu_t=cu, feed_cu_t=feed_cu,
                p80=float((x*np.array(P80_MODES)).sum()/q) if q else 0,
-               trips=len(tripped), restarts=restarts, unserved=unserved, price=p.price_kzt_mwh(t%24),
+               trips=len(tripped), restarts=restarts, unserved=unserved, price=p.price_kzt_mwh(t%24)*env.tariff_mult[t],
+               tariff_mult=env.tariff_mult[t], grade_mult=env.grade_mult[t], truck_availability=env.truck_mult[t],
                hard_frac=hf, bwi_est_soft=st.bwi_est["soft"], bwi_est_hard=st.bwi_est["hard"],
                grade_soft=grades["soft"], grade_hard=grades["hard"],
                mined_cu_t=sum(mine*fractions[d]*env.grade_true[d][t] for d in DOMAINS),

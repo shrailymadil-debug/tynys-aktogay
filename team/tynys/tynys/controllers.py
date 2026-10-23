@@ -162,9 +162,9 @@ class V2Tynys:
         hf = env.hard_frac[idx]
         mpd = {"soft": mplan * (1 - hf), "hard": mplan * hf}
         if self.flat_price:
-            price = np.full(H, p.tariff_kzt_kwh * 1000 + p.co2_price_kzt_t * p.grid_co2_t_mwh)
+            price = np.full(H, p.tariff_kzt_kwh * 1000) * env.tariff_mult[idx] + p.co2_price_kzt_t * p.grid_co2_t_mwh
         else:
-            price = np.array([p.price_kzt_mwh((t + h) % 24) + p.co2_price_kzt_t * p.grid_co2_t_mwh for h in range(H)])
+            price = np.array([p.price_kzt_mwh((t + h) % 24) for h in range(H)]) * env.tariff_mult[idx] + p.co2_price_kzt_t * p.grid_co2_t_mwh
         bwi = st.bwi_est if self.segregated else p.bwi
         if p.geomet:
             bwi = {d: st.pile_bwi_mass[d]/st.pile[d] if st.pile[d] > 1e-9 else p.bwi[d] for d in DOMAINS}
@@ -225,7 +225,9 @@ class V2Tynys:
                 MW[l, h] = vi.add(0, p.line_p_max_mw*line_factors[l,h])
                 XO[l, h] = vi.add(0, p.line_q_max - p.line_q_nom, ovl_cost)
                 SU[l, h] = vi.add(0, 1, p.restart_cost_kzt)
-            CH[h] = vi.add(0, p.charge_mw_max/4 * sum(factors[h][f"charger-{i}"] for i in range(1,5)))
+            charge_cap = min(p.charge_mw_max/4 * sum(factors[h][f"charger-{i}"] for i in range(1,5)),
+                             p.n_trucks/14*p.charger_mw * sum(factors[h][f"truck-{i:02d}"] for i in range(1,15)))
+            CH[h] = vi.add(0, charge_cap)
             BC[h] = vi.add(0, p.bess_mw * factors[h]["bess"])
             BD[h] = vi.add(0, p.bess_mw * factors[h]["bess"])
             DIRECTION[h] = vi.add(0, 1, 0, 1)
@@ -324,7 +326,7 @@ class V2Tynys:
             # перевозка: самосвалы на зарядке не возят
             mt = mplan[h]
             con([(MS[d, h], -(1 + p.strip_ratio)) for d in DOMAINS] + [(CH[h], p.truck_tph / p.charger_mw)],
-                -np.inf, p.n_trucks * p.truck_tph - (1 + p.strip_ratio) * mt)
+                -np.inf, p.n_trucks * p.truck_tph * env.truck_mult[idx[h]] - (1 + p.strip_ratio) * mt)
             # флот
             terms = [(F[h], 1), (CH[h], -p.eta_charge)] + [(MS[d, h], -haul) for d in DOMAINS]
             rhs = -haul * mt

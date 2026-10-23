@@ -78,7 +78,7 @@ def install(env):
                     chosen[t] = hard
         env.geology_ids[domain] = [c["id"] for c in chosen]
         env.bwi_true[domain] = np.array([c["bwi"] for c in chosen])
-        env.grade_true[domain] = np.array([c["grade_fraction"] for c in chosen])
+        env.grade_true[domain] = np.array([c["grade_fraction"] for c in chosen]) * env.grade_mult
         env.recovery_true[domain] = np.array([c["lct"] for c in chosen])
 
 
