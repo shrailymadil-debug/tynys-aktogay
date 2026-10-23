@@ -42,3 +42,12 @@ jobs:
           python team/tynys/scripts/check3d.py http://127.0.0.1:8095/3d.html screen3d.png --mode functional --expect-source live 2>&1 | tee -a ci.log
       - name: Снимок пульта (материал для команды)
         if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tynys-ci-evidence
+          path: |
+            ci.log
+            screen3d.png
+            screen2d.png
+          if-no-files-found: warn
+          retention-days: 14
