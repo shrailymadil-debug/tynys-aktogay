@@ -167,6 +167,8 @@ export function installSceneDetails(ctx) {
   fixedShadows.forEach((p,i)=>shadowAt(i,...p));
   const hardHalo=mesh(new THREE.RingGeometry(20,22,40).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffa94b,transparent:true,opacity:.8,side:THREE.DoubleSide,depthWrite:false}),PILES.x,.3,PILES.z+20,scene,false);hardHalo.visible=false;hardHalo.userData.noMerge=true;
   const gridBeacon=mesh(new THREE.SphereGeometry(2.2,10,8),M(0xffa34e,{emissive:0xff8b32,emissiveIntensity:0}),SUB.x,20,SUB.z,scene,false);gridBeacon.userData.noMerge=true;dynamicRoots.push(gridBeacon);
+  const planHalo=mesh(new THREE.RingGeometry(PIT_R-4,PIT_R,64).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffc65c,transparent:true,opacity:.85,side:THREE.DoubleSide,depthWrite:false}),PIT.x,.55,PIT.z,scene,false);planHalo.visible=false;planHalo.userData.noMerge=true;dynamicRoots.push(planHalo);
+  const planLabel=label('<b>План добычи +10 %</b><span id="l-plan">—</span>',PIT.x,34,PIT.z-PIT_R-28);planLabel.style.display='none';
   const steamMaterial=new THREE.SpriteMaterial({map:glowMap,color:0xd8e8f2,transparent:true,opacity:.13,depthWrite:false});
   const steam= mills.map((m,i)=>{const s=new THREE.Sprite(steamMaterial.clone());s.position.set(PLANT.x-30,25,PLANT.z+(i?14:-14));s.scale.set(11,18,1);scene.add(s);return s;});
 
@@ -200,13 +202,16 @@ export function installSceneDetails(ctx) {
     for(let i=0;i<trucks.length;i++){const id=`truck-${String(i+1).padStart(2,'0')}`;$(`l-${id}`).textContent=data[id]?`${fmt(data[id].soc)} %`:'—';}
     hardHalo.visible=kinds.has('hard_ore');
     hardHalo.scale.setScalar(Math.max(1,piles.hard.scale.x*1.15));
+    const planEvent=active.find(e=>e.kind==='plan_up');planHalo.visible=!!planEvent;planLabel.style.display=planEvent?'':'none';
+    const planRate=data.pit?.ore_plan_tph;const actualRate=data.pit?.ore_tph;$('l-plan').textContent=typeof planRate==='number'?fmt(planRate)+' т/ч по плану · факт '+fmt(actualRate)+' т/ч':'повышенная подача · модельное событие';
     bessLights.forEach(l=>l.material.emissive.set(data.bess?.available===false?0xff3d31:0x4fd18b));
     ctx.bessBodyMat.color.set(data.bess?.available===false?0xbc493f:0xeef1f3);
     refreshSelection();
   }
   function tick(now,dayK) {
     const kinds=new Set(events.filter(e=>e.active).map(e=>e.kind));
-    const gridLimited=kinds.has('kegoc');gridBeacon.material.emissiveIntensity=gridLimited?(Math.sin(now/160)>0?3:.15):0;gridBeacon.visible=gridLimited;
+    const gridLimited=kinds.has('kegoc');
+    if(planHalo.visible)planHalo.material.opacity=.55+.3*(.5+.5*Math.sin(now/320));gridBeacon.material.emissiveIntensity=gridLimited?(Math.sin(now/160)>0?3:.15):0;gridBeacon.visible=gridLimited;
     flows.grid.im.material.color.set(gridLimited?(Math.sin(now/220)>0?0xffa23d:0xb77a35):0x9a9a9a);
     const wirePulse=gridLimited&&Math.sin(now/220)>0;
     ctx.gridWireMat.color.set(wirePulse?0xffa23d:0x3a3f44);
