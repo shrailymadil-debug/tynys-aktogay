@@ -41,7 +41,7 @@ async function cancelScenarioEvent(id){
   const body={events:{properties:{value:JSON.stringify(events.filter(e=>String(e.id)!==String(id)))}},rev:{properties:{value:Number(v('scenario','rev',0))+1}},goal:{properties:{value:v('scenario','goal','copper')}}};
   const r=await fetch(`ditto/api/2/things/${NS}:scenario/features`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error(`Ditto: ${r.status}`);await pollLive();hud();
 }
-const SCENARIOS={lull:[3,24],line_trip:[0,8],kegoc:[2,4],hard_ore:[0,72],plan_up:[0,48],bess_fault:[0,12]};
+const SCENARIOS={lull:[3,24],line_trip:[0,8],kegoc:[2,4],hard_ore:[0,72],plan_up:[0,48],bess_fault:[0,12],truck_failure:[0,12],excavator_failure:[0,12],grade_drop:[0,24],tariff_change:[0,24]};
 async function addScenarioEvent(kind){
   const feedback=$('scenario-feedback'),buttons=[...document.querySelectorAll('[data-scenario]')];
   if(source!=='live'){feedback.textContent='Запуск доступен при связи с живыми двойниками Ditto.';return;}
@@ -49,7 +49,7 @@ async function addScenarioEvent(kind){
   try{
     await pollLive();const t=Number(v('site','sim_hour',0));let events;const raw=v('scenario','events','[]');events=Array.isArray(raw)?raw:JSON.parse(raw||'[]');
     const [lead,dur]=SCENARIOS[kind];if(!Number.isFinite(t)||!Number.isFinite(dur))throw new Error('Нет модельного времени');
-    events=events.filter(e=>Number(e.t0)+Number(e.dur)>t);events.push({kind,t0:t+1+lead,dur,id:Date.now()});
+    events=events.filter(e=>Number(e.t0)+Number(e.dur)>t);const event={kind,t0:t+1+lead,dur:Number($('scenario-duration')?.value)||dur,id:Date.now()};if(kind==='line_trip')event.line=Number($('scenario-line')?.value)||2;if(kind==='kegoc')event.grid_drop_mw=Number($('scenario-kegoc-mw')?.value)||80;if(kind==='truck_failure'||kind==='excavator_failure')event.loss_pct=Number($('scenario-loss-pct')?.value)||30;if(kind==='grade_drop')event.drop_pct=Number($('scenario-grade-pct')?.value)||10;if(kind==='tariff_change')event.change_pct=Number($('scenario-tariff-pct')?.value)||20;if(kind==='plan_up')event.mine_mult=Number($('scenario-plan-pct')?.value)||1.1;events.push(event);
     const body={events:{properties:{value:JSON.stringify(events)}},rev:{properties:{value:Number(v('scenario','rev',0))+1}},goal:{properties:{value:v('scenario','goal','copper')}}};
     const r=await fetch('ditto/api/2/things/'+NS+':scenario/features',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error('Ditto: '+r.status);
     await pollLive();hud();feedback.textContent='Сценарий записан в двойник; 3D покажет его по модельному времени.';
