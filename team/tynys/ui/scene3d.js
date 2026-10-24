@@ -502,9 +502,16 @@ function hud() {
     : '<b class="good">Почему так.</b> ';
   if(view!=='now')$('whyt').appendChild(document.createTextNode(v('coordinator','why','—')));
   set('l-pit', `${fmt(v('pit', 'ore_tph'))} т/ч · твёрдой ${fmt(100 * v('pit', 'hard_frac'))} %`);
-  set('l-ps', `${fmt(v('pile-soft', 'tonnes') / 1000)} тыс. т · ${fmt(v('pile-soft', 'fill_pct'))} %`);
-  set('l-ph', `${fmt(v('pile-hard', 'tonnes') / 1000)} тыс. т · ${fmt(v('pile-hard', 'fill_pct'))} %`);
-  set('l-pl', `${view==='now'?'основной двойник · ':''}твёрдой ${fmt(v('plant', 'feed_hard_tph'))} · мягкой ${fmt(v('plant', 'feed_soft_tph'))} т/ч · P80 ${fmt(v('plant', 'p80_um'))} мкм`);
+  if (view === 'now') {
+    set('l-ps', `${fmt(v('shadow-v0', 'pile_soft_t') / 1000)} тыс. т · ${fmt(v('shadow-v0', 'pile_soft_fill_pct'))} % · как сейчас`);
+    set('l-ph', `${fmt(v('shadow-v0', 'pile_hard_t') / 1000)} тыс. т · ${fmt(v('shadow-v0', 'pile_hard_fill_pct'))} % · как сейчас`);
+  } else {
+    set('l-ps', `${fmt(v('pile-soft', 'tonnes') / 1000)} тыс. т · ${fmt(v('pile-soft', 'fill_pct'))} %`);
+    set('l-ph', `${fmt(v('pile-hard', 'tonnes') / 1000)} тыс. т · ${fmt(v('pile-hard', 'fill_pct'))} %`);
+  }
+  set('l-pl', view==='now'
+    ? `как сейчас · смесь руды ${fmt(v('shadow-v0', 'feed_tph'))} т/ч · P80 150 мкм`
+    : `твёрдой ${fmt(v('plant', 'feed_hard_tph'))} · мягкой ${fmt(v('plant', 'feed_soft_tph'))} т/ч · P80 ${fmt(v('plant', 'p80_um'))} мкм`);
   set('l-fl', `${fmt(v('flotation', 'cu_tph'), 1)} т меди/ч`);
   set('l-wind', `${fmt(v('wind', 'power_mw'))} МВт${e.curtail > 1 ? ` · <span class="bad">сброс ${fmt(e.curtail)}</span>` : ''}`);
   set('l-pv', `${fmt(v('pv', 'power_mw'))} МВт`);
@@ -523,12 +530,15 @@ function hud() {
     <tr><td title="поправка на склады и заряд батарей в конце">CO₂ с учётом запасов, т</td><td>${fmt(a.co2)}</td><td>${fmt(b.co2)}</td></tr>`;
   set('g-co2', fmt(e.co2)); set('g-ren', fmt(100 * e.used / Math.max(1, e.used + e.grid))); set('g-cur', fmt(e.curtail));
   flows.grid.mw = e.grid; flows.wind.mw = Math.max(0, v('wind', 'power_mw') - e.curtail * 0.7); flows.pv.mw = Math.max(0, v('pv', 'power_mw') - e.curtail * 0.3);
-  flows.plant.mw = v('plant', 'mill_mw'); flows.charge.mw = e.charge;
-  for (const [dd, n] of [['soft', 'pile-soft'], ['hard', 'pile-hard']]) { const f = 0.35 + 0.9 * v(n, 'fill_pct', 50) / 100; piles[dd].scale.set(f, f, f); piles[dd].position.y = 7.5 * f; }
-  belts[0].rate = v('plant', 'feed_soft_tph') / 4000; belts[1].rate = v('plant', 'feed_hard_tph') / 4000;
+  // «Как сейчас»: склады, конвейеры и мельницы берутся из тени V0 (свой рудник без
+  // координации на той же погоде), а не из рудника «Тыныс».
+  const now = view === 'now', s0 = (k, d) => v('shadow-v0', k, d);
+  flows.plant.mw = now ? s0('mill_mw', v('plant', 'mill_mw')) : v('plant', 'mill_mw'); flows.charge.mw = e.charge;
+  for (const [dd, n] of [['soft', 'pile-soft'], ['hard', 'pile-hard']]) { const fill = now ? s0(`pile_${dd}_fill_pct`, v(n, 'fill_pct', 50)) : v(n, 'fill_pct', 50); const f = 0.35 + 0.9 * fill / 100; piles[dd].scale.set(f, f, f); piles[dd].position.y = 7.5 * f; }
+  belts[0].rate = (now ? s0('feed_soft_tph', 0) : v('plant', 'feed_soft_tph')) / 4000; belts[1].rate = (now ? s0('feed_hard_tph', 0) : v('plant', 'feed_hard_tph')) / 4000;
   for (let l = 0; l < 2; l++) {
-    const n = `line-${l + 1}`, ok = v(n, 'available', true), q = v(n, 'feed_tph', 3330);
-    mills[l].speed = ok ? v(n,'speed_rpm',q>0?10.5:0) * 2*Math.PI/60 : 0; const c = !ok ? 0xe0675a : q > 0 ? 0x4fd18b : 0x888888; mills[l].lamp.material.color.set(c); mills[l].lamp.material.emissive.set(c);mills[l].lamp.material.emissiveIntensity=2;
+    const n = `line-${l + 1}`, ok = v(n, 'available', true), q = now ? s0(`line${l + 1}_tph`, v(n, 'feed_tph', 3330)) : v(n, 'feed_tph', 3330);
+    mills[l].speed = ok ? (now ? (q > 0 ? 10.5 : 0) : v(n,'speed_rpm',q>0?10.5:0)) * 2*Math.PI/60 : 0; const c = !ok ? 0xe0675a : q > 0 ? 0x4fd18b : 0x888888; mills[l].lamp.material.color.set(c); mills[l].lamp.material.emissive.set(c);mills[l].lamp.material.emissiveIntensity=2;
   }
   panelMat.emissiveIntensity = Math.min(1, v('pv', 'power_mw') / 250) * 0.45;
   const soc = v('bess', 'soc', 0) / 100; bessLights.forEach(x => { x.scale.y = Math.max(0.05, soc); });
