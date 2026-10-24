@@ -30,7 +30,7 @@ def twins():
         t("plant", "Обогатительные фабрики", "plant", "site", {"feed_tph": 0.}),
         t("energy", "Энергосистема рудника", "energy", "site", {"load_mw": 0.}),
         t("coordinator", "Координатор «Тыныс» (MPC 24 ч)", "coordinator", "site", {"for_t": -1}),
-        t("scenario", "Сценарии what-if", "scenario", "site", {"events": "[]", "rev": 0, "goal": "copper"}),
+        t("scenario", "Сценарии what-if", "scenario", "site", {"events": "[]", "rev": 0, "goal": "green"}),
         t("future-request", "Запрос проверки обещания", "experiment_request", "site", {"request_json": ""}),
         t("future-result", "Два будущих: результат расчёта", "experiment_result", "site",
           {"status": "idle", "request_id": "", "progress": 0, "stage": "", "result_json": "", "error": "", "updated_at": ""}),

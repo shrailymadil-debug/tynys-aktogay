@@ -36,11 +36,11 @@ async function start() {
   catch (e) { try { TRACE = await loadTrace(); if(!Array.isArray(TRACE)||!TRACE.length)throw new Error('Нет записи');source='replay';tStart=performance.now();pollTrace();setInterval(pollTrace,250); }
     catch {source='unavailable';} sourceLabel(); }
 }
-function sourceLabel(){const text=source==='live'?'● живые двойники OpenEgiz':source==='replay'?'● запись стенда · не живые данные':source==='stale'?`● связь потеряна · снимок ${new Date(lastLiveAt).toLocaleTimeString('ru-RU')}`:source==='unavailable'?'● данные недоступны':'подключение…';$('src').textContent=text;$('source-line').textContent=text+' · движение самосвалов ускорено ×10';document.querySelectorAll('[data-scenario]').forEach(b=>b.disabled=source!=='live');}
+function sourceLabel(){const text=source==='live'?'● живые двойники OpenEgiz':source==='replay'?'● запись стенда · не живые данные':source==='stale'?`● связь потеряна · снимок ${new Date(lastLiveAt).toLocaleTimeString('ru-RU')}`:source==='unavailable'?'● данные недоступны':'подключение…';$('src').textContent=text;$('source-line').textContent=text+' · движение самосвалов ускорено ×6';document.querySelectorAll('[data-scenario]').forEach(b=>b.disabled=source!=='live');}
 async function cancelScenarioEvent(id){
   if(source!=='live')throw new Error('Отмена доступна только при связи с Ditto');
   await pollLive();let events;try{const raw=v('scenario','events','[]');events=Array.isArray(raw)?raw:JSON.parse(raw);}catch{throw new Error('Некорректный сценарий');}
-  const body={events:{properties:{value:JSON.stringify(events.filter(e=>String(e.id)!==String(id)))}},rev:{properties:{value:Number(v('scenario','rev',0))+1}},goal:{properties:{value:v('scenario','goal','copper')}}};
+  const body={events:{properties:{value:JSON.stringify(events.filter(e=>String(e.id)!==String(id)))}},rev:{properties:{value:Number(v('scenario','rev',0))+1}},goal:{properties:{value:v('scenario','goal','green')}}};
   const r=await fetch(`ditto/api/2/things/${NS}:scenario/features`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error(`Ditto: ${r.status}`);await pollLive();hud();
 }
 const SCENARIOS={lull:[3,24],line_trip:[0,8],kegoc:[2,4],hard_ore:[0,72],plan_up:[0,48],bess_fault:[0,12],truck_failure:[0,12],excavator_failure:[0,12],grade_drop:[0,24],tariff_change:[0,24]};
@@ -65,7 +65,7 @@ async function addScenarioEvent(kind){
     if(kind==='tariff_change')event.change_pct=parameter('scenario-tariff-pct',20);
     if(kind==='plan_up')event.mine_mult=parameter('scenario-plan-pct',1.1);
     events.push(event);
-    const body={events:{properties:{value:JSON.stringify(events)}},rev:{properties:{value:Number(v('scenario','rev',0))+1}},goal:{properties:{value:v('scenario','goal','copper')}}};
+    const body={events:{properties:{value:JSON.stringify(events)}},rev:{properties:{value:Number(v('scenario','rev',0))+1}},goal:{properties:{value:v('scenario','goal','green')}}};
     const r=await fetch('ditto/api/2/things/'+NS+':scenario/features',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error('Ditto: '+r.status);
     await pollLive();hud();feedback.textContent='Сценарий записан в двойник; 3D покажет его по модельному времени.';
   }catch(err){feedback.textContent='Не удалось запустить: '+err.message;}
@@ -256,7 +256,7 @@ const rim = roadPts[roadPts.length - 1];
 roadPts.push(new THREE.Vector3(rim.x + 30, 0.4, rim.z + 6), new THREE.Vector3(-10, 0.4, -2), new THREE.Vector3(PILES.x - 26, 0.4, PILES.z + 6));
 const road = new THREE.CatmullRomCurve3(roadPts);
 const ROAD_LEN = road.getLength();   // ед. сцены (≈ 10 м)
-const TRUCK_TIMELAPSE = 10;           // показ движения ускорен ×10
+const TRUCK_TIMELAPSE = 6;            // показ движения ускорен ×6
 {
   const N = LOW?360:700, pos = [], idx = [], uv = [];
   for (let i = 0; i <= N; i++) {
@@ -316,7 +316,7 @@ for (let i = 0; i < 14; i++) {
   for (const [x, z] of [[3.6, 2.5], [3.6, -2.5], [-2.8, 2.5], [-2.8, -2.5], [-2.8, 3.6], [-2.8, -3.6]]) mesh(new THREE.CylinderGeometry(1.6, 1.6, 1.2, LOW?10:16).rotateX(Math.PI / 2), dark, x, 1.6, z, g);
   // Charging is indicated by emissive panels; avoid fourteen dynamic point lights.
   const glow = new THREE.Object3D(); glow.intensity=0; glow.position.y = 9; g.add(glow);
-  g.scale.setScalar(0.8);
+  g.scale.setScalar(1.6);   // увеличены для наглядности: в масштабе карьера настоящий самосвал — точка
   trucks.push({ g, load, glow, phase: i / 14 });
 }
 const dustIM = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 8, 6), new THREE.MeshStandardMaterial({ color: 0xcdb89a, transparent: true, opacity: 0.22, depthWrite: false }), 14 * 8);
@@ -648,10 +648,13 @@ function frame(now) {
   const slots = { c: 0, w: 0 };
   trucks.forEach((tr, i) => {
     const n = `truck-${String(i + 1).padStart(2, '0')}`; let st = v(n, 'state', 'empty');
+    // Звено заряжается часть часа (мощность / 18 МВт трёх машин), остальное время возит руду:
+    // у зарядки показываем только звенья, которые стоят на ней большую часть часа.
+    if (st === 'charging' && Number(v(n, 'charge_mw', 18)) / 18 < 0.5) st = 'empty';
     tr.glow.intensity = st === 'charging' ? 5 : 0;
     if(!LOW)for (let k = 0; k < 8; k++) setInst(dustIM, i * 8 + k, 0, -500, 0, 0, 0, 0);
-    if (st === 'charging') { const k = Number(String(v(n,'assigned_charger',`charger-${i%4+1}`)).split('-').pop())-1; tr.g.position.set(CHARGE.x - 30 + k * 20, 0.4, CHARGE.z - 5 + Math.floor(i/4)*8); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
-    if (['waiting','idle','unavailable','fault','maintenance'].includes(st)) { const k = slots.w++; tr.g.position.set(CHARGE.x - 34 + (k % 8) * 10, 0.4, CHARGE.z + 32 + Math.floor(k / 8) * 9); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
+    if (st === 'charging') { const k = Number(String(v(n,'assigned_charger',`charger-${i%4+1}`)).split('-').pop())-1; tr.g.position.set(CHARGE.x - 30 + k * 20, 0.4, CHARGE.z - 8 + Math.floor(i/4)*13); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
+    if (['waiting','idle','unavailable','fault','maintenance'].includes(st)) { const k = slots.w++; tr.g.position.set(CHARGE.x - 40 + (k % 6) * 17, 0.4, CHARGE.z + 40 + Math.floor(k / 6) * 13); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
     // Скорость — как у карьерного самосвала: гружёный в подъём ≈ 12 км/ч, порожний ≈ 30 км/ч
     // (1 ед. сцены ≈ 10 м), показ ускорен в TRUCK_TIMELAPSE раз. Модель часовая, поэтому
     // положение на дороге — анимация; заряд, состояние и груз звена — из двойника.

@@ -36,7 +36,7 @@ def capture_snapshot(things):
         "seed": int(prop(site, "seed")), "start_doy": int(prop(site, "start_doy")),
         "scenario_rev": int(revision),
         "events": json.loads(prop(scenario, "events", "[]")),
-        "goal": prop(scenario, "goal", "copper"),
+        "goal": prop(scenario, "goal", "green"),
         "captured_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "source": "OpenEgiz / kz.tynys:site + kz.tynys:scenario",
     }

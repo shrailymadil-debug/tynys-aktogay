@@ -21,7 +21,7 @@ val = lambda thing, f: req("GET", f"{thing}/features/{f}/properties/value")
 def set_events(events):
     rev = (val("scenario", "rev") or 0) + 1
     req("PUT", "scenario/features", {"events": {"properties": {"value": json.dumps(events)}}, "rev": {"properties": {"value": rev}},
-                                     "goal": {"properties": {"value": val("scenario", "goal") or "copper"}}})
+                                     "goal": {"properties": {"value": val("scenario", "goal") or "green"}}})
     return rev
 
 

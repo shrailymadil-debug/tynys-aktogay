@@ -84,8 +84,8 @@ def main():
         p, env = cache[key]
         st = state_from_dict(json.loads(sj))
         t0 = time.time()
-        goal = prop(sc, "goal", "copper")
-        ctl = ctls.get(goal, ctls["copper"])
+        goal = prop(sc, "goal", "green")
+        ctl = ctls.get(goal, ctls["green"])
         dec = ctl.decide(p, env, st, t)
         plan = ctl.last_plan or {}
         ms = (time.time() - t0) * 1000

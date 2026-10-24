@@ -85,7 +85,7 @@ def _snapshot(snapshot, request, p):
         ("seed", 0, 2**31 - 1), ("scenario_rev", 0, 2**31 - 1),
     ):
         out[k] = _number(snapshot.get(k), k, lo, hi, True)
-    out["goal"] = snapshot.get("goal", "copper")
+    out["goal"] = snapshot.get("goal", "green")
     if out["goal"] not in ("copper", "green"):
         raise ValueError("snapshot.goal: copper или green")
     duration = 12 if request["mode"] == "limit" else request["duration_h"]

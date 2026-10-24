@@ -59,17 +59,21 @@ def main():
     ap.add_argument("--start-doy", type=int, default=105)
     ap.add_argument("--start-hour", type=int, default=9)
     ap.add_argument("--hours", type=int, default=96)
+    ap.add_argument("--record-from", type=int, default=190,
+                    help="модельный час начала записи; часы до него — разгон с start-hour, итоги копятся с него")
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--output", type=Path, default=ROOT / "ui" / "trace.json")
     a = ap.parse_args()
     p = aktogay()
-    env = Env(p, Scenario(start_doy=a.start_doy, days=a.start_hour // 24 + a.hours // 24 + 2), a.seed)
+    first = max(a.start_hour, a.record_from)
+    env = Env(p, Scenario(start_doy=a.start_doy, days=(first + a.hours) // 24 + 2), a.seed)
     st = {k: init_state(p) for k in ("v0", "v1", "v2")}
     tot = {k: Totals() for k in st}
     ctl = {"v0": V0Traditional(), "v1": V1Reactive()}
-    v2 = V2Tynys(explain=True)
+    # Цель по умолчанию на стенде — «CO₂» (services/setup_twins.py, coordinator.py)
+    v2 = V2Tynys(explain=True, grind_modes=(150, 200, 250), flat_price=True)
     bus, frames, last = Store(), [], {}
-    for t in range(a.start_hour, a.start_hour + a.hours):
+    for t in range(a.start_hour, first + a.hours):
         sim_time = dt.datetime(2026, 1, 1) + dt.timedelta(days=a.start_doy - 1, hours=t)
         bus.send("site", {"sim_hour": t, "sim_time": sim_time.strftime("%Y-%m-%d %H:00"),
                           "start_doy": a.start_doy, "start_hour": a.start_hour,
@@ -83,7 +87,7 @@ def main():
         else:
             mode, why = "выдох", "Решение по запасному правилу V1."
         bus.send("coordinator", {"for_t": t, "scenario_rev": 0, "charge_mw": round(dec["charge_mw"], 2),
-                                 "bess_mw": round(dec["bess_mw"], 2), "mode": mode, "why": why, "goal": "copper",
+                                 "bess_mw": round(dec["bess_mw"], 2), "mode": mode, "why": why, "goal": "green",
                                  "feed_plan_tph": round(sum(sum(sum(d) for d in line) for line in dec["x"]))})
         rec = step(p, env, st["v2"], t, dec, True)
         tot["v2"].add(p, rec, st["v2"])
@@ -98,7 +102,8 @@ def main():
                        "line1_tph": round(r["line0"]), "line2_tph": round(r["line1"]),
                        "mill_mw": round(r["mill_mw"], 1), "charge_mw": round(r["charge"], 1)}
         publish_hour(bus, p, env, st["v2"], rec, t, "coordinator", st["v2"].fleet)
-        frames.append(bus.snapshot())
+        if t >= first:
+            frames.append(bus.snapshot())
         if (t - a.start_hour) % 24 == 23:
             print(f"t={t}: Cu V2 {tot['v2'].cu:.0f} t, V0 {tot['v0'].cu:.0f} t", flush=True)
     a.output.write_text(json.dumps(frames, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
