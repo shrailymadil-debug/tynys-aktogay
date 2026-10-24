@@ -183,7 +183,15 @@ class V2Tynys:
         # ценность тонны − средняя энергия на её помол, с небольшим дисконтом за риск.
         e_avg_cost = np.mean([ph.bond_kwh_t(p, p.bwi[d], 150) + p.flot_kwh_t for d in DOMAINS]) * (p.tariff_kzt_kwh + p.co2_price_kzt_t * p.grid_co2_t_mwh / 1000)
         lamS_end = 0.97 * val_t - e_avg_cost
-        lamS, Cspill = 0.3 * val_t, 0.8 * val_t   # lamS — штраф за уход ниже страхового запаса
+        # Ценность тонны на складе считается по анализу этого склада (как и ценность
+        # переработки X): иначе при бедной руде остаток «ценнее» помола и линии стоят.
+        e_cost = {d: (ph.bond_kwh_t(p, bwi[d], 150) + p.flot_kwh_t) * (p.tariff_kzt_kwh + p.co2_price_kzt_t * p.grid_co2_t_mwh / 1000) for d in DOMAINS}
+        val_d = {d: V * grade[d] * R[d, G150] for d in DOMAINS}
+        lamS_end_d = {d: 0.95 * val_d[d] - e_cost[d] for d in DOMAINS}
+        lamS_hi_d = {d: 0.75 * val_d[d] - e_cost[d] for d in DOMAINS}
+        # Недобытая руда — потерянные часы карьера: их не вернуть, поэтому штраф выше
+        # ценности переработки (иначе склад «выгоднее» плана добычи).
+        lamS, Cspill = 0.3 * val_t, 1.5 * val_t   # lamS — штраф за уход ниже страхового запаса
         # Заряд флота в конце горизонта нужен, чтобы возить руду завтра: нехватка 1 МВт·ч
         # = ~1/haul тонн недобытой руды. Остаток заряда оценивается по цене восполнения.
         lamF = 0.8 * val_t / haul
@@ -245,8 +253,8 @@ class V2Tynys:
         # стороны, поэтому тонны выше середины склада ценятся меньше (их некуда
         # будет «выдохнуть»).
         mid = 0.5 * p.pile_cap_t  # на домен; для общего склада — суммарно 50 %
-        SL = {d: vi.add(0, mid, -lamS_end) for d in DOMAINS}
-        SHI = {d: vi.add(0, np.inf, -(0.75 * val_t - e_avg_cost)) for d in DOMAINS}
+        SL = {d: vi.add(0, mid, -lamS_end_d[d]) for d in DOMAINS}
+        SHI = {d: vi.add(0, np.inf, -lamS_hi_d[d]) for d in DOMAINS}
         devF = vi.add(0, np.inf, lamF)
         devB = vi.add(0, np.inf, lamB)
 
@@ -327,6 +335,12 @@ class V2Tynys:
             mt = mplan[h]
             con([(MS[d, h], -(1 + p.strip_ratio)) for d in DOMAINS] + [(CH[h], p.truck_tph / p.charger_mw)],
                 -np.inf, p.n_trucks * p.truck_tph * env.truck_mult[idx[h]] - (1 + p.strip_ratio) * mt)
+            # Зарядка за час ограничена свободной ёмкостью батарей на начало часа
+            # (так считает поле: sim.dispatch не «зачитывает» рейсы этого же часа).
+            if h > 0:
+                con([(F[h - 1], 1), (CH[h], p.eta_charge)], -np.inf, p.fleet_e_max)
+            else:
+                con([(CH[h], p.eta_charge)], -np.inf, max(0.0, p.fleet_e_max - st.fleet_e))
             # флот
             terms = [(F[h], 1), (CH[h], -p.eta_charge)] + [(MS[d, h], -haul) for d in DOMAINS]
             rhs = -haul * mt
@@ -335,6 +349,10 @@ class V2Tynys:
             else:
                 rhs += st.fleet_e
             con(terms, rhs, rhs)
+            # Поле считает заряд по звеньям: при среднем заряде у нижней границы часть
+            # звеньев уже пуста и не возит. Мягкий резерв над суммарным минимумом.
+            fbuf = vi.add(0, np.inf, lamF)
+            con([(F[h], 1), (fbuf, 1)], p.fleet_e_min + 0.25 * p.n_trucks * p.truck_batt_mwh, np.inf)
             # накопитель
             bmax = p.bess_mw*factors[h]["bess"]
             con([(BC[h], 1), (DIRECTION[h], -bmax)], -np.inf, 0)
