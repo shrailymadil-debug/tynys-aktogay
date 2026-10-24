@@ -326,7 +326,7 @@ async function loadSizing() {
     const eq = attrs.wind_equivalent, current = attrs.wind_equivalent_current;
     if (eq?.status==='ok') {
       $('page-title').textContent = `Тыныс: эквивалент ${fmt(eq.equivalent_wind_mw)} МВт ВЭС${eq.archived?' в архивном расчёте':''}.`;
-      $('equivalent-note').textContent = `ВЭС ${fmt(eq.wind_mw)} + СЭС ${fmt(eq.pv_mwp)}: одинаковый CO₂ при выпуске Cu в пределах ${fmt(eq.copper_tolerance_pct)}%. Без координатора — ${fmt(eq.required_baseline_wind_mw)} МВт ВЭС по интерполяции (${fmt(eq.grid_step_equivalent_mw)} МВт добавления по сетке). Это эквивалент по выбросам, не гарантированная замена оборудования.`;
+      $('equivalent-note').textContent = `ВЭС ${fmt(eq.wind_mw)} + СЭС ${fmt(eq.pv_mwp)}: одинаковый CO₂ при выпуске Cu в пределах ${fmt(eq.copper_tolerance_pct)}%. Медь ${eq.copper_change_pct!=null?(eq.copper_change_pct>0?'+':'')+fmt(eq.copper_change_pct,1)+' %':'—'}. Без координатора — ${fmt(eq.required_baseline_wind_mw)} МВт ВЭС по интерполяции (${fmt(eq.grid_step_equivalent_mw)} МВт добавления по сетке). Это эквивалент по выбросам, не гарантированная замена оборудования.`;
       if (eq.archived) $('equivalent-note').textContent += ' Архив legacy-v1. '+(current?.status==='unavailable'?'Новая модель: сопоставимый эквивалент пока не подтверждён.':'');
     }
   } catch (e) { return setTimeout(loadSizing, 5000); }

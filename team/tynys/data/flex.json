@@ -47,7 +47,7 @@
     "restart_cost_kzt": 20000000.0,
     "trip_lockout_h": 1,
     "crush_kwh_t": 0.6,
-    "auxiliary_nominal_mw": 100.0,
+    "auxiliary_nominal_mw": 83.0,
     "shovel_capacity_factor": 1.2,
     "crusher_capacity_factor": 1.2,
     "conveyor_capacity_factor": 1.2,

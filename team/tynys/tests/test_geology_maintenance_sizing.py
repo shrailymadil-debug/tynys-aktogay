@@ -100,7 +100,7 @@ def test_liner_service_stops_line_resets_wear_and_roundtrips():
 
 
 def test_wind_equivalent_archive_and_no_false_savings():
-    path = DATA.parent/'sizing.csv'
+    path = DATA.parent/'archive'/'sizing-legacy-v1.csv'
     result = analyze(path)
     assert result['archived']
     assert result['equivalent_wind_mw'] == pytest.approx((778.5-723.8)/(778.5-715.7)*150)

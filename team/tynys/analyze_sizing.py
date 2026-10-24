@@ -34,7 +34,9 @@ def wind_equivalent(data, wind=300., pv=500., variant="V2green", copper_toleranc
             continue
         fraction = (a.co2_adj_kt-target.co2_adj_kt)/(a.co2_adj_kt-b.co2_adj_kt)
         required = a.wind_mw+fraction*(b.wind_mw-a.wind_mw)
+        cu_base = a.cu_adj_t + fraction*(b.cu_adj_t-a.cu_adj_t)
         return {**out, "status": "ok", "required_baseline_wind_mw": float(required),
+                "copper_change_pct": float(100*(target.cu_adj_t/cu_base-1)),
                 "equivalent_wind_mw": float(required-wind), "grid_step_equivalent_mw": float((a.wind_mw if fraction == 0 else b.wind_mw)-wind),
                 "bracket_wind_mw": [float(a.wind_mw),float(b.wind_mw)],
                 "bracket_co2_kt": [float(a.co2_adj_kt),float(b.co2_adj_kt)],
@@ -43,8 +45,8 @@ def wind_equivalent(data, wind=300., pv=500., variant="V2green", copper_toleranc
     return {**out, "reason": "Нет интервала CO2 при сопоставимом выпуске меди; экстраполяция запрещена"}
 
 
-def analyze(path, wind=300., pv=500.):
-    result = wind_equivalent(pd.read_csv(path), wind, pv)
+def analyze(path, wind=300., pv=500., copper_tolerance=.01):
+    result = wind_equivalent(pd.read_csv(path), wind, pv, copper_tolerance=copper_tolerance)
     metadata = path.with_suffix(".json")
     meta = json.loads(metadata.read_text(encoding="utf-8")) if metadata.exists() else {}
     digest = hashlib.sha256(path.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
@@ -62,8 +64,9 @@ def main():
     parser.add_argument("--output", type=Path)
     parser.add_argument("--wind", type=float, default=300)
     parser.add_argument("--pv", type=float, default=500)
+    parser.add_argument("--copper-tolerance-pct", type=float, default=1.0)
     args = parser.parse_args()
-    result = analyze(args.input, args.wind, args.pv)
+    result = analyze(args.input, args.wind, args.pv, args.copper_tolerance_pct/100)
     if result["status"] == "ok":
         print(f"Тыныс: эквивалент {result['equivalent_wind_mw']:.1f} МВт ВЭС по CO2 "
               f"({result['grid_step_equivalent_mw']:.0f} МВт по сетке расчёта)")
