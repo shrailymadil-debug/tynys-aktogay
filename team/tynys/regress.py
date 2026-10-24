@@ -21,6 +21,8 @@ PHYSICS_V4_REF = {"cu_adj_t": 219068.3, "grid_gwh": 2030.9, "kwh_t": 36.3234}
 
 def calculate(legacy=False, physics_v3=False):
     p = replace(aktogay(), wind_mw=0, pv_mwp=0)
+    if legacy or physics_v3:
+        p = replace(p, auxiliary_nominal_mw=100.0)   # прежние эталоны считались до калибровки v4
     if legacy:
         p = replace(p, mill_idle_fraction=0, line_q_ramp_fraction=1,
                     line_power_ramp_fraction=1, grade_noise_sd=0, planned_stops=False,
