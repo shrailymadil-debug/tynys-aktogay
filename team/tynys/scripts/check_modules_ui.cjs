@@ -10,8 +10,10 @@ const output=process.argv[3];
     const page=await browser.newPage({viewport:{width:1440,height:1050}});
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto(url+'/dashboard.html');
-    await page.waitForFunction(()=>document.querySelector('#page-title').textContent.includes('131'));
-    assert.match(await page.locator('#page-title').innerText(),/архивном/);
+    await page.waitForFunction(()=>/эквивалент \d+ МВт ВЭС/.test(document.querySelector('#page-title').textContent));
+    const headline = await page.locator('#page-title').innerText();
+    if (/архив/.test(headline)) throw new Error('Headline must come from the current sizing, not the archive: '+headline);
+    if (!/Медь [−+-]?\d/.test(await page.locator('#equivalent-note').innerText())) throw new Error('Copper change must be shown next to the wind equivalent');
     await page.waitForFunction(()=>document.querySelector('#geo-active').textContent.includes('GM-'));
     const foreign=await page.evaluate(async()=>{
       const r=await fetch('ditto/api/2/things/kz.tynys:scenario/features');
@@ -47,6 +49,6 @@ const output=process.argv[3];
     await page.locator('#demo-cancel').click();
     await page.waitForFunction(()=>!sessionStorage.getItem('tynys.demo.v1'));
     assert.deepEqual(errors,[]);
-    console.log(JSON.stringify({headline:'131 MW, archive labelled',geology:'spatial colors and active faces',demo:'one-click auto journey, stopped rotors, real futures, cleanup PASS',pageErrors:errors}));
+    console.log(JSON.stringify({headline:headline,geology:'spatial colors and active faces',demo:'one-click auto journey, stopped rotors, real futures, cleanup PASS',pageErrors:errors}));
   }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

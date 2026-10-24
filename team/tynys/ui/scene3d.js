@@ -204,6 +204,9 @@ async function loadGeology() {
     const active=document.createElement('p');active.id='geology-active';
     const note=document.createElement('small');note.textContent='Мягче → твёрже. Белые точки — текущие забои. Пространственный аналог, не геология Актогая. Hoffimann et al. · CC BY 4.0';
     legend.append(title,gradient,active,note);document.body.appendChild(legend);
+    // Легенда стоит над блоком «Почему так» и не перекрывает его при любой длине текста.
+    const placeLegend=()=>{const w=document.getElementById('why');if(w&&w.offsetParent!==null)legend.style.bottom=`${w.offsetHeight+16+12}px`;};
+    placeLegend();setInterval(placeLegend,500);
   } catch(e) { console.info('GeoMet: '+e.message); }
 }
 function terrainH(x, z) {
@@ -582,7 +585,7 @@ const STORY = [
   { v: 'tynys', p: [-40, 120, -190], t: [70, 0, 0], h: 'Решение: рудник «дышит»', s: 'ВДОХ — энергии много: мелем твёрдую руду и тоньше, заряжаем самосвалы. ВЫДОХ — мало: мелем мягкую, твёрдую копим на складе.' },
   { v: 'tynys', p: [80, 55, 200], t: [10, 0, 110], h: 'Электросамосвалы — тоже батарея', s: 'Самосвалы заряжаются, когда дует ветер, и возят руду на заряде, когда ветра нет.' },
   { v: 'tynys', p: [360, 130, 140], t: [250, 10, -20], h: 'Мозг считает на сутки вперёд', s: 'Каждый час — план на 24 ч по прогнозу погоды и объяснение словами. В «Двух будущих» можно проверить ограничение сети, последствия для производства и восстановление запасов.' },
-  { v: 'tynys', p: [300, 280, 460], t: [20, -20, -20], h: 'Итог за год на реальной погоде 2024', s: 'ВЭС 300 + СЭС 250 МВт: CO₂ 1 661 → 978 тыс. т в год (−41 %). «Тыныс» с целью «CO₂» сверху: сброс ветра и солнца почти вдвое меньше (94 → 49 ГВт·ч) и CO₂ ещё −4,4 % (935 тыс. т) при меди −1 %. Цель «медь»: +1 % меди, но CO₂ +2,3 %.' },
+  { v: 'tynys', p: [300, 280, 460], t: [20, -20, -20], h: 'Итог за год на реальной погоде 2024', s: 'ВЭС 300 + СЭС 250 МВт: CO₂ 1 661 → 978 тыс. т в год (−41 %). «Тыныс» с целью «CO₂» сверху: сброс ветра и солнца почти вдвое меньше (94 → 49 ГВт·ч) и CO₂ ещё −4,4 % (935 тыс. т) при меди −1 %. Цель «медь»: +0,9 % меди, но CO₂ +2,3 %.' },
 ];
 let tour = null;
 function startStory() { tour = { i: 0, t0: performance.now(), stepMs:Q.get('demo')==='1'?25000:11000, from: { p: camera.position.clone(), t: controls.target.clone() } }; setView(STORY[0].v); }

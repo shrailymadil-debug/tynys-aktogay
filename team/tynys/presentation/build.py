@@ -3,7 +3,7 @@
 Все числа берутся из data/sizing.csv и data/flex.csv, а не пишутся вручную.
 Снимки экранов — img/*.png (снимаются со стенда скриптом shots.py).
 Запуск из team/tynys:  python presentation/build.py"""
-import asyncio, os
+import asyncio, json, os
 import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -11,6 +11,7 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 D = os.path.join(HERE, "..", "data")
 sz = pd.read_csv(os.path.join(D, "sizing.csv"))
 fx = pd.read_csv(os.path.join(D, "flex.csv"))
+eq = json.load(open(os.path.join(D, "wind-equivalent.json"), encoding="utf-8"))
 
 
 def row(w, p, v):
@@ -29,7 +30,7 @@ def pct(a, b):
 base = row(0, 0, "V0")
 W, P = 300, 250
 r = {v: row(W, P, v) for v in ("V0", "V2fixed", "V2", "V2green")}
-year = fx[fx.season.str.startswith("весь год")].iloc[0]
+year = fx[(fx.season == "all") | fx.season.str.startswith("весь год")].iloc[0]
 piv = sz.pivot_table(index=["wind_mw", "pv_mwp"], columns="variant", values=["co2_adj_kt", "cu_adj_t", "curtail_mwh"])
 green_rng = pct(piv.co2_adj_kt.V2green, piv.co2_adj_kt.V0)
 cu_rng = pct(piv.cu_adj_t.V2, piv.cu_adj_t.V0)
@@ -51,7 +52,10 @@ N = dict(
     cuco2_min=f(copper_co2.min(), 1), cuco2_max=f(copper_co2.max(), 1),
     curt_min=f(curt_cut.min()), curt_max=f(curt_cut.max()), n_curt=len(has),
     flex_mw=f(year.mw_median), flex_p10=f(year.mw_p10), flex_p90=f(year.mw_p90), flex_h=f(year.h_median, 1),
-    flex_hp10=f(year.h_p10, 1), flex_hp90=f(year.h_p90, 1),
+    flex_hp10=f(year.h_p10, 1), flex_hp90=f(year.h_p90, 1), flex_mean=f(year.mw_mean),
+    green_cu=f(pct(r["V2green"].cu_adj_t, r["V0"].cu_adj_t), 1), fixed_cu=f(pct(r["V2fixed"].cu_adj_t, r["V0"].cu_adj_t), 1),
+    green_total=f(pct(r["V2green"].co2_adj_kt, base.co2_adj_kt), 1),
+    eq_mw=f(eq["equivalent_wind_mw"]), eq_req=f(eq["required_baseline_wind_mw"]), eq_cu=f(eq["copper_change_pct"], 1),
 )
 
 CSS = """
@@ -74,7 +78,7 @@ p,li{font-size:22px;line-height:1.5;color:#c9d6de}li{margin-bottom:6px}
 .box p{font-size:17px;margin:8px 0 0}
 table{border-collapse:collapse;width:100%;font-size:20px;font-variant-numeric:tabular-nums}
 th{font-size:14px;letter-spacing:.06em;color:#9aaebb;font-weight:600;text-align:right;padding:10px 12px;border-bottom:1px solid #3a4d5d}
-td{padding:11px 12px;border-bottom:1px solid #253745;text-align:right}th:first-child,td:first-child{text-align:left}
+td{padding:11px 12px;border-bottom:1px solid #253745;text-align:right}.tight td{padding:7px 10px}th:first-child,td:first-child{text-align:left}
 img.shot{border-radius:14px;border:1px solid #283947;display:block}
 .tag{display:inline-block;border:1px solid #326f60;background:#173d36;color:#6ce0cc;border-radius:7px;padding:3px 9px;font-size:14px;font-weight:600;margin-right:6px}
 code{background:#172633;border:1px solid #283947;border-radius:6px;padding:1px 7px;font-size:.9em;color:#6ce0cc}
@@ -104,58 +108,68 @@ def slides():
 <div class="grid g2"><div><table><tr><th></th><th>Модель (V0, без ВИЭ)</th><th>KAZ Minerals 2024</th></tr>
 <tr><td>Медь, тыс. т/год</td><td>{n['cu_today']}</td><td>221</td></tr>
 <tr><td>Электроэнергия, ГВт·ч/год</td><td>{n['gwh_today']}</td><td>≈ 2 030</td></tr>
-<tr><td>Удельный расход, кВт·ч/т</td><td>34,5</td><td>≈ 35</td></tr>
+<tr><td>Удельный расход, кВт·ч/т</td><td>36,3</td><td>≈ 35</td></tr>
 <tr><td>Содержание / извлечение</td><td>0,43 % / ≈ 88 %</td><td>0,43 % / 87,9 %</td></tr></table>
-<p class="sm" style="margin-top:14px">Остаток нагрузки ≈ 100 МВт (водовод, насосы, посёлок) подобран под ≈ 35 кВт·ч/т — это калибровка, а не независимая проверка.</p></div>
+<p class="sm" style="margin-top:14px">Вспомогательные потребители (водовод, хвосты, фильтрация, мастерские, посёлок) — 83 МВт при номинальных потоках; подобраны под энергию отчёта. Это калибровка, а не независимая проверка. Медь модель считает сама.</p></div>
 <div><ul><li>Погода: почасовой ветер 100 м и радиация в точке рудника за 2024 г. — Open‑Meteo ERA5, CC BY 4.0.</li>
 <li>Физика: закон Бонда, извлечение от крупности и времени флотации, энергия рейса самосвала, баланс мощности с пределом сети.</li>
 <li>Чего на Актогае пока нет — ВЭС 300 МВт, СЭС 250 МВт, накопитель, 42 электросамосвала — помечено как допущение.</li></ul></div></div><div class="n">4</div></div>""")
-    S.append(f"""<div class="s"><p class="eb">ПОСТРОЕНО НА OPENEGIZ</p><h2>39 двойников, все данные идут через платформу</h2>
+    S.append(f"""<div class="s"><p class="eb">ПОСТРОЕНО НА OPENEGIZ</p><h2>51 двойник и 28 типов, все данные идут через платформу</h2>
 <div class="box" style="font-size:22px;line-height:1.8"><b>Модель рудника</b> → MQTT <code>telemetry/&lt;двойник&gt;</code> → <b>Eclipse Ditto</b> → Telegraf → InfluxDB → <b>Grafana</b><br>
 <b>Координатор</b> ⇄ Ditto: читает состояние и сценарий, пишет план, уставки и объяснение<br>
 <b>Лаборатория «Два будущих»</b> ⇄ Ditto: запрос и результат расчёта — через двойники<br>
-<b>Экраны</b> (пульт, 3D, «Два будущих») читают двойники и пишут сценарии «что если»</div>
+<b>Экраны</b> (Unity на главной, пульт, лёгкая 3D, «Два будущих») читают двойники и пишут сценарии «что если»</div>
 <p style="margin-top:22px">Рудник → карьер (экскаваторы, 14 звеньев самосвалов, зарядки) · фабрика (склады мягкой и твёрдой руды, 2 линии, флотация) · энергия (ВЭС, СЭС, накопитель, подстанция). Связи «кто кому передаёт руду и энергию» записаны в атрибутах двойников.</p>
-<p class="sm">Запуск: <code>sudo apt-get install -y make</code> · <code>make tynys</code> — проверено с нуля на Ubuntu 24.04 в GitHub Actions.</p><div class="n">5</div></div>""")
-    S.append(f"""<div class="s" style="padding:40px 50px"><p class="eb">ГДЕ СМОТРЕТЬ НА СТЕНДЕ · 1 / 3</p><h2 style="font-size:30px;margin-bottom:14px">Пульт рудника — <code>http://localhost:8095</code></h2>
+<p class="sm">Запуск: <code>sudo apt-get update &amp;&amp; sudo apt-get install -y make</code> · <code>make tynys</code> — проверено с нуля на Ubuntu 24.04 в GitHub Actions.</p><div class="n">5</div></div>""")
+    S.append(f"""<div class="s"><p class="eb">МОДЕЛЬ РУДНИКА</p><h2>Оборудование, потоки и состояние — как на настоящем руднике</h2>
+<div class="grid g3">
+<div class="box"><h3>ПОТОК РУДЫ</h3><p>Экскаваторы → закреплённые звенья самосвалов → дробилка → конвейер → склады мягкой и твёрдой руды → конвейер питания → две линии мельниц → флотация → концентрат и хвосты; вскрыша — в отвал.</p></div>
+<div class="box"><h3>ЭНЕРГИЯ</h3><p>Мельницы: постоянная часть мощности 35 %, пределы изменения подачи и мощности за час, один P80 на линию. Вспомогательные потребители — отдельные двойники с МВт. Батареи 14 звеньев самосвалов, накопитель, ВЭС, СЭС, предел сети.</p></div>
+<div class="box"><h3>СОСТОЯНИЕ</h3><p>Исправность, наработка, ТО, ремонты и готовность у каждого объекта. Отказы ограничивают потоки, выпуск и энергию. Вода, хвосты, концентрат и вскрыша имеют материальные балансы.</p></div>
+<div class="box"><h3>ГЕОЛОГИЯ GEOMET</h3><p>60 координатных проб открытого набора GeoMet (CC BY 4.0): твёрдость BWi, медь и извлечение по месту добычи. Это пространственный аналог, не скважины Актогая.</p></div>
+<div class="box"><h3>РЕМОНТ НА ВЫДОХЕ</h3><p>Координатор ставит ТО и замену футеровки мельниц в окно, когда энергия из сети дороже (±12 ч от календаря, одна бригада).</p></div>
+<div class="box"><h3>ДЕМО ЗА 3 МИНУТЫ</h3><p>Одна кнопка на пульте: штиль → 3D с остановленными ветряками и уступами по твёрдости → настоящий расчёт «Двух будущих».</p></div></div>
+<div class="n">6</div></div>""")
+    S.append(f"""<div class="s" style="padding:40px 50px"><p class="eb">ГДЕ СМОТРЕТЬ НА СТЕНДЕ · 1 / 3</p><h2 style="font-size:30px;margin-bottom:14px">Пульт рудника — <code>http://localhost:8095/dashboard.html</code></h2>
 <div class="grid" style="grid-template-columns:780px 1fr;gap:26px"><img class="shot" src="img/pult.png" style="width:780px">
 <ul style="padding-left:20px;margin:0"><li style="font-size:18px">Пять цифр сейчас: CO₂, доля ВИЭ, сброс, медь к «как сейчас», резерв</li>
 <li style="font-size:18px">«Вдох / выдох» и «Почему так» — решение координатора словами</li><li style="font-size:18px">План на 24 ч и теневая цена энергии</li>
-<li style="font-size:18px">Сравнение V0 / V1 / V2 на одной погоде</li><li style="font-size:18px">Цель «медь / CO₂», 6 кнопок «что если» с отменой, «Сколько строить»</li></ul></div><div class="n">6</div></div>""")
+<li style="font-size:18px">Сравнение V0 / V1 / V2 на одной погоде</li><li style="font-size:18px">Цель «медь / CO₂», кнопки «что если» с параметрами и отменой, «Сколько строить», таблица оборудования</li></ul></div><div class="n">7</div></div>""")
     S.append(f"""<div class="s" style="padding:40px 50px"><p class="eb">ГДЕ СМОТРЕТЬ НА СТЕНДЕ · 2 / 3</p><h2 style="font-size:30px;margin-bottom:14px">3D‑сцена — <code>/3d.html</code></h2>
 <div class="grid" style="grid-template-columns:780px 1fr;gap:26px"><img class="shot" src="img/3d.png" style="width:780px">
 <ul style="padding-left:20px;margin:0"><li style="font-size:18px">«История: проблема → решение» — облёт с подписями</li>
 <li style="font-size:18px">«Как сейчас / С „Тыныс“» — тот же час без координации и с ней</li><li style="font-size:18px">Щелчок по оборудованию — числа из двойника</li>
-<li style="font-size:18px">Сценарии видны на оборудовании: красная линия, лимит сети на ЛЭП, отказ накопителя</li><li style="font-size:18px">Без видеокарты сцена сама переходит в облегчённый режим</li></ul></div><div class="n">7</div></div>""")
+<li style="font-size:18px">Сценарии видны на оборудовании: красная линия, лимит сети на ЛЭП, отказ накопителя</li><li style="font-size:18px">Без видеокарты сцена сама переходит в облегчённый режим</li></ul></div><div class="n">8</div></div>""")
     S.append(f"""<div class="s" style="padding:40px 50px"><p class="eb">ГДЕ СМОТРЕТЬ НА СТЕНДЕ · 3 / 3</p><h2 style="font-size:30px;margin-bottom:14px">Два будущих — <code>/futures.html</code></h2>
 <div class="grid" style="grid-template-columns:780px 1fr;gap:26px"><img class="shot" src="img/futures.png" style="width:780px">
 <ul style="padding-left:20px;margin:0"><li style="font-size:18px">Запрос KEGOC: на сколько МВт и часов снизить лимит</li>
 <li style="font-size:18px">«Проверить обещание»: один снимок рудника, обычное управление и «Тыныс» рядом</li><li style="font-size:18px">Фактическое снижение потребления — отдельно от снижения лимита</li>
-<li style="font-size:18px">Цена помощи завтра: восстановление запасов и долг по меди</li><li style="font-size:18px">«Найти предел» и выгрузка расчёта в JSON</li></ul></div><div class="n">8</div></div>""")
-    S.append(f"""<div class="s"><p class="eb">ЧТО ЕСЛИ — НА СТЕНДЕ, БЕЗ ИЗМЕНЕНИЯ КОДА</p><h2>Шесть сценариев, каждый отменяется кнопкой</h2>
-<table><tr><th>Сценарий</th><th>Что меняется в модели</th><th>Где видно</th></tr>
+<li style="font-size:18px">Цена помощи завтра: восстановление запасов и долг по меди</li><li style="font-size:18px">«Найти предел» и выгрузка расчёта в JSON</li></ul></div><div class="n">9</div></div>""")
+    S.append(f"""<div class="s"><p class="eb">ЧТО ЕСЛИ — НА СТЕНДЕ, БЕЗ ИЗМЕНЕНИЯ КОДА</p><h2>Сценарии с параметрами — каждый отменяется кнопкой</h2>
+<table class="tight" style="font-size:17px"><tr><th>Сценарий</th><th>Что меняется в модели</th><th>Где видно</th></tr>
 <tr><td>Штиль на сутки</td><td>ветер 8 % на 24 ч, в прогнозе</td><td>ВЭС, план, сброс, CO₂</td></tr>
 <tr><td>Авария линии 2</td><td>линия недоступна 8 ч</td><td>линия красная, склады растут</td></tr>
 <tr><td>Запрос KEGOC −80 МВт</td><td>предел сети 260 → 180 МВт на 4 ч</td><td>ЛЭП, план, накопитель, зарядка</td></tr>
 <tr><td>Пошла твёрдая руда</td><td>80 % твёрдой из забоя на 72 ч</td><td>карьер, склад твёрдой, энергия помола</td></tr>
 <tr><td>План добычи +10 %</td><td>добыча 6 700 → 7 370 т/ч на 48 ч</td><td>самосвалы, склады, заряд</td></tr>
-<tr><td>Отказ накопителя</td><td>накопитель недоступен 12 ч</td><td>накопитель, резерв, план</td></tr></table>
-<p class="sm" style="margin-top:16px">Автоматическая проверка в CI включает каждый сценарий через двойник <code>scenario</code>, находит его след в двойниках и отменяет.</p><div class="n">9</div></div>""")
+<tr><td>Отказ накопителя</td><td>накопитель недоступен 12 ч</td><td>накопитель, резерв, план</td></tr>
+<tr><td>Ещё</td><td>поломка самосвалов / экскаватора, падение содержания меди, смена тарифа, отказы дробилки, конвейера, водовода</td><td>пульт и 3D, кнопки в обоих</td></tr></table>
+<p class="sm" style="margin-top:16px">Длительность, линия, мощность запроса, доля потерь — задаются на экране. CI включает сценарии через двойник <code>scenario</code>, проверяет след в двойниках и последствия для меди и CO₂, затем отменяет.</p><div class="n">10</div></div>""")
     S.append(f"""<div class="s"><p class="eb">РЕЗУЛЬТАТ · ГОД НА РЕАЛЬНОЙ ПОГОДЕ 2024 · ВЭС {W} + СЭС {P} МВт</p><h2>Главное даёт стройка ВЭС и СЭС, координация — сверху</h2>
 <table><tr><th></th><th>CO₂, тыс. т/год*</th><th>Медь, тыс. т/год</th><th>Сброс ВИЭ, ГВт·ч</th></tr>
 <tr><td>Сегодня (без ВИЭ)</td><td>{n['co2_today_adj']}</td><td>{n['cu_today']}</td><td>0</td></tr>
 <tr><td>ВИЭ, управление как сейчас</td><td>{n['co2_res']} <span class="m">({n['res_drop']} %)</span></td><td>{n['cu_res']}</td><td>{n['curt_res']}</td></tr>
 <tr><td>ВИЭ + «Тыныс», цель «CO₂»</td><td><em>{n['co2_green']}</em></td><td>{n['cu_green']}</td><td><em>{n['curt_green']}</em></td></tr>
 <tr><td>ВИЭ + «Тыныс», цель «медь»</td><td class="cu">{n['co2_cu']}</td><td class="cu">{n['cu_cu']}</td><td>{n['curt_cu']}</td></tr></table>
-<ul style="margin-top:16px"><li>Режим «CO₂» к управлению «как сейчас» при тех же ВИЭ: {n['green_vs_res']} % CO₂, по 25 сочетаниям от {n['green_min']} до {n['green_max']} %; сброс ВИЭ меньше на {n['curt_min']}–{n['curt_max']} %.</li>
-<li>Режим «медь»: +{n['cu_gain']} % меди за счёт более тонкого помола, но CO₂ +{n['cuco2']} %.</li></ul>
-<p class="sm">* С учётом запасов в конце прогонов (склады, заряд батарей). Источник: <code>team/tynys/sizing.py</code> → <code>data/sizing.csv</code>, сводка — <code>analyze_sizing.py</code>.</p><div class="n">10</div></div>""")
+<ul style="margin-top:16px"><li>Цель «CO₂» к управлению «как сейчас» при тех же ВИЭ: {n['green_vs_res']} % CO₂ (всего {n['green_total']} % к сегодняшнему), по 25 сочетаниям от {n['green_min']} до {n['green_max']} %; медь {n['green_cu']} %. Это как ≈ {n['eq_mw']} МВт дополнительных ветряков.</li>
+<li>Цель «медь»: +{n['cu_gain']} % меди за счёт более тонкого помола, но CO₂ +{n['cuco2']} %.</li></ul>
+<p class="sm">* С учётом запасов в конце прогонов (склады, заряд батарей). Источник: <code>team/tynys/sizing.py</code> → <code>data/sizing.csv</code>, сводка — <code>analyze_sizing.py</code>.</p><div class="n">11</div></div>""")
     S.append(f"""<div class="s"><p class="eb">ЧЕСТНО О ГРАНИЦАХ</p><h2>Что модель утверждает — и чего нет</h2>
-<ul><li>Прирост меди {n['cu_min']}…{n['cu_max']} % — эффект тонкого помола, а не подстройки под ВИЭ: координатор с крупностью «как сейчас» даёт ту же медь, что V0.</li>
-<li>Резерв для KEGOC по состоянию модели: медиана {n['flex_mw']} МВт (p10–p90 {n['flex_p10']}–{n['flex_p90']}) на {n['flex_h']} ч (p10–p90 {n['flex_hp10']}–{n['flex_hp90']}); чаще всего его ограничивает накопитель. Конкретное обещание проверяется в «Двух будущих».</li>
+<ul><li>Прирост меди +{n['cu_min']}…+{n['cu_max']} % у цели «медь» — эффект тонкого помола, а не подстройки под ВИЭ. С крупностью «как сейчас» координатор теряет {n['fixed_cu']} % меди на остановках и перестройках линий — это цена гибкости.</li>
+<li>Резерв для KEGOC по состоянию модели: медиана {n['flex_mw']} МВт (p10–p90 {n['flex_p10']}–{n['flex_p90']}) на {n['flex_h']} ч (p10–p90 {n['flex_hp10']}–{n['flex_hp90']}). Постоянная часть мощности мельниц и пределы изменения подачи честно уменьшили оценку. Конкретное обещание проверяется в «Двух будущих».</li>
 <li>Модель часовая; движение самосвалов на экранах — схема (ускорено ×10), заряд и состояние звеньев — из модели.</li>
-<li>Твёрдость руды — случайный процесс, не блочная модель месторождения; прогноз погоды — реальный ряд плюс модельная ошибка; ERA5 занижает ветер.</li></ul>
-<p style="margin-top:26px"><em>Польза:</em> руководство видит, какие ВЭС и СЭС окупаются меньшим углём; энергетик понимает каждое решение — двойник объясняет его словами.</p><div class="n">11</div></div>""")
+<li>Геология — открытый пространственный аналог GeoMet, а не скважины Актогая; прогноз погоды — реальный ряд плюс модельная ошибка; ERA5 занижает ветер.</li></ul>
+<p style="margin-top:26px"><em>Польза:</em> руководство видит, какие ВЭС и СЭС окупаются меньшим углём; энергетик понимает каждое решение — двойник объясняет его словами.</p><div class="n">12</div></div>""")
     return S
 
 
