@@ -1,42 +1,59 @@
-"""«Тыныс‑резерв» по сезонам: распределение flex_down_mw и flex_down_h.
-Координатор V2 (цель «медь», как на стенде по умолчанию), параметры aktogay(),
-реальная погода 2024, 4 сезона × 14 суток. Результат — data/flex.csv.
-Запуск: PYTHONPATH=. python flex_stats.py"""
-import math
+"""Reproducible physics-v4 reserve statistics; preserves prior CSV versions.
+
+Run from team/tynys: python flex_stats.py
+Four seasons x 14 days, seed 7, V2 with deterministic 16-node budget, as in
+the counterfactual evaluator. The reserve is conditional next-hour reduction,
+not certified ancillary service. CSV plus JSON provenance are written together.
+"""
+import argparse
+from dataclasses import asdict
+import json
+from pathlib import Path
 import pandas as pd
 from tynys.params import aktogay
 from tynys.sim import Scenario, Env, init_state, step
 from tynys.controllers import V2Tynys
-from tynys import physics as ph
 
-SEASONS = {15: "зима (с 15 янв)", 105: "весна (с 15 апр)", 196: "лето (с 15 июл)", 288: "осень (с 15 окт)"}
-p = aktogay()
-frames = []
-for doy, name in SEASONS.items():
-    env, st, c, recs = Env(p, Scenario(start_doy=doy, days=14), 7), init_state(p), V2Tynys(), []
-    for t in range(14 * 24):
-        r = step(p, env, st, t, c.decide(p, env, st, t), True)
-        # какой запас ограничил длительность (те же формулы, что в sim.flexibility)
-        bess_usable = (max(0.0, st.bess_e - p.bess_e_min) * math.sqrt(p.bess_eta_rt)
-                       if r.get("bess_available", True) else 0.0)
-        bess_dis = min(p.bess_mw, bess_usable)
-        h_fleet = max(0.0, st.fleet_e - p.fleet_e_min) / max(
-            ph.haul_mwh_per_t_ore(p) * max(r["mine"], 1.0), 1e-6)
-        h = {"самосвалы": h_fleet if r["charge"] > 0 else 48.0,
-             "склады": (2 * p.pile_cap_t - sum(st.pile.values())) / max(1.0, r["mine"] - p.n_lines * p.line_q_min),
-             "накопитель": bess_usable / bess_dis if bess_dis > 0 else 48.0, "предел 48 ч": 48.0}
-        if not math.isclose(min(h.values()), r["flex_down_h"], rel_tol=1e-10, abs_tol=1e-10):
-            raise AssertionError("Расчёт ограничивающего запаса разошёлся с sim.flexibility")
-        r["limit"] = min(h, key=h.get); recs.append(r)
-    r = pd.DataFrame(recs); r["season"] = name; frames.append(r)
-df = pd.concat(frames)
-rows = []
-for name, g in list(df.groupby("season", sort=False)) + [("весь год (4 × 14 сут)", df)]:
-    rows.append({"season": name,
-                 "mw_mean": g.flex_down_mw.mean(), "mw_p10": g.flex_down_mw.quantile(0.1), "mw_p90": g.flex_down_mw.quantile(0.9),
-                 "h_mean": g.flex_down_h.mean(), "h_median": g.flex_down_h.median(), "mw_median": g.flex_down_mw.median(), "h_p10": g.flex_down_h.quantile(0.1), "h_p90": g.flex_down_h.quantile(0.9)})
-out = pd.DataFrame(rows).round(1)
-out.to_csv("data/flex.csv", index=False)
-print(out.to_string(index=False))
-print("что ограничивает длительность, доля часов:")
-print((df.limit.value_counts(normalize=True) * 100).round(1).to_string())
+SEASONS = {15: 'winter', 105: 'spring', 196: 'summer', 288: 'autumn'}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--days', type=int, default=14)
+    parser.add_argument('--output', type=Path, default=Path('data/flex.csv'))
+    args = parser.parse_args()
+    if not 1 <= args.days <= 30:
+        parser.error('--days must be between 1 and 30')
+    p = aktogay()
+    options = {'time_limit': None, 'node_limit': 16, 'mip_rel_gap': .01}
+    frames, diagnostics = [], []
+    for doy, name in SEASONS.items():
+        env, st = Env(p, Scenario(start_doy=doy, days=args.days), 7), init_state(p)
+        ctl = V2Tynys(solver_options=options)
+        records = []
+        for t in range(args.days*24):
+            r = step(p, env, st, t, ctl.decide(p, env, st, t), True)
+            records.append({k:r[k] for k in ('flex_down_mw','flex_down_h','grid','feed','cu_t','trips')})
+        frame = pd.DataFrame(records); frame['season'] = name; frames.append(frame)
+        diagnostics.append(dict(season=name, fallback_steps=ctl.fallback_count,
+                                limited_steps=ctl.limited_count, weather_source=env.w.get('source')))
+        print(f'{name}: {len(records)} h; mean {frame.flex_down_mw.mean():.2f} MW; fallback {ctl.fallback_count}', flush=True)
+    df = pd.concat(frames)
+    rows = []
+    for name, g in list(df.groupby('season', sort=False)) + [('all', df)]:
+        rows.append(dict(season=name, mw_mean=g.flex_down_mw.mean(), mw_median=g.flex_down_mw.median(),
+                         mw_p10=g.flex_down_mw.quantile(.1), mw_p90=g.flex_down_mw.quantile(.9),
+                         h_mean=g.flex_down_h.mean(), h_median=g.flex_down_h.median(),
+                         h_p10=g.flex_down_h.quantile(.1), h_p90=g.flex_down_h.quantile(.9)))
+    out = pd.DataFrame(rows).round(2)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    out.to_csv(args.output, index=False)
+    args.output.with_suffix('.json').write_text(json.dumps(dict(model_version='physics-v4-geomet-maintenance', seed=7,
+        days_per_season=args.days, hours=len(df), solver_options=options, params=asdict(p),
+        diagnostics=diagnostics, note='Includes zero-import hours. Duration is a resource ceiling at unchanged conditions.'),
+        ensure_ascii=False, indent=2), encoding='utf-8')
+    print(out.to_string(index=False))
+
+
+if __name__ == '__main__':
+    main()

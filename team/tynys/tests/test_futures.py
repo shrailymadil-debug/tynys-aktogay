@@ -61,9 +61,11 @@ class FuturesTests(unittest.TestCase):
         r = self.stressed
         self.assertNotEqual(r["verdict"]["status"], "feasible")
         self.assertTrue(r["verdict"]["reasons"])
-        self.assertIn("unserved", {v["code"] for v in r["verdict"]["reasons"]})
+        self.assertIn("copper_loss", {v["code"] for v in r["verdict"]["reasons"]})
         self.assertEqual(r["limits"]["requested_cap_mw"], 60)
-        self.assertGreater(r["summary"]["tynys"]["unserved_mwh"], 0)
+        # Flow-dependent auxiliaries shut down with production. A 60 MW cap
+        # need not cause unserved fixed load, but cannot preserve copper output.
+        self.assertGreater(r["summary"]["reference"]["copper_t"], r["summary"]["tynys"]["copper_t"])
 
     def test_failed_battery_cannot_supply_or_absorb_energy(self):
         for f in self.stressed["frames"][:12]:
@@ -145,12 +147,14 @@ class FuturesTests(unittest.TestCase):
         wf, _ = weather.forecast(env.w, 0, 12, env.seed)
         self.assertAlmostEqual(wf[0] * env.wind_mult[0], env.w["wind_pu"][0], places=12)
 
-    def test_legacy_reserve_duration_is_bounded_by_battery_energy(self):
+    def test_reserve_duration_is_bounded_by_battery_energy(self):
         p = aktogay()
         st = init_state(p)
         st.bess_e = p.bess_e_min + 1
         rec = {"line0": 3330, "line1": 3330, "mill_mw": 100, "feed": 6660,
-               "charge": 0, "mine": 6700, "bess_available": True}
+               "charge": 0, "mine": 6700, "bess_available": True, "bess": 0,
+               "grid": 260, "unserved": 0, "feed_soft": 3330, "feed_hard": 3330,
+               "hard_frac": .5, "assets": {f"line-{l+1}": {"feed_tph": 3330, "mill_mw": st.line_mw[l]} for l in range(2)}}
         power, duration = flexibility(p, st, rec)
         self.assertGreater(power, 0)
         self.assertLessEqual(duration, 1.000001)

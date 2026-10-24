@@ -23,7 +23,10 @@ html = html.replace('{"imports":{"three":"./vendor/three.module.js"}}', '{"impor
 # A single-file replay has no sibling Unity, dashboard or experiment pages.
 html = re.sub(r'<a class="btn" href="(?:\./|\./dashboard\.html|futures\.html)"(?: id="[^"]+")?>[^<]+</a>', '', html)
 html = html.replace('<a style="color:#5fe3a1" href="./dashboard.html">2D‑схему рудника</a>', '2D‑схему на стенде')
-html = html.replace('<script type="module" src="scene3d.js"></script>',
-                    '<script>window.TYNYS_TRACE=' + trace + ';</script>\n<script type="module">\n' + js + '\n</script>')
+html = html.replace('<script src="demo.js"></script>', '')  # live-only guided demo
+tag = re.search(r'<script type="module" src="scene3d\.js(?:\?[^"]*)?"></script>', html)
+if not tag:
+    raise SystemExit("3d.html: scene3d.js script tag not found")
+html = html[:tag.start()] + '<script>window.TYNYS_TRACE=' + trace + ';</script>\n<script type="module">\n' + js + '\n</script>' + html[tag.end():]
 open(os.path.join(here, "demo.html"), "w", encoding="utf-8").write(html)
 print("demo.html", len(html) // 1024, "KB")

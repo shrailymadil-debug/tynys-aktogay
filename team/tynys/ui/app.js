@@ -1,9 +1,21 @@
 // Экран «Тыныс»: все данные — из двойников Eclipse Ditto (через прокси /ditto).
 const NS = 'kz.tynys';
-const NAMES = ['site','pit','plant','energy','coordinator','scenario','shadow-v0','shadow-v1','pile-soft','pile-hard',
-  'line-1','line-2','flotation','wind','pv','bess','substation', ...Array.from({length:14},(_,i)=>`truck-${String(i+1).padStart(2,'0')}`)];
+const ASSETS = {
+  'shovel-1':'Экскаватор 1','shovel-2':'Экскаватор 2',crusher:'Дробилка',
+  'conveyor-crushed':'Конвейер дроблёной руды','conveyor-feed':'Конвейер питания',
+  'waste-dump':'Отвал вскрыши',water:'Водовод',tailings:'Хвостовое хозяйство',
+  concentrate:'Концентрат',dewatering:'Водоотлив','pit-services':'Службы карьера',
+  workshops:'Мастерские',camp:'Посёлок','line-1':'Линия 1','line-2':'Линия 2',flotation:'Флотация',
+  'charger-1':'Зарядная группа 1','charger-2':'Зарядная группа 2',
+  'charger-3':'Зарядная группа 3','charger-4':'Зарядная группа 4',
+};
+const NAMES = ['site','pit','plant','energy','geology','coordinator','scenario','shadow-v0','shadow-v1','pile-soft','pile-hard',
+  ...Object.keys(ASSETS),'wind','pv','bess','substation', ...Array.from({length:14},(_,i)=>`truck-${String(i+1).padStart(2,'0')}`)];
 const EVENTS = {lull:['Штиль на сутки',3,24], line_trip:['Авария линии',0,8], kegoc:['Ограничение KEGOC',2,4],
   hard_ore:['Пошла твёрдая руда',0,72], plan_up:['План добычи +10 %',0,48], bess_fault:['Отказ накопителя',0,12],
+  crusher_fault:['Отказ дробилки',0,8], shovel_fault:['Отказ экскаватора 1',0,8],
+  conveyor_fault:['Отказ конвейера питания',0,4], water_fault:['Отказ водовода',0,4],
+  charger_fault:['Отказ зарядной группы 1',0,8], crusher_service:['ТО дробилки',2,4],
   truck_failure:['Поломка самосвала',0,8], excavator_failure:['Поломка экскаватора',0,8],
   grade_drop:['Падение содержания меди',0,24], tariff_change:['Смена тарифа сети',0,24]};
 const $ = id => document.getElementById(id);
@@ -133,6 +145,28 @@ $('g-green').onclick = () => writeScenario(curEvents(), 'green');
 let rot = 0;
 function render() {
   const t = v('site', 'sim_hour', null); if (t == null) return;
+  $('geo-active').textContent = ['soft','hard'].map(d => `${d==='soft'?'Мягкий':'Твёрдый'} забой ${v('geology','active_'+d,'—')}: BWi ${fmt(v('geology','bwi_'+d,null),1)} кВт·ч/т; Cu ${fmt(v('geology','grade_'+d+'_pct',null),2)}%; LCT ${fmt(v('geology','recovery_'+d+'_pct',null),1)}%`).join(' · ');
+  const maint = $('maintenance-plan'); maint.replaceChildren();
+  for (const id of ['line-1','line-2']) {
+    const line = document.createElement('p'), start = v(id,'maintenance_start_h',-1);
+    const kind = v(id,'maintenance_kind')==='liner'?'футеровка':'ТО';
+    line.textContent = `${ASSETS[id]}: ${start>=t?`${kind} с часа ${start}, крайний старт ${v(id,'maintenance_deadline_h')}`:v(id,'state')==='maintenance'?`${kind} выполняется`:'окно ещё не назначено'}; ресурс футеровки ${fmt(v(id,'liner_remaining_pct',100))}%.`;
+    maint.appendChild(line);
+  }
+  const states = {running:'Работает',idle:'Простой',fault:'Отказ',maintenance:'ТО / ремонт',lockout:'Блокировка'};
+  const body = $('equipment-rows'); body.replaceChildren();
+  for (const [id, title] of Object.entries(ASSETS)) {
+    const row = document.createElement('tr');
+    const flow = v(id,'flow_m3_h',null) ?? v(id,'throughput_tph',null) ?? v(id,'rate_tph',null) ?? v(id,'feed_tph',null) ?? v(id,'inflow_tph',null);
+    const speed = v(id,'speed_rpm',null);
+    const cells = [title,states[v(id,'state')] || '—',
+      flow === null ? '—' : fmt(flow,1)+(id==='water'?' м³/ч':' т/ч'),
+      fmt(v(id,'power_mw',null),2), speed===null?'—':fmt(speed,1),fmt(v(id,'p80_um',null)),
+      fmt(v(id,'health_pct',null),1),fmt(v(id,'availability_pct',null),1)];
+    for (const value of cells) { const cell=document.createElement('td');cell.textContent=value;row.appendChild(cell); }
+    body.appendChild(row);
+  }
+  $('material-stocks').textContent = `С начала прогона: вскрыша ${fmt(v('waste-dump','tonnes'))} т · хвосты ${fmt(v('tailings','tonnes'))} т · концентрат ${fmt(v('concentrate','tonnes'))} т. Вода: свежая ${fmt(v('water','fresh_m3_h'))} + оборотная ${fmt(v('water','recycle_m3_h'))} = ${fmt(v('water','flow_m3_h'))} м³/ч.`;
   $('clock').textContent = `модельное время ${v('site', 'sim_time', '')} · час ${t}`;
   const mode = v('coordinator', 'mode', '—');
   $('mode-t').textContent = mode === 'вдох' ? 'ВДОХ · копим энергию' : mode === 'выдох' ? 'ВЫДОХ · экономим' : '—';
@@ -241,7 +275,7 @@ function animate(ts) {
   for (let i = 0; i < 14; i++) {
     const n = `truck-${String(i + 1).padStart(2, '0')}`, r = trucksG.children[i], st = v(n, 'state', 'empty');
     let x, y;
-    if (st === 'charging' || st === 'waiting') { const k = st === 'charging' ? slotC++ : 7 + (slotW++ % 7); x = 304 + (k % 7) * 19; y = st === 'charging' ? 474 : 496; }
+    if (['charging','waiting','idle','unavailable','fault','maintenance'].includes(st)) { const k = st === 'charging' ? slotC++ : 7 + (slotW++ % 7); x = 304 + (k % 7) * 19; y = st === 'charging' ? 474 : 496; }
     else { const ph = (i / 14 + ts / 1000 / 90) % 1;   // анимация: полный рейс за 90 с
       const f = ph < 0.5 ? ph * 2 : 2 - ph * 2;
       const p = road.getPointAtLength(f * roadLen); x = p.x - 7; y = p.y - 4 + (ph < 0.5 ? -7 : 7); }
@@ -286,7 +320,16 @@ function drawSizing() {
   $('sizing').innerHTML = rows.map((r, i) => `<tr>${r.map(c => i ? `<td>${c}</td>` : `<th>${c}</th>`).join('')}</tr>`).join('');
 }
 async function loadSizing() {
-  try { SZ = await api('GET', `things/${NS}:energy/attributes/sizing`) || []; } catch (e) { return setTimeout(loadSizing, 5000); }
+  try {
+    const attrs = await api('GET', `things/${NS}:energy/attributes`) || {};
+    SZ = attrs.sizing || [];
+    const eq = attrs.wind_equivalent, current = attrs.wind_equivalent_current;
+    if (eq?.status==='ok') {
+      $('page-title').textContent = `Тыныс: эквивалент ${fmt(eq.equivalent_wind_mw)} МВт ВЭС${eq.archived?' в архивном расчёте':''}.`;
+      $('equivalent-note').textContent = `ВЭС ${fmt(eq.wind_mw)} + СЭС ${fmt(eq.pv_mwp)}: одинаковый CO₂ при выпуске Cu в пределах ${fmt(eq.copper_tolerance_pct,1)} %. Медь ${eq.copper_change_pct!=null?(eq.copper_change_pct>0?'+':'')+fmt(eq.copper_change_pct,1)+' %':'—'}. Без координатора — ${fmt(eq.required_baseline_wind_mw)} МВт ВЭС по интерполяции (${fmt(eq.grid_step_equivalent_mw)} МВт добавления по сетке). Это эквивалент по выбросам, не гарантированная замена оборудования.`;
+      if (eq.archived) $('equivalent-note').textContent += ' Архив legacy-v1. '+(current?.status==='unavailable'?'Новая модель: сопоставимый эквивалент пока не подтверждён.':'');
+    }
+  } catch (e) { return setTimeout(loadSizing, 5000); }
   if (!SZ.length) return;
   const uniq = k => [...new Set(SZ.map(r => r[k]))].sort((a, b) => a - b);
   $('sz-w').innerHTML = uniq('wind_mw').map(x => `<option ${x == 300 ? 'selected' : ''}>${x}</option>`).join('');
@@ -296,9 +339,11 @@ async function loadSizing() {
 loadSizing();
 async function loadFlex() {
   try {
-    const F = await api('GET', `things/${NS}:substation/attributes/flex_stats`) || [];
-    const y = Array.isArray(F) ? F.find(r => typeof r?.season === 'string' && r.season.startsWith('весь год')) : null;
-    $('flexstat').textContent = describeFlexStats(y);
+    const attrs = await api('GET', `things/${NS}:substation/attributes`) || {};
+    const F = attrs.flex_stats || [];
+    const y = Array.isArray(F) ? F.find(r => typeof r?.season === 'string' && (r.season === 'all' || r.season.startsWith('весь год'))) : null;
+    const source = attrs.flex_stats_model === 'physics-v4-geomet-maintenance' ? 'Расчёт physics-v4.' : 'Архив прежней модели.';
+    $('flexstat').textContent = y ? `${source} ${describeFlexStats(y)} Длительность — предел по запасам при неизменных условиях, а не гарантия выдачи резерва.` : describeFlexStats(y);
   } catch (e) {
     $('flexstat').textContent = 'Статистика резерва недоступна: нет ответа от Ditto. Повторяем подключение…';
     setTimeout(loadFlex, 5000);

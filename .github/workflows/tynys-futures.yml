@@ -23,8 +23,12 @@ jobs:
           python-version: '3.12'
       - name: Model and service tests
         run: |
-          pip install -r team/tynys/requirements.txt
-          python -m unittest discover -s team/tynys/tests -v
+          pip install -r team/tynys/requirements.txt pytest==9.1.1
+          python -m pytest team/tynys/tests -q
+          PYTHONPATH=team/tynys python team/tynys/scripts/scenario_effect_check.py
+          (cd team/tynys && python regress.py)
+          (cd team/tynys && python regress.py --physics-v3)
+          (cd team/tynys && python regress.py --legacy)
       - name: Start the documented stand
         run: |
           sudo apt-get update && sudo apt-get install -y make
@@ -39,6 +43,21 @@ jobs:
           node --experimental-vm-modules team/tynys/scripts/check_scene_geometry.cjs
           node team/tynys/scripts/check_futures_ui.cjs
           node team/tynys/scripts/check_futures_tabs.cjs
+      - name: Equipment model UI with local transport fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          export NODE_PATH=/tmp/tynys-browser/node_modules
+          python team/tynys/tests/serve_mine_fixture.py 18098 > /tmp/mine-fixture.log 2>&1 &
+          fixture_pid=$!
+          trap 'kill "$fixture_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18098/ > /dev/null; then break; fi
+            sleep 0.25
+          done
+          node team/tynys/scripts/check_mine_ui.cjs http://127.0.0.1:18098
+          node team/tynys/scripts/check_scenario_ui.cjs http://127.0.0.1:18098
+          node team/tynys/scripts/check_modules_ui.cjs http://127.0.0.1:18098
       - name: Dashboard metrics and goals
         env:
           NODE_PATH: /tmp/tynys-browser/node_modules

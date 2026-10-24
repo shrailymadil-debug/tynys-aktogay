@@ -51,7 +51,9 @@ async function main() {
         for (const [key,value] of Object.entries(body)) twins.scenario[key]=value.properties.value;
         return route.fulfill({status:204,body:''});
       }
-      const body = url.pathname.endsWith('/flex_stats') ? stats : url.pathname.endsWith('/sizing') ? sizing : things();
+      const body = url.pathname.endsWith('/flex_stats') ? stats : url.pathname.endsWith('/sizing') ? sizing
+        : url.pathname.endsWith('kz.tynys:energy/attributes') ? {sizing}
+        : url.pathname.endsWith('kz.tynys:substation/attributes') ? {flex_stats:stats} : things();
       return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
     });
     await page.goto(`http://127.0.0.1:${server.address().port}/dashboard.html`);

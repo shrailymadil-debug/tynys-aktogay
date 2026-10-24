@@ -14,6 +14,8 @@ from scipy.sparse import coo_matrix
 from .params import Params, DOMAINS, P80_MODES
 from . import physics as ph
 from . import weather as wx
+from .assets import capacity_factor, asset_specs, process_factor, mining_capacity, load_coefficients
+from .maintenance import schedule, feed_limit
 
 NG = len(P80_MODES)
 G150 = P80_MODES.index(150)
@@ -24,7 +26,10 @@ def _empty_x(p):
 
 
 def _line_ok(env, st, l, t):
-    return env.line_avail[l, t] and st.line_lock[l] == 0
+    return (env.line_avail[l, t] and st.line_lock[l] == 0
+            and capacity_factor(env, st, f"line-{l+1}", t) > 0
+            and all(capacity_factor(env, st, name, t) > 0 for name in
+                    ("water", "tailings", "concentrate", "conveyor-feed", "flotation")))
 
 
 def _fleet_charge_rule(p, env, st, t):
@@ -39,11 +44,12 @@ class V0Traditional:
     segregated = False
 
     def decide(self, p, env, st, t):
+        maintenance = schedule(p, env, st, t, coordinated=False)
         x = _empty_x(p)
         for l in range(p.n_lines):
             if _line_ok(env, st, l, t):
-                x[l][0][G150] = p.line_q_nom
-        return {"x": x, "charge_mw": _fleet_charge_rule(p, env, st, t), "bess_mw": 0.0}
+                x[l][0][G150] = min(p.line_q_nom, feed_limit(p, st, f"line-{l+1}", t))
+        return {"x": x, "charge_mw": _fleet_charge_rule(p, env, st, t), "bess_mw": 0.0, "maintenance": maintenance}
 
 
 class V1Reactive:
@@ -51,16 +57,21 @@ class V1Reactive:
     segregated = False
 
     def decide(self, p, env, st, t):
+        maintenance = schedule(p, env, st, t, coordinated=False)
         charge = _fleet_charge_rule(p, env, st, t)
         renew = env.w["wind_pu"][t] * p.wind_mw + env.w["pv_pu"][t] * p.pv_mwp
         tot = sum(st.pile.values())
         fs = st.pile["soft"] / tot if tot > 0 else 0.5
         e = fs * ph.bond_kwh_t(p, p.bwi["soft"], 150) + (1 - fs) * ph.bond_kwh_t(p, p.bwi["hard"], 150)
-        e_t = (e + p.flot_kwh_t) / 1000.0  # МВт·ч/т
-        other = p.base_load_mw + p.crush_kwh_t * env.mine_plan[t] / 1000.0 + charge
+        factors = {n: capacity_factor(env, st, n, t) for n in asset_specs(p)}
+        fixed, mine_coef, feed_coef = load_coefficients(p, factors)
+        e_var = (1-p.mill_idle_fraction)*e/1000
+        e_t = e_var + feed_coef  # МВт·ч/т
+        other = fixed + mine_coef * min(env.mine_plan[t], mining_capacity(p, factors)) + charge
         lines = [l for l in range(p.n_lines) if _line_ok(env, st, l, t)]
+        other += len(lines)*ph.mill_idle_mw(p)
         q_nom = p.line_q_nom * len(lines)
-        q_max = min(p.line_q_max, p.line_p_max_mw / (e / 1000.0)) * len(lines)
+        q_max = min(p.line_q_max, (p.line_p_max_mw-ph.mill_idle_mw(p))/e_var) * len(lines)
         bess_dis = (min(p.bess_mw, max(0.0, st.bess_e - p.bess_e_min) * np.sqrt(p.bess_eta_rt))
                     if env.bess_avail[t] else 0.0)
         d_nom = other + q_nom * e_t
@@ -83,7 +94,9 @@ class V1Reactive:
                 x[l][0][G150] = q / len(lines)
         elif lines and q >= p.line_q_min:
             x[lines[0]][0][G150] = min(q, q_max / len(lines))
-        return {"x": x, "charge_mw": charge, "bess_mw": 0.0}
+        for l in range(p.n_lines):
+            x[l][0][G150] = min(x[l][0][G150], feed_limit(p, st, f"line-{l+1}", t))
+        return {"x": x, "charge_mw": charge, "bess_mw": 0.0, "maintenance": maintenance}
 
 
 class _VarIndex:
@@ -124,6 +137,8 @@ class V2Tynys:
 
     def decide(self, p, env, st, t):
         import time
+        ph.ensure_process_state(p, st)
+        maintenance = schedule(p, env, st, t, coordinated=self.use_forecast)
         self.last_plan = None
         self.last_fallback = False
         H = min(p.mpc_horizon_h, env.sc.n() - t)
@@ -137,17 +152,29 @@ class V2Tynys:
         renew = wf * p.wind_mw + pf * p.pv_mwp
         gcap = env.known_grid_cap(t, H)
         idx = np.minimum(np.arange(t, t + H), env.sc.n() - 1)
-        mplan = env.mine_plan[idx]
+        factors = [{n: capacity_factor(env, st, n, int(idx[h]), h) for n in asset_specs(p)} for h in range(H)]
+        renew = wf * p.wind_mw * np.array([f["wind"] for f in factors]) + pf * p.pv_mwp * np.array([f["pv"] for f in factors])
+        gcap *= np.array([f["substation"] for f in factors])
+        mplan = np.array([min(env.mine_plan[idx[h]], mining_capacity(p, factors[h]),
+                             p.mine_ore_tph*p.shovel_capacity_factor/2 * sum(factors[h][f"shovel-{i}"] for i in (1,2)),
+                             p.n_trucks/14*p.truck_tph/(1+p.strip_ratio) * sum(factors[h][f"truck-{i:02d}"] for i in range(1,15)))
+                          * factors[h]["pit-services"] for h in range(H)])
         hf = env.hard_frac[idx]
         mpd = {"soft": mplan * (1 - hf), "hard": mplan * hf}
         if self.flat_price:
-            price = np.full(H, p.tariff_kzt_kwh * 1000 + p.co2_price_kzt_t * p.grid_co2_t_mwh) * env.tariff_mult[idx]
+            price = np.full(H, p.tariff_kzt_kwh * 1000) * env.tariff_mult[idx] + p.co2_price_kzt_t * p.grid_co2_t_mwh
         else:
-            price = np.array([p.price_kzt_mwh((t + h) % 24) + p.co2_price_kzt_t * p.grid_co2_t_mwh for h in range(H)]) * env.tariff_mult[idx]
+            price = np.array([p.price_kzt_mwh((t + h) % 24) for h in range(H)]) * env.tariff_mult[idx] + p.co2_price_kzt_t * p.grid_co2_t_mwh
         bwi = st.bwi_est if self.segregated else p.bwi
+        if p.geomet:
+            bwi = {d: st.pile_bwi_mass[d]/st.pile[d] if st.pile[d] > 1e-9 else p.bwi[d] for d in DOMAINS}
         grinds = ([g for g in range(NG) if P80_MODES[g] in self.grind_modes] if self.grind_modes else range(NG)) if self.elastic_grind else [G150]
-        e = {(d, g): ph.bond_kwh_t(p, bwi[d], P80_MODES[g]) for d in DOMAINS for g in range(NG)}
-        R = {(d, g): ph.recovery_inf(p, d, P80_MODES[g]) for d in DOMAINS for g in range(NG)}
+        e = {(d, g): ph.mill_variable_mwh_t(p, bwi[d], P80_MODES[g]) for d in DOMAINS for g in range(NG)}
+        grade = {d: st.pile_cu[d]/st.pile[d] if st.pile[d] > 1e-9 else p.cu_grade[d] for d in DOMAINS}
+        # Assay persistence forecast; future true grades are deliberately unknown.
+        idle = ph.mill_idle_mw(p)
+        recovery = {d: st.pile_recovery_cu[d]/st.pile_cu[d] if p.geomet and st.pile_cu[d] > 1e-9 else p.r150[d] for d in DOMAINS}
+        R = {(d, g): ph.recovery_inf(p, d, P80_MODES[g], recovery[d]) for d in DOMAINS for g in range(NG)}
         V = p.cu_value_kzt_t
         haul = ph.haul_mwh_per_t_ore(p)
         eta_b = np.sqrt(p.bess_eta_rt)
@@ -156,7 +183,15 @@ class V2Tynys:
         # ценность тонны − средняя энергия на её помол, с небольшим дисконтом за риск.
         e_avg_cost = np.mean([ph.bond_kwh_t(p, p.bwi[d], 150) + p.flot_kwh_t for d in DOMAINS]) * (p.tariff_kzt_kwh + p.co2_price_kzt_t * p.grid_co2_t_mwh / 1000)
         lamS_end = 0.97 * val_t - e_avg_cost
-        lamS, Cspill = 0.3 * val_t, 0.8 * val_t   # lamS — штраф за уход ниже страхового запаса
+        # Ценность тонны на складе считается по анализу этого склада (как и ценность
+        # переработки X): иначе при бедной руде остаток «ценнее» помола и линии стоят.
+        e_cost = {d: (ph.bond_kwh_t(p, bwi[d], 150) + p.flot_kwh_t) * (p.tariff_kzt_kwh + p.co2_price_kzt_t * p.grid_co2_t_mwh / 1000) for d in DOMAINS}
+        val_d = {d: V * grade[d] * R[d, G150] for d in DOMAINS}
+        lamS_end_d = {d: 0.95 * val_d[d] - e_cost[d] for d in DOMAINS}
+        lamS_hi_d = {d: 0.75 * val_d[d] - e_cost[d] for d in DOMAINS}
+        # Недобытая руда — потерянные часы карьера: их не вернуть, поэтому штраф выше
+        # ценности переработки (иначе склад «выгоднее» плана добычи).
+        lamS, Cspill = 0.3 * val_t, 1.5 * val_t   # lamS — штраф за уход ниже страхового запаса
         # Заряд флота в конце горизонта нужен, чтобы возить руду завтра: нехватка 1 МВт·ч
         # = ~1/haul тонн недобытой руды. Остаток заряда оценивается по цене восполнения.
         lamF = 0.8 * val_t / haul
@@ -165,7 +200,8 @@ class V2Tynys:
         Cun = 1e7
 
         # известная недоступность линий
-        avail = np.ones((p.n_lines, H), dtype=bool)
+        line_factors = np.array([[min(f[f"line-{l+1}"], process_factor(f)) for f in factors] for l in range(p.n_lines)])
+        avail = line_factors > 0
         for l in range(p.n_lines):
             if not env.line_avail[l, t]:
                 h = 0
@@ -179,6 +215,7 @@ class V2Tynys:
         X, ON, SU, CH, BC, BD, GR, CU, UN, MS, S, F, B = ({} for _ in range(13))
         PB = {}
         XO = {}
+        MODE, DIRECTION, MW = {}, {}, {}
         # Перегрузка линии выше номинала сокращает время флотации: предельные тонны
         # дают меньше меди. Линеаризация: q·kf(q) между номиналом и максимумом.
         kf_max = ph.kinetic_factor(p, p.line_q_max)
@@ -189,13 +226,19 @@ class V2Tynys:
                 for d in DOMAINS:
                     for g in range(NG):
                         ub = p.line_q_max if (avail[l, h] and g in grinds) else 0.0
-                        X[l, d, g, h] = vi.add(0, ub, -V * p.cu_grade[d] * env.grade_mult[idx[h]] * R[d, g])
+                        X[l, d, g, h] = vi.add(0, ub, -V * grade[d] * R[d, g])
                 ON[l, h] = vi.add(0, 1 if avail[l, h] else 0, 0, 1)
+                for g in range(NG):
+                    MODE[l, g, h] = vi.add(0, int(avail[l,h] and g in grinds), 0, 1)
+                MW[l, h] = vi.add(0, p.line_p_max_mw*line_factors[l,h])
                 XO[l, h] = vi.add(0, p.line_q_max - p.line_q_nom, ovl_cost)
                 SU[l, h] = vi.add(0, 1, p.restart_cost_kzt)
-            CH[h] = vi.add(0, p.charge_mw_max)
-            BC[h] = vi.add(0, p.bess_mw if env.bess_avail[min(t + h, env.sc.n() - 1)] else 0)
-            BD[h] = vi.add(0, p.bess_mw if env.bess_avail[min(t + h, env.sc.n() - 1)] else 0)
+            charge_cap = min(p.charge_mw_max/4 * sum(factors[h][f"charger-{i}"] for i in range(1,5)),
+                             p.n_trucks/14*p.charger_mw * sum(factors[h][f"truck-{i:02d}"] for i in range(1,15)))
+            CH[h] = vi.add(0, charge_cap)
+            BC[h] = vi.add(0, p.bess_mw * factors[h]["bess"])
+            BD[h] = vi.add(0, p.bess_mw * factors[h]["bess"])
+            DIRECTION[h] = vi.add(0, 1, 0, 1)
             GR[h] = vi.add(0, gcap[h], price[h])
             CU[h] = vi.add(0, np.inf, 1.0)
             UN[h] = vi.add(0, np.inf, Cun)
@@ -210,8 +253,8 @@ class V2Tynys:
         # стороны, поэтому тонны выше середины склада ценятся меньше (их некуда
         # будет «выдохнуть»).
         mid = 0.5 * p.pile_cap_t  # на домен; для общего склада — суммарно 50 %
-        SL = {d: vi.add(0, mid, -lamS_end) for d in DOMAINS}
-        SHI = {d: vi.add(0, np.inf, -(0.75 * val_t - e_avg_cost)) for d in DOMAINS}
+        SL = {d: vi.add(0, mid, -lamS_end_d[d]) for d in DOMAINS}
+        SHI = {d: vi.add(0, np.inf, -lamS_hi_d[d]) for d in DOMAINS}
         devF = vi.add(0, np.inf, lamF)
         devB = vi.add(0, np.inf, lamB)
 
@@ -229,11 +272,41 @@ class V2Tynys:
         for h in range(H):
             for l in range(p.n_lines):
                 xs = [X[l, d, g, h] for d in DOMAINS for g in range(NG)]
-                con([(j, 1) for j in xs] + [(ON[l, h], -p.line_q_max)], -np.inf, 0)
+                con([(j, 1) for j in xs], -np.inf, feed_limit(p, st, f"line-{l+1}", t+h))
+                con([(j, 1) for j in xs] + [(ON[l, h], -p.line_q_max*line_factors[l,h])], -np.inf, 0)
                 con([(j, -1) for j in xs] + [(ON[l, h], p.line_q_min)], -np.inf, 0)
                 con([(j, 1) for j in xs] + [(ON[l, h], -p.line_q_nom), (XO[l, h], -1)], -np.inf, 0)
-                con([(X[l, d, g, h], e[d, g] / 1000) for d in DOMAINS for g in range(NG)]
-                    + [(ON[l, h], -p.line_p_max_mw)], -np.inf, 0)
+                con([(MW[l,h], 1), (ON[l,h], -idle)] +
+                    [(X[l,d,g,h], -e[d,g]) for d in DOMAINS for g in range(NG)], 0, 0)
+                con([(MODE[l,g,h], 1) for g in range(NG)] + [(ON[l,h], -1)], 0, 0)
+                for g in range(NG):
+                    con([(X[l,d,g,h], 1) for d in DOMAINS] + [(MODE[l,g,h], -p.line_q_max)], -np.inf, 0)
+                qramp = p.line_q_nom*p.line_q_ramp_fraction
+                pramp = p.line_p_max_mw*p.line_power_ramp_fraction
+                bigq, bigp = p.line_q_max, p.line_p_max_mw
+                qterms = [(j, 1) for j in xs]
+                if h == 0:
+                    pq = float(np.asarray(st.line_x[l]).sum())
+                    if pq > 0:
+                        con(qterms + [(ON[l,h], bigq)], -np.inf, pq+qramp+bigq)
+                        con(qterms + [(ON[l,h], -bigq)], pq-qramp-bigq, np.inf)
+                        con([(MW[l,h], 1), (ON[l,h], bigp)], -np.inf, st.line_mw[l]+pramp+bigp)
+                        con([(MW[l,h], 1), (ON[l,h], -bigp)], st.line_mw[l]-pramp-bigp, np.inf)
+                        if avail[l,h] and pq > p.line_q_min+qramp+1e-7:
+                            con([(ON[l,h], 1)], 1, 1)
+                    else:
+                        con(qterms, -np.inf, p.line_q_min)
+                else:
+                    prevq = [(X[l,d,g,h-1], -1) for d in DOMAINS for g in range(NG)]
+                    # Both running: bounded hourly feed and power changes.
+                    for sign in (-1, 1):
+                        con([(j, sign*v) for j,v in qterms+prevq] +
+                            [(ON[l,h], bigq), (ON[l,h-1], bigq)], -np.inf, qramp+2*bigq)
+                        con([(MW[l,h], sign), (MW[l,h-1], -sign),
+                             (ON[l,h], bigp), (ON[l,h-1], bigp)], -np.inf, pramp+2*bigp)
+                    con(qterms + [(ON[l,h-1], -bigq)], -np.inf, p.line_q_min)
+                    if avail[l,h]:
+                        con([(j,-v) for j,v in prevq] + [(ON[l,h], -bigq)], -np.inf, p.line_q_min+qramp)
                 prev = (1.0 if st.line_on[l] else 0.0)
                 if h == 0:
                     con([(ON[l, h], 1), (SU[l, h], -1)], -np.inf, prev)
@@ -244,6 +317,11 @@ class V2Tynys:
                         con([(X[l, "soft", g, h], 1 - phi), (X[l, "hard", g, h], -phi)], 0, 0)
             # склады
             for d in DOMAINS:
+                opening_feed = [(X[l, d, g, h], 1) for l in range(p.n_lines) for g in range(NG)]
+                if h > 0:
+                    con(opening_feed + [(S[d, h-1], -1)], -np.inf, 0)
+                else:
+                    con(opening_feed, -np.inf, st.pile[d])
                 terms = [(S[d, h], 1), (MS[d, h], 1)] + [(X[l, d, g, h], 1) for l in range(p.n_lines) for g in range(NG)]
                 if h > 0:
                     terms.append((S[d, h - 1], -1))
@@ -257,6 +335,12 @@ class V2Tynys:
             mt = mplan[h]
             con([(MS[d, h], -(1 + p.strip_ratio)) for d in DOMAINS] + [(CH[h], p.truck_tph / p.charger_mw)],
                 -np.inf, p.n_trucks * p.truck_tph * env.truck_mult[idx[h]] - (1 + p.strip_ratio) * mt)
+            # Зарядка за час ограничена свободной ёмкостью батарей на начало часа
+            # (так считает поле: sim.dispatch не «зачитывает» рейсы этого же часа).
+            if h > 0:
+                con([(F[h - 1], 1), (CH[h], p.eta_charge)], -np.inf, p.fleet_e_max)
+            else:
+                con([(CH[h], p.eta_charge)], -np.inf, max(0.0, p.fleet_e_max - st.fleet_e))
             # флот
             terms = [(F[h], 1), (CH[h], -p.eta_charge)] + [(MS[d, h], -haul) for d in DOMAINS]
             rhs = -haul * mt
@@ -265,7 +349,14 @@ class V2Tynys:
             else:
                 rhs += st.fleet_e
             con(terms, rhs, rhs)
+            # Поле считает заряд по звеньям: при среднем заряде у нижней границы часть
+            # звеньев уже пуста и не возит. Мягкий резерв над суммарным минимумом.
+            fbuf = vi.add(0, np.inf, lamF)
+            con([(F[h], 1), (fbuf, 1)], p.fleet_e_min + 0.25 * p.n_trucks * p.truck_batt_mwh, np.inf)
             # накопитель
+            bmax = p.bess_mw*factors[h]["bess"]
+            con([(BC[h], 1), (DIRECTION[h], -bmax)], -np.inf, 0)
+            con([(BD[h], 1), (DIRECTION[h], bmax)], -np.inf, bmax)
             terms = [(B[h], 1), (BC[h], -eta_b), (BD[h], 1 / eta_b)]
             rhs = 0.0
             if h > 0:
@@ -273,11 +364,13 @@ class V2Tynys:
             else:
                 rhs = st.bess_e
             con(terms, rhs, rhs)
-            # баланс мощности
+            # баланс мощности: та же декомпозиция, что в поле
+            fixed, mine_coef, feed_coef = load_coefficients(p, factors[h])
             terms = [(GR[h], 1), (BD[h], 1), (UN[h], 1), (CH[h], -1), (BC[h], -1), (CU[h], -1)]
-            terms += [(X[l, d, g, h], -(e[d, g] + p.flot_kwh_t) / 1000) for l in range(p.n_lines) for d in DOMAINS for g in range(NG)]
-            terms += [(MS[d, h], p.crush_kwh_t / 1000) for d in DOMAINS]
-            rhs = p.base_load_mw + p.crush_kwh_t * mt / 1000 - renew[h]
+            terms += [(MW[l,h], -1) for l in range(p.n_lines)]
+            terms += [(X[l, d, g, h], -feed_coef) for l in range(p.n_lines) for d in DOMAINS for g in range(NG)]
+            terms += [(MS[d, h], mine_coef) for d in DOMAINS]
+            rhs = fixed + mine_coef * mt - renew[h]
             PB[h] = r[0]
             con(terms, rhs, rhs)
         # терминальные цели (запас «дыхания» на конец горизонта)
@@ -321,12 +414,12 @@ class V2Tynys:
         for l in range(p.n_lines):
             for di, d in enumerate(DOMAINS):
                 for g in range(NG):
-                    x[l][di][g] = float(s[X[l, d, g, 0]])
+                    x[l][di][g] = max(0., float(s[X[l, d, g, 0]])) if s[MODE[l,g,0]] > .5 else 0.
         if self.explain:
-            self.last_plan = self._plan(p, s, A, lo, hi, vi, H, X, ON, CH, BD, BC, GR, CU, S, F, B, PB, renew, gcap, price)
-        return {"x": x, "charge_mw": float(s[CH[0]]), "bess_mw": float(s[BD[0]] - s[BC[0]])}
+            self.last_plan = self._plan(p, s, A, lo, hi, vi, H, X, ON, CH, BD, BC, GR, CU, S, F, B, PB, renew, gcap, price, MW)
+        return {"x": x, "charge_mw": float(s[CH[0]]), "bess_mw": float(s[BD[0]] - s[BC[0]]), "maintenance": maintenance}
 
-    def _plan(self, p, s, A, lo, hi, vi, H, X, ON, CH, BD, BC, GR, CU, S, F, B, PB, renew, gcap, price):
+    def _plan(self, p, s, A, lo, hi, vi, H, X, ON, CH, BD, BC, GR, CU, S, F, B, PB, renew, gcap, price, MW):
         """План на горизонт + теневая цена энергии (двойственная оценка баланса мощности
         при зафиксированных включениях линий) — «сколько стоит лишний МВт·ч в этот час»."""
         from scipy.optimize import linprog
@@ -359,6 +452,13 @@ class V2Tynys:
             "feed_tph": feed, "hard_tph": hard, "p80_um": p80,
             "charge_mw": [float(s[CH[h]]) for h in range(H)],
             "bess_mw": [float(s[BD[h]] - s[BC[h]]) for h in range(H)],
+            "bess_charge_mw": [float(s[BC[h]]) for h in range(H)],
+            "bess_discharge_mw": [float(s[BD[h]]) for h in range(H)],
+            "line_feed_tph": [[sum(s[X[l,d,g,h]] for d in DOMAINS for g in range(NG)) for h in range(H)] for l in range(p.n_lines)],
+            "line_mw": [[float(s[MW[l,h]]) for h in range(H)] for l in range(p.n_lines)],
+            "line_mode_feed_tph": [[[sum(s[X[l,d,g,h]] for d in DOMAINS) for g in range(NG)] for h in range(H)] for l in range(p.n_lines)],
+            "line_p80_um": [[next((P80_MODES[g] for g in range(NG) if sum(s[X[l,d,g,h]] for d in DOMAINS) > 1e-5), None)
+                             for h in range(H)] for l in range(p.n_lines)],
             "grid_mw": [float(s[GR[h]]) for h in range(H)],
             "curtail_mw": [float(s[CU[h]]) for h in range(H)],
             "pile_soft_t": [float(s[S["soft", h]]) for h in range(H)],

@@ -11,6 +11,8 @@
 .page{padding-top:26px}
 .hero{margin-bottom:22px;align-items:flex-end}
 .hero h1{font-size:clamp(28px,3vw,44px)}
+#demo-start{background:var(--teal);color:#09232c;border:0;border-radius:8px;padding:12px 20px;font:inherit;font-weight:600;font-size:15px;cursor:pointer;margin-top:12px}
+#demo-start:disabled{opacity:.5;cursor:wait}
 .mode{display:inline-flex;align-items:center;gap:10px;padding:8px 16px 8px 12px;border-radius:30px;font-weight:650;letter-spacing:.06em;font-size:13px;border:1px solid var(--line);background:#14222e;transition:all .5s}
 .mode i{width:10px;height:10px;border-radius:50%;background:var(--quiet)}
 .mode.inhale{background:#133c34;border-color:#2f7e6d;color:#bff6ea}.mode.inhale i{background:var(--teal);animation:breath 3.2s ease-in-out infinite}
@@ -75,7 +77,9 @@
     <div>
       <p class="eyebrow">ПУЛЬТ ЭНЕРГЕТИКА · ЖИВЫЕ ДВОЙНИКИ</p>
       <h1 id="page-title">Рудник Актогай <em>дышит</em> вместе с ветром.</h1>
+      <p id="equivalent-note" class="note">Сравнение в МВт строительства загружается из двойника энергосистемы.</p>
       <p class="lead">Каждый час координатор решает, какую руду молоть и когда заряжать самосвалы, — и объясняет почему.</p>
+      <button id="demo-start" type="button">▶ Демо за 3 минуты</button>
     </div>
     <div style="text-align:right">
       <div class="mode" id="mode"><i></i><span id="mode-t">—</span></div>
@@ -88,7 +92,7 @@
     <div class="panel kpi good"><span>Ветер и солнце</span><b id="k-ren">—</b><small>доля потребления сейчас</small></div>
     <div class="panel kpi"><span>Сброс ВИЭ</span><b id="k-cur">—</b><small>МВт выбрасывается сейчас</small></div>
     <div class="panel kpi good"><span>Медь к «как сейчас»</span><b id="k-cu">—</b><small>с начала прогона, с учётом склада</small></div>
-    <div class="panel kpi"><span>Резерв для KEGOC</span><b id="k-res">—</b><small>МВт · мгновенная оценка модели</small></div>
+    <div class="panel kpi"><span>Оценка резерва KEGOC</span><b id="k-res">—</b><small>МВт снижения за следующий час</small></div>
   </section>
 
   <div class="grid">
@@ -168,6 +172,14 @@
         <div class="legend"><span><i style="background:#6ce0cc"></i>самосвал гружёный</span><span><i style="background:#9aa6b2"></i>порожний</span><span><i style="background:#5ec8e5"></i>на зарядке</span><span><i style="background:#ebcb88"></i>ждёт зарядки</span><span><i style="background:var(--soft)"></i>мягкая руда</span><span><i style="background:var(--hard)"></i>твёрдая руда</span><span><i style="background:var(--grid)"></i>сеть</span><span><i style="background:var(--wind)"></i>ветер и солнце</span></div>
       </section>
 
+      <section class="panel" aria-labelledby="equipment-title">
+        <div class="section-label"><span id="equipment-title">ОБОРУДОВАНИЕ И МАТЕРИАЛЬНЫЕ ПОТОКИ</span></div>
+        <p class="note">Экскаваторы → закреплённые самосвалы → дробилка → конвейер → склады → конвейер питания → мельницы → флотация → концентрат и хвосты. Вскрыша поступает в отвал; вода возвращается из хвостового хозяйства.</p>
+        <div class="table-wrap"><table><thead><tr><th>Объект</th><th>Состояние</th><th>Поток</th><th>МВт</th><th>об/мин</th><th>P80, мкм</th><th>Исправность, %</th><th>Готовность, %</th></tr></thead><tbody id="equipment-rows"></tbody></table></div>
+        <p class="note" id="material-stocks">Ожидание телеметрии</p>
+        <p class="note">Готовность — доля доступных часов с начала прогона. Исправность, ресурс до ТО и скорость привода — параметры учебной модели, не измерения на Актогае. Остановка оборудования ограничивает потоки и меняет нагрузку.</p>
+      </section>
+
       <section class="panel why" id="whybox" aria-labelledby="why-title">
         <div class="section-label"><span id="why-title">ПОЧЕМУ ТАК · РЕШЕНИЕ КООРДИНАТОРА</span></div>
         <p id="why">—</p><div id="src"></div>
@@ -193,6 +205,17 @@
     </div>
 
     <aside class="col">
+      <section class="panel" aria-labelledby="geo-title">
+        <div class="section-label"><span id="geo-title">ГЕОЛОГИЯ · GEOMET</span></div>
+        <p id="geo-active">Ожидание геологических двойников…</p>
+        <a href="3d.html" style="color:var(--teal)">Уступы по твёрдости →</a>
+        <p class="note">60 пространственных проб GeoMet v4. Геологический аналог: это не скважины Актогая. Cu нормирован к 0,43%; LCT принят за извлечение при P80 150 мкм. <a href="https://doi.org/10.5281/zenodo.7051975" target="_blank" rel="noopener">Hoffimann et al., CC BY 4.0</a>.</p>
+      </section>
+      <section class="panel" aria-labelledby="maintenance-title">
+        <div class="section-label"><span id="maintenance-title">РЕМОНТ НА ВЫДОХЕ</span></div>
+        <div id="maintenance-plan">Ожидание плана…</div>
+        <p class="note">ТО 4 ч, каждая четвёртая остановка — футеровка 12 ч. Перенос ±12 ч, одна бригада. Интервалы и ресурс — допущения; выбранное окно фиксируется.</p>
+      </section>
       <section class="panel" aria-labelledby="goal-title">
         <div class="section-label"><span id="goal-title">ЦЕЛЬ КООРДИНАТОРА</span></div>
         <div class="btns"><button id="g-copper" aria-pressed="false">Больше меди</button><button id="g-green" aria-pressed="false">Меньше CO₂</button></div>
@@ -205,8 +228,8 @@
       </section>
       <section class="panel" aria-labelledby="flex-title">
         <div class="section-label"><span id="flex-title">ОЦЕНКА ГИБКОСТИ ДЛЯ KEGOC</span></div>
-        <div>Мгновенный потенциал: <span class="big" id="flex">—</span> МВт</div>
-        <div class="mute" style="font-size:12px">Оценка запаса времени: <b id="flexh">—</b> ч. Обещание проверяется в «Двух будущих».</div>
+        <div>Снижение за следующий час: <span class="big" id="flex">—</span> МВт</div>
+        <div class="mute" style="font-size:12px">Предел по запасам: <b id="flexh">—</b> ч при неизменных условиях. Проверка траектории и восстановления — в «Двух будущих».</div>
         <a href="futures.html" style="color:var(--teal);font-size:12px;font-weight:600">Проверить обещание →</a>
         <p class="note" id="flexstat" role="status">Статистика резерва загружается…</p>
       </section>
@@ -223,6 +246,7 @@
     </aside>
   </div>
 </div>
-<script src="app.js?v=contest-sync-20261023"></script>
+<script src="app.js?v=contest-sync-20261024"></script>
+<script src="demo.js?v=contest-sync-20261024"></script>
 </body>
 </html>

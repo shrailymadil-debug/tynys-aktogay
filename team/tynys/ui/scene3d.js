@@ -8,8 +8,10 @@ import { CSS2DRenderer, CSS2DObject } from './vendor/CSS2DRenderer.js';
 import { installSceneDetails, mergeStaticMeshes } from './scene-details.js';
 
 const NS = 'kz.tynys';
-const NAMES = ['site', 'pit', 'plant', 'energy', 'coordinator', 'scenario', 'shadow-v0', 'shadow-v1', 'pile-soft', 'pile-hard', 'line-1', 'line-2',
-  'flotation', 'wind', 'pv', 'bess', 'substation', ...Array.from({ length: 4 }, (_, i) => `charger-${i+1}`), ...Array.from({ length: 14 }, (_, i) => `truck-${String(i + 1).padStart(2, '0')}`)];
+const NAMES = ['site', 'pit', 'plant', 'energy', 'geology', 'coordinator', 'scenario', 'shadow-v0', 'shadow-v1', 'pile-soft', 'pile-hard', 'line-1', 'line-2',
+  'flotation', 'wind', 'pv', 'bess', 'substation', 'shovel-1', 'shovel-2',
+  'crusher','conveyor-crushed','conveyor-feed','waste-dump','water','tailings','concentrate',
+  ...Array.from({ length: 4 }, (_, i) => `charger-${i+1}`), ...Array.from({ length: 14 }, (_, i) => `truck-${String(i + 1).padStart(2, '0')}`)];
 const $ = id => document.getElementById(id);
 const fmt = (x, k = 0) => (x == null || isNaN(x)) ? '—' : Number(x).toLocaleString('ru-RU', { maximumFractionDigits: k, minimumFractionDigits: k });
 
@@ -49,7 +51,20 @@ async function addScenarioEvent(kind){
   try{
     await pollLive();const t=Number(v('site','sim_hour',0));let events;const raw=v('scenario','events','[]');events=Array.isArray(raw)?raw:JSON.parse(raw||'[]');
     const [lead,dur]=SCENARIOS[kind];if(!Number.isFinite(t)||!Number.isFinite(dur))throw new Error('Нет модельного времени');
-    events=events.filter(e=>Number(e.t0)+Number(e.dur)>t);const event={kind,t0:t+1+lead,dur:Number($('scenario-duration')?.value)||dur,id:Date.now()};if(kind==='line_trip')event.line=Number($('scenario-line')?.value)||2;if(kind==='kegoc')event.grid_drop_mw=Number($('scenario-kegoc-mw')?.value)||80;if(kind==='truck_failure'||kind==='excavator_failure')event.loss_pct=Number($('scenario-loss-pct')?.value)||30;if(kind==='grade_drop')event.drop_pct=Number($('scenario-grade-pct')?.value)||10;if(kind==='tariff_change')event.change_pct=Number($('scenario-tariff-pct')?.value)||20;if(kind==='plan_up')event.mine_mult=Number($('scenario-plan-pct')?.value)||1.1;events.push(event);
+    const parameter=(id,fallback)=>{
+      const el=$(id);if(!el)return fallback;
+      if(!el.value.trim()||!el.checkValidity()||!Number.isFinite(Number(el.value)))throw new Error('Проверьте параметры сценария');
+      return Number(el.value);
+    };
+    events=events.filter(e=>Number(e.t0)+Number(e.dur)>t);
+    const event={kind,t0:t+1+lead,dur:parameter('scenario-duration',dur),id:Date.now()};
+    if(kind==='line_trip')event.line=parameter('scenario-line',2);
+    if(kind==='kegoc')event.grid_drop_mw=parameter('scenario-kegoc-mw',80);
+    if(kind==='truck_failure'||kind==='excavator_failure')event.loss_pct=parameter('scenario-loss-pct',30);
+    if(kind==='grade_drop')event.drop_pct=parameter('scenario-grade-pct',10);
+    if(kind==='tariff_change')event.change_pct=parameter('scenario-tariff-pct',20);
+    if(kind==='plan_up')event.mine_mult=parameter('scenario-plan-pct',1.1);
+    events.push(event);
     const body={events:{properties:{value:JSON.stringify(events)}},rev:{properties:{value:Number(v('scenario','rev',0))+1}},goal:{properties:{value:v('scenario','goal','copper')}}};
     const r=await fetch('ditto/api/2/things/'+NS+':scenario/features',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error('Ditto: '+r.status);
     await pollLive();hud();feedback.textContent='Сценарий записан в двойник; 3D покажет его по модельному времени.';
@@ -156,6 +171,44 @@ scene.add(stars);
 
 // ---------- рельеф ----------
 const PIT = new THREE.Vector3(-130, 0, 10), PIT_R = 100, PIT_D = 78, BENCH = 12, SITE_R = 520;
+let geologyPit, geologyCells = [];
+const geologyMarkers = new THREE.Group(); scene.add(geologyMarkers);
+async function loadGeology() {
+  if(window.TYNYS_TRACE)return; // archival standalone scene has no live geology
+  try {
+    const response=await fetch('ditto/api/2/things/kz.tynys:geology/attributes/model');
+    if(!response.ok)throw new Error('GeoMet недоступен');
+    const data=await response.json();
+    if(!Array.isArray(data.cells)||!data.cells.length)throw new Error('Нет проб');
+    geologyCells=data.cells;
+    const min=Math.min(...geologyCells.map(c=>c.bwi)),max=Math.max(...geologyCells.map(c=>c.bwi));
+    const positions=geologyPit.geometry.attributes.position, colors=geologyPit.geometry.attributes.color;
+    const color=new THREE.Color();
+    for(let i=0;i<positions.count;i++){
+      const u=positions.getX(i)/PIT_R,vv=positions.getZ(i)/PIT_R,depth=-positions.getY(i)/PIT_D;
+      let closest=null,distance=Infinity;
+      for(const c of geologyCells){const d=(u-c.u)**2+(vv-c.v)**2+(depth-c.depth)**2;if(d<distance){distance=d;closest=c;}}
+      color.setHSL(.48*(1-(closest.bwi-min)/(max-min)),.62,.48);
+      colors.setXYZ(i,color.r,color.g,color.b);
+    }
+    colors.needsUpdate=true;
+    for(const c of geologyCells){
+      const marker=new THREE.Mesh(new THREE.SphereGeometry(2.5,8,6),new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false}));
+      marker.position.set(PIT.x+c.u*PIT_R,-c.depth*PIT_D,PIT.z+c.v*PIT_R);
+      marker.userData.cellId=c.id;marker.visible=false;marker.renderOrder=50;geologyMarkers.add(marker);
+    }
+    const legend=document.createElement('aside');legend.id='geology-legend';
+    Object.assign(legend.style,{position:'fixed',left:'16px',bottom:'100px',zIndex:5,maxWidth:'330px',padding:'10px 14px',background:'#102830e8',color:'#fff',font:'12px system-ui',borderRadius:'10px',pointerEvents:'none'});
+    const title=document.createElement('strong');title.textContent=`GeoMet · BWi ${fmt(min,1)}–${fmt(max,1)} кВт·ч/т`;
+    const gradient=document.createElement('div');Object.assign(gradient.style,{height:'6px',margin:'6px 0',background:'linear-gradient(90deg,#2ec4a0,#d7cd30,#d74b30)'});
+    const active=document.createElement('p');active.id='geology-active';
+    const note=document.createElement('small');note.textContent='Мягче → твёрже. Белые точки — текущие забои. Пространственный аналог, не геология Актогая. Hoffimann et al. · CC BY 4.0';
+    legend.append(title,gradient,active,note);document.body.appendChild(legend);
+    // Легенда стоит над блоком «Почему так» и не перекрывает его при любой длине текста.
+    const placeLegend=()=>{const w=document.getElementById('why');if(w&&w.offsetParent!==null)legend.style.bottom=`${w.offsetHeight+16+12}px`;};
+    placeLegend();setInterval(placeLegend,500);
+  } catch(e) { console.info('GeoMet: '+e.message); }
+}
 function terrainH(x, z) {
   const r = Math.hypot(x - PIT.x, z - PIT.z); const k = THREE.MathUtils.smoothstep(r, SITE_R, SITE_R + 420);
   return k * (fbm(x / 300, z / 300) * 170 - 50 + fbm(x / 70, z / 70) * 14);
@@ -184,7 +237,7 @@ function terrainH(x, z) {
     col.push(c.r, c.g, c.b); uvs.setXY(i, ang / Math.PI * 14, y / 9);
   }
   lg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); lg.computeVertexNormals();
-  mesh(lg, M(0xffffff,{ vertexColors: true, map: rock, side: THREE.BackSide, roughness: 1, metalness: 0, flatShading: true }), PIT.x, 0, PIT.z, scene, false);
+  geologyPit = mesh(lg, M(0xffffff,{ vertexColors: true, map: rock, side: THREE.BackSide, roughness: 1, metalness: 0, flatShading: true }), PIT.x, 0, PIT.z, scene, false);
   mesh(new THREE.CircleGeometry(27, 48).rotateX(-Math.PI / 2), M(0x8a7a66, { map: gravel }), PIT.x, -PIT_D + 0.1, PIT.z, scene, false);
   mesh(new THREE.CircleGeometry(10, 40).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x3d8f86, roughness: 0.06, metalness: 0.5 }), PIT.x + 12, -PIT_D + 0.3, PIT.z - 9, scene, false);
   // террасированные отвалы пустой породы
@@ -429,7 +482,8 @@ const rigidMergeStats=LOW?[
   ...turbines.map(hub=>mergeStaticMeshes(hub,[],{local:true,bakeColors:true})),
   ...mills.map(m=>mergeStaticMeshes(m.drum,[],{local:true,bakeColors:true})),
 ]:[];
-const mergeStats = mergeStaticMeshes(scene,details.dynamicRoots,{bakeColors:LOW});
+const mergeStats = mergeStaticMeshes(scene,[...details.dynamicRoots,geologyPit,geologyMarkers],{bakeColors:LOW});
+loadGeology();
 mergeStats.rigid={batches:0,mergedMeshes:0,savedMeshes:0};
 for(const stat of rigidMergeStats){mergeStats.before+=stat.before-stat.after;mergeStats.batches+=stat.batches;mergeStats.mergedMeshes+=stat.mergedMeshes;mergeStats.rigid.batches+=stat.batches;mergeStats.rigid.mergedMeshes+=stat.mergedMeshes;mergeStats.rigid.savedMeshes+=stat.before-stat.after;}
 
@@ -437,6 +491,11 @@ for(const stat of rigidMergeStats){mergeStats.before+=stat.before-stat.after;mer
 const set = (id, h) => { const e = document.getElementById(id); if (e) e.innerHTML = h; };
 function hud() {
   if (!D.site) return;
+  for (const marker of geologyMarkers.children) {
+    const active = marker.userData.cellId===v('geology','active_soft') || marker.userData.cellId===v('geology','active_hard');
+    marker.visible=active; marker.scale.setScalar(active?1:0);
+  }
+  const geoLabel=$('geology-active'); if(geoLabel)geoLabel.textContent=`Забои ${v('geology','active_soft','—')} / ${v('geology','active_hard','—')} · BWi ${fmt(v('geology','bwi_soft',null),1)} / ${fmt(v('geology','bwi_hard',null),1)} кВт·ч/т`;
   const e = E(), mode = v('coordinator', 'mode', '—');
   if (view === 'now') { $('mode').textContent = 'КАК СЕЙЧАС · без координации'; $('mode').className = 'now'; }
   else { $('mode').textContent = mode === 'вдох' ? 'ТЫНЫС · ВДОХ — копим энергию' : 'ТЫНЫС · ВЫДОХ — экономим'; $('mode').className = mode === 'вдох' ? 'inhale' : 'exhale'; }
@@ -446,9 +505,16 @@ function hud() {
     : '<b class="good">Почему так.</b> ';
   if(view!=='now')$('whyt').appendChild(document.createTextNode(v('coordinator','why','—')));
   set('l-pit', `${fmt(v('pit', 'ore_tph'))} т/ч · твёрдой ${fmt(100 * v('pit', 'hard_frac'))} %`);
-  set('l-ps', `${fmt(v('pile-soft', 'tonnes') / 1000)} тыс. т · ${fmt(v('pile-soft', 'fill_pct'))} %`);
-  set('l-ph', `${fmt(v('pile-hard', 'tonnes') / 1000)} тыс. т · ${fmt(v('pile-hard', 'fill_pct'))} %`);
-  set('l-pl', `${view==='now'?'основной двойник · ':''}твёрдой ${fmt(v('plant', 'feed_hard_tph'))} · мягкой ${fmt(v('plant', 'feed_soft_tph'))} т/ч · P80 ${fmt(v('plant', 'p80_um'))} мкм`);
+  if (view === 'now') {
+    set('l-ps', `${fmt(v('shadow-v0', 'pile_soft_t') / 1000)} тыс. т · ${fmt(v('shadow-v0', 'pile_soft_fill_pct'))} % · как сейчас`);
+    set('l-ph', `${fmt(v('shadow-v0', 'pile_hard_t') / 1000)} тыс. т · ${fmt(v('shadow-v0', 'pile_hard_fill_pct'))} % · как сейчас`);
+  } else {
+    set('l-ps', `${fmt(v('pile-soft', 'tonnes') / 1000)} тыс. т · ${fmt(v('pile-soft', 'fill_pct'))} %`);
+    set('l-ph', `${fmt(v('pile-hard', 'tonnes') / 1000)} тыс. т · ${fmt(v('pile-hard', 'fill_pct'))} %`);
+  }
+  set('l-pl', view==='now'
+    ? `как сейчас · смесь руды ${fmt(v('shadow-v0', 'feed_tph'))} т/ч · P80 150 мкм`
+    : `твёрдой ${fmt(v('plant', 'feed_hard_tph'))} · мягкой ${fmt(v('plant', 'feed_soft_tph'))} т/ч · P80 ${fmt(v('plant', 'p80_um'))} мкм`);
   set('l-fl', `${fmt(v('flotation', 'cu_tph'), 1)} т меди/ч`);
   set('l-wind', `${fmt(v('wind', 'power_mw'))} МВт${e.curtail > 1 ? ` · <span class="bad">сброс ${fmt(e.curtail)}</span>` : ''}`);
   set('l-pv', `${fmt(v('pv', 'power_mw'))} МВт`);
@@ -467,16 +533,19 @@ function hud() {
     <tr><td title="поправка на склады и заряд батарей в конце">CO₂ с учётом запасов, т</td><td>${fmt(a.co2)}</td><td>${fmt(b.co2)}</td></tr>`;
   set('g-co2', fmt(e.co2)); set('g-ren', fmt(100 * e.used / Math.max(1, e.used + e.grid))); set('g-cur', fmt(e.curtail));
   flows.grid.mw = e.grid; flows.wind.mw = Math.max(0, v('wind', 'power_mw') - e.curtail * 0.7); flows.pv.mw = Math.max(0, v('pv', 'power_mw') - e.curtail * 0.3);
-  flows.plant.mw = v('plant', 'mill_mw'); flows.charge.mw = e.charge;
-  for (const [dd, n] of [['soft', 'pile-soft'], ['hard', 'pile-hard']]) { const f = 0.35 + 0.9 * v(n, 'fill_pct', 50) / 100; piles[dd].scale.set(f, f, f); piles[dd].position.y = 7.5 * f; }
-  belts[0].rate = v('plant', 'feed_soft_tph') / 4000; belts[1].rate = v('plant', 'feed_hard_tph') / 4000;
+  // «Как сейчас»: склады, конвейеры и мельницы берутся из тени V0 (свой рудник без
+  // координации на той же погоде), а не из рудника «Тыныс».
+  const now = view === 'now', s0 = (k, d) => v('shadow-v0', k, d);
+  flows.plant.mw = now ? s0('mill_mw', v('plant', 'mill_mw')) : v('plant', 'mill_mw'); flows.charge.mw = e.charge;
+  for (const [dd, n] of [['soft', 'pile-soft'], ['hard', 'pile-hard']]) { const fill = now ? s0(`pile_${dd}_fill_pct`, v(n, 'fill_pct', 50)) : v(n, 'fill_pct', 50); const f = 0.35 + 0.9 * fill / 100; piles[dd].scale.set(f, f, f); piles[dd].position.y = 7.5 * f; }
+  belts[0].rate = (now ? s0('feed_soft_tph', 0) : v('plant', 'feed_soft_tph')) / 4000; belts[1].rate = (now ? s0('feed_hard_tph', 0) : v('plant', 'feed_hard_tph')) / 4000;
   for (let l = 0; l < 2; l++) {
-    const n = `line-${l + 1}`, ok = v(n, 'available', true), q = v(n, 'feed_tph', 3330);
-    mills[l].speed = ok ? q / 3330 : 0; const c = !ok ? 0xe0675a : q > 0 ? 0x4fd18b : 0x888888; mills[l].lamp.material.color.set(c); mills[l].lamp.material.emissive.set(c);mills[l].lamp.material.emissiveIntensity=2;
+    const n = `line-${l + 1}`, ok = v(n, 'available', true), q = now ? s0(`line${l + 1}_tph`, v(n, 'feed_tph', 3330)) : v(n, 'feed_tph', 3330);
+    mills[l].speed = ok ? (now ? (q > 0 ? 10.5 : 0) : v(n,'speed_rpm',q>0?10.5:0)) * 2*Math.PI/60 : 0; const c = !ok ? 0xe0675a : q > 0 ? 0x4fd18b : 0x888888; mills[l].lamp.material.color.set(c); mills[l].lamp.material.emissive.set(c);mills[l].lamp.material.emissiveIntensity=2;
   }
   panelMat.emissiveIntensity = Math.min(1, v('pv', 'power_mw') / 250) * 0.45;
   const soc = v('bess', 'soc', 0) / 100; bessLights.forEach(x => { x.scale.y = Math.max(0.05, soc); });
-  const nch = Math.round(v('energy','charge_mw') / 18); chargers.forEach((c, i) => c.material.emissiveIntensity = i < nch ? 2.5 : 0);
+  chargers.forEach((c, i) => c.material.emissiveIntensity = v(`charger-${i+1}`,'power_mw',0)>0 ? 2.5 : 0);
   details.update(D);
 }
 setInterval(hud, 400);
@@ -516,7 +585,7 @@ const STORY = [
   { v: 'tynys', p: [-40, 120, -190], t: [70, 0, 0], h: 'Решение: рудник «дышит»', s: 'ВДОХ — энергии много: мелем твёрдую руду и тоньше, заряжаем самосвалы. ВЫДОХ — мало: мелем мягкую, твёрдую копим на складе.' },
   { v: 'tynys', p: [80, 55, 200], t: [10, 0, 110], h: 'Электросамосвалы — тоже батарея', s: 'Самосвалы заряжаются, когда дует ветер, и возят руду на заряде, когда ветра нет.' },
   { v: 'tynys', p: [360, 130, 140], t: [250, 10, -20], h: 'Мозг считает на сутки вперёд', s: 'Каждый час — план на 24 ч по прогнозу погоды и объяснение словами. В «Двух будущих» можно проверить ограничение сети, последствия для производства и восстановление запасов.' },
-  { v: 'tynys', p: [300, 280, 460], t: [20, -20, -20], h: 'Итог за год на реальной погоде 2024', s: 'ВЭС 300 + СЭС 250 МВт: CO₂ 1 601 → 937 тыс. т в год (−41 %). «Тыныс» в режиме «CO₂» сверху: сброс ветра и солнца −24 % и CO₂ ещё −2 %. Режим «медь»: +1,9 % меди тонким помолом, но CO₂ +4 %.' },
+  { v: 'tynys', p: [300, 280, 460], t: [20, -20, -20], h: 'Итог за год на реальной погоде 2024', s: 'ВЭС 300 + СЭС 250 МВт: CO₂ 1 661 → 978 тыс. т в год (−41 %). «Тыныс» с целью «CO₂» сверху: сброс ветра и солнца почти вдвое меньше (94 → 49 ГВт·ч) и CO₂ ещё −4,4 % (935 тыс. т) при меди −1 %. Цель «медь»: +0,9 % меди, но CO₂ +2,3 %.' },
 ];
 let tour = null;
 function startStory() { tour = { i: 0, t0: performance.now(), stepMs:Q.get('demo')==='1'?25000:11000, from: { p: camera.position.clone(), t: controls.target.clone() } }; setView(STORY[0].v); }
@@ -568,18 +637,21 @@ function frame(now) {
   const lull=details.events.some(e=>e.active&&e.kind==='lull');
   rot += dt * (lull ? 0 : 3.4 * Math.max(0,v('wind', 'cf_pct', 0)) / 100);
   turbines.forEach((hh, i) => { if (i >= Math.round(feather * turbines.length)) hh.rotation.z = rot + i; });
-  mills.forEach(m => m.drum.rotation.x += dt * 1.2 * (m.speed || 0));
-  const pitActive=v('pit','available',true)!==false&&v('pit','running',true)!==false&&Number(v('pit','ore_tph',0))>0;
-   const shovelLoad=pitActive?Math.min(1,Number(v('pit','ore_tph',0))/20000):0;
-   shovels.forEach((s, i) => { const phase=Math.sin(now/1800+i*2);s.rotation.y=pitActive?phase*0.28*shovelLoad:0;s.position.y=2.6+(pitActive?Math.max(0,phase)*0.8*shovelLoad:0); });
+  mills.forEach(m => m.drum.rotation.x += dt * (m.speed || 0));
+  shovels.forEach((s, i) => {
+    const name=`shovel-${i+1}`, rate=Number(v(name,'rate_tph',0));
+    const load=v(name,'available',false)?Math.min(1,rate/Math.max(1,Number(v(name,'capacity_tph',1)))):0;
+    const phase=Math.sin(now/1800+i*2);
+    s.rotation.y=phase*0.28*load;s.position.y=2.6+Math.max(0,phase)*0.8*load;
+  });
   const hf = v('pit', 'hard_frac', 0.5);
   const slots = { c: 0, w: 0 };
   trucks.forEach((tr, i) => {
     const n = `truck-${String(i + 1).padStart(2, '0')}`; let st = v(n, 'state', 'empty');
     tr.glow.intensity = st === 'charging' ? 5 : 0;
     if(!LOW)for (let k = 0; k < 8; k++) setInst(dustIM, i * 8 + k, 0, -500, 0, 0, 0, 0);
-    if (st === 'charging') { const k = slots.c++ % 4; tr.g.position.set(CHARGE.x - 30 + k * 20, 0.4, CHARGE.z - 5); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
-    if (st === 'waiting') { const k = slots.w++; tr.g.position.set(CHARGE.x - 34 + (k % 8) * 10, 0.4, CHARGE.z + 9 + Math.floor(k / 8) * 9); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
+    if (st === 'charging') { const k = Number(String(v(n,'assigned_charger',`charger-${i%4+1}`)).split('-').pop())-1; tr.g.position.set(CHARGE.x - 30 + k * 20, 0.4, CHARGE.z - 5 + Math.floor(i/4)*8); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
+    if (['waiting','idle','unavailable','fault','maintenance'].includes(st)) { const k = slots.w++; tr.g.position.set(CHARGE.x - 34 + (k % 8) * 10, 0.4, CHARGE.z + 32 + Math.floor(k / 8) * 9); tr.g.rotation.set(0, Math.PI / 2, 0); tr.load.visible = false; return; }
     // Скорость — как у карьерного самосвала: гружёный в подъём ≈ 12 км/ч, порожний ≈ 30 км/ч
     // (1 ед. сцены ≈ 10 м), показ ускорен в TRUCK_TIMELAPSE раз. Модель часовая, поэтому
     // положение на дороге — анимация; заряд, состояние и груз звена — из двойника.

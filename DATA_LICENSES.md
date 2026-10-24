@@ -8,5 +8,7 @@
 | Тариф 49,03 ₸/кВт·ч | РЭК «Рудный», тариф для юрлиц с 01.10.2026 | публичный тариф | `params.py` |
 | Батарея 2,6 МВт·ч и зарядка 6 МВт электросамосвала | публикации о Fortescue / Liebherr T264 (2026) | числовой факт со ссылкой | `params.py` |
 | `team/tynys/data/sizing.csv` | расчёт команды: `team/tynys/sizing.py` на данных выше | MIT (как всё решение) | В репозитории |
+| `team/tynys/data/geomet/*.csv`, `source.json` | Hoffimann et al., GeoMet v4, DOI 10.5281/zenodo.7051975 | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | CSV без изменений; [атрибуция, контрольные суммы и все преобразования](team/tynys/data/geomet/README.md). Пространственный аналог, не данные Актогая |
+| `sizing-physics-v4.csv`, `flex-physics-v4.csv`, `wind-equivalent-*.json` | Модель команды с GeoMet и ERA5 | Код расчёта MIT; GeoMet CC BY 4.0 сохраняет атрибуцию | Версия и параметры рядом в JSON; [границы выводов](team/tynys/MODULES_V4.md) |
 
 Конфиденциальных данных организаций и персональных данных в решении нет.
