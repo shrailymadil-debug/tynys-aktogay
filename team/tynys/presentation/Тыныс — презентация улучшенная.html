@@ -358,7 +358,7 @@ html, body { font-family: var(--f-display); }
   <div class="rv" style="--d:2;position:absolute;left:96px;top:300px;width:1728px;height:560px">
     <svg id="ch-arch" viewBox="0 0 1728 560" width="1728" height="560" role="img" aria-label="Схема потока данных: модель рудника, MQTT, Eclipse Ditto, Telegraf, InfluxDB, Grafana; координатор, экран и сервис двух будущих читают и пишут двойники в Ditto"></svg>
   </div>
-  <div class="d-src rv" style="--d:4;right:72px">Запуск: <span style="color:var(--ink)">make tynys</span> · от команды до SMOKE OK за 232 с на Ubuntu 24.04, 2 CPU, 7 ГБ (GitHub Actions) · путь данных описан в SUBMISSION.md</div>
+  <div class="d-src rv" style="--d:4;right:72px">Запуск: <span style="color:var(--ink)">make tynys</span> · от команды до SMOKE OK за 201 с на Ubuntu 24.04, 2 CPU, 7 ГБ (GitHub Actions) · путь данных описан в SUBMISSION.md</div>
   <div class="d-foot"><span>Тыныс · рудник Актогай</span><span>05 / 13</span></div>
   <aside class="d-notes">Модель рудника публикует телеметрию в MQTT, дальше Eclipse Ditto, Telegraf, InfluxDB и Grafana. Координатор, экран и сервис «Два будущих» работают только через двойники в Ditto. Двойников 39, у них иерархия: рудник, карьер, фабрика, энергия. Всё поднимается одной командой make tynys, это проверено в CI на машине слабее, чем у жюри.</aside>
 </section>
@@ -488,7 +488,7 @@ html, body { font-family: var(--f-display); }
   <div class="rv" style="--d:2;position:absolute;left:96px;top:290px;width:840px">
     <div class="pill p-checked" style="display:inline-flex"><i></i>ПРОВЕРЕНО</div>
     <ul class="chk" style="margin:26px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:24px;font:460 28px/1.38 var(--f-display);color:var(--sub)">
-      <li><b style="color:var(--ink)">Запуск с нуля по README</b><br>Ubuntu 24.04, 2 CPU, 7 ГБ: от make до SMOKE OK за 232 с</li>
+      <li><b style="color:var(--ink)">Запуск с нуля по README</b><br>Ubuntu 24.04, 2 CPU, 7 ГБ: от make до SMOKE OK за 201 с</li>
       <li><b style="color:var(--ink)">10 what-if сценариев</b><br>включение, последствия в телеметрии, отмена</li>
       <li><b style="color:var(--ink)">3D без видеокарты</b><br>Chromium с программным WebGL: сцена открывается, кадры идут</li>
       <li><b style="color:var(--ink)">Запасное правило V1</b><br>если координатор не ответил, это видно в двойнике</li>
