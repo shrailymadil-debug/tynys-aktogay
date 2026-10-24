@@ -82,7 +82,7 @@
 ## What works and what does not
 
 **Проверено** (GitHub Actions `.github/workflows/tynys-e2e.yml`; журнал и снимки последнего запуска — [team/tynys/evidence](team/tynys/evidence/README.md)):
-- **Запуск с нуля по README.** Ubuntu 24.04.5, 2 CPU, 7 ГБ, Docker 28.0.4, Compose 2.38.2 — то есть слабее окружения судьи. От `make` до `SMOKE OK` прошло 226 с (`team/tynys/scripts/smoke.sh`).
+- **Запуск с нуля по README.** Ubuntu 24.04.5, 2 CPU, 7 ГБ, Docker 28.0.4, Compose 2.38.2 — то есть слабее окружения судьи. От `make` до `SMOKE OK` прошло 201 с (`team/tynys/scripts/smoke.sh`).
 - **Сценарии what‑if на стенде.** Шесть основных сценариев включаются через двойник `scenario`, их след проверяется в двойниках, затем они отменяются (`team/tynys/scripts/whatif_check.py`); для настраиваемых сценариев (поломки самосвалов и экскаватора, падение содержания, тариф) проверяются последствия для меди и CO₂ (`scenario_effect_check.py`).
 - **3D без GPU.** Headless Chromium с программным WebGL: сцена открывается без ошибок, время и кадр обновляются (`team/tynys/scripts/check3d.py`). При программном WebGL сцена сама переходит в облегчённый режим.
 - **Запасное правило.** Если координатор не успел ответить (например, в первые часы после старта), поле работает по правилу V1 и пишет это в двойник `plant.decision_source`.
