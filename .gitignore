@@ -35,5 +35,7 @@ team/tynys/results/
 .futures-test-output/
 .scene-test-output/
 .scene-performance-output/
+.dashboard-test-output/
+.unity-test-output/
 futures-e2e-report.json
 team/tynys/data/sizing_part_*.csv

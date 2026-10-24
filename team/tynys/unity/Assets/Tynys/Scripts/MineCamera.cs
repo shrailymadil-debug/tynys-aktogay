@@ -7,7 +7,7 @@ namespace Tynys
     public sealed class MineCamera : MonoBehaviour
     {
         public Vector3 target = new Vector3(0f, -3f, 0f);
-        public float yaw = -12f;
+        public float yaw = -22f;
         public float pitch = 40f;
         public float distance = 145f;
         public float orthographicSize = 60f;
@@ -67,7 +67,8 @@ namespace Tynys
                 float unitsPerPixel = orthographicSize * 2f / Mathf.Max(1f, view.pixelHeight);
                 target -= right * delta.x * unitsPerPixel;
                 target -= forward * delta.y * unitsPerPixel;
-                target.x = Mathf.Clamp(target.x, -100f, 100f);
+                float origin=hud!=null&&hud.command!=null&&!hud.command.SiteView?MineCommandView.Origin.x:0;
+                target.x = Mathf.Clamp(target.x, origin-100f, origin+100f);
                 target.z = Mathf.Clamp(target.z, -65f, 65f);
                 desiredTarget = target;
             }
@@ -103,7 +104,7 @@ namespace Tynys
                 float scale = Mathf.Min(Screen.width / 1600f, Screen.height / 900f);
                 float width = Screen.width / scale;
                 float height = Screen.height / scale;
-                view.rect = new Rect(0f, 126f / height, (width - 344f) / width,
+                view.rect = new Rect(290f/width, 126f / height, (width - 634f) / width,
                     (height - 230f) / height);
             }
             else view.rect = new Rect(0f, 0f, 1f, 1f);
@@ -119,13 +120,21 @@ namespace Tynys
 
         public void ResetView()
         {
-            yaw = -12f;
+            if(hud!=null&&hud.command!=null){hud.command.ShowSite(false);return;}
+            yaw = -22f;
             pitch = 40f;
             distance = 145f;
             orthographicSize = 60f;
             desiredTarget = new Vector3(0f, -3f, 0f);
             target = desiredTarget;
             movingToFocus = false;
+            ApplyCamera();
+        }
+
+        public void SetComposition(Vector3 center,float size)
+        {
+            target=desiredTarget=center;orthographicSize=desiredSize=size;
+            yaw=-32f;pitch=43f;distance=145f;movingToFocus=false;focusVelocity=Vector3.zero;sizeVelocity=0;
             ApplyCamera();
         }
 

@@ -9,7 +9,7 @@ const output=process.argv[3];
   try{
     const page=await browser.newPage({viewport:{width:1440,height:1050}});
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
-    await page.goto(url);
+    await page.goto(url+'/dashboard.html');
     await page.waitForFunction(()=>document.querySelector('#page-title').textContent.includes('131'));
     assert.match(await page.locator('#page-title').innerText(),/архивном/);
     await page.waitForFunction(()=>document.querySelector('#geo-active').textContent.includes('GM-'));
