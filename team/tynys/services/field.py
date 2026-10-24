@@ -122,7 +122,14 @@ def main():
         for k in ("v0", "v1"):
             r = step(p, env, st[k], t, ctl[k].decide(p, env, st[k], t), ctl[k].segregated)
             tot[k].add(p, r, st[k])
-            last[k] = {"grid_mw": round(r["grid"], 1), "curtail_mw": round(r["curtail"], 1), "feed_tph": round(r["feed"])}
+            last[k] = {"grid_mw": round(r["grid"], 1), "curtail_mw": round(r["curtail"], 1), "feed_tph": round(r["feed"]),
+                       # Состояние тени для 3D «Как сейчас»: свои склады, линии и мельницы
+                       "feed_soft_tph": round(r["feed_soft"]), "feed_hard_tph": round(r["feed_hard"]),
+                       "pile_soft_t": round(st[k].pile["soft"]), "pile_hard_t": round(st[k].pile["hard"]),
+                       "pile_soft_fill_pct": round(100 * st[k].pile["soft"] / p.pile_cap_t, 1),
+                       "pile_hard_fill_pct": round(100 * st[k].pile["hard"] / p.pile_cap_t, 1),
+                       "line1_tph": round(r["line0"]), "line2_tph": round(r["line1"]),
+                       "mill_mw": round(r["mill_mw"], 1), "charge_mw": round(r["charge"], 1)}
         publish_hour(bus, p, env, st["v2"], rec, t, source, st["v2"].fleet)
         # --- 4. ждём конца модельного часа ---
         # Самосвалы публикуются раз в час вместе с остальными двойниками: их заряд,

@@ -186,9 +186,19 @@ async def check_controls(page):
     require(await page.locator("#compass").is_visible(), "Compass missing")
     before = await page.locator("#compass-arrow").evaluate(
         "el => getComputedStyle(el).transform")
-    await page.mouse.move(700, 430)
+    # Drag on bare terrain: with many equipment labels a fixed point may land on
+    # a DOM label, which (correctly) does not rotate the camera.
+    start = await page.evaluate("""() => {
+      const canvas = document.querySelector('canvas');
+      for (const y of [430, 520, 600, 360, 660]) for (const x of [700, 560, 840, 460, 960]) {
+        const ok = [[0,0],[120,30],[60,15]].every(([dx,dy]) => document.elementFromPoint(x+dx, y+dy) === canvas);
+        if (ok) return {x, y};
+      }
+      return {x: 700, y: 430};
+    }""")
+    await page.mouse.move(start["x"], start["y"])
     await page.mouse.down()
-    await page.mouse.move(820, 460, steps=10)
+    await page.mouse.move(start["x"] + 120, start["y"] + 30, steps=10)
     await page.mouse.up()
     await page.wait_for_timeout(800)
     after = await page.locator("#compass-arrow").evaluate(
