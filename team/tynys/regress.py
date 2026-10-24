@@ -15,7 +15,8 @@ from tynys.metrics import summarize
 
 LEGACY_REF = {"cu_adj_t": 222131.2, "grid_gwh": 2013.9, "kwh_t": 34.53}
 PHYSICS_V3_REF = {"cu_adj_t": 214118.1, "grid_gwh": 1976.8, "kwh_t": 35.03}
-PHYSICS_V4_REF = {"cu_adj_t": 218656.2, "grid_gwh": 2175.0, "kwh_t": 38.9145}
+# v4 откалибрована по энергии отчёта (вспомогательные потребители 83 МВт): 2 030 ГВт·ч
+PHYSICS_V4_REF = {"cu_adj_t": 219068.3, "grid_gwh": 2030.9, "kwh_t": 36.3234}
 
 
 def calculate(legacy=False, physics_v3=False):

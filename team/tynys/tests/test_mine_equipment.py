@@ -169,7 +169,7 @@ def test_auxiliary_loads_and_units_survive_actual_publishing():
                 assert all(target.split(":")[1] in instances for target in targets)
     assert set(instances["shovel-1"]["attributes"]["links"]["loads"]).isdisjoint(instances["shovel-2"]["attributes"]["links"]["loads"])
     nominal = sum(a+b*p.mine_ore_tph+c*p.n_lines*p.line_q_nom for a,b,c in auxiliary_coefficients(p).values())
-    assert nominal == pytest.approx(100)
+    assert nominal == pytest.approx(p.auxiliary_nominal_mw)
     r = step(p, env, st, 0, V0Traditional().decide(p, env, st, 0), False)
     class Bus:
         def __init__(self): self.messages = {}
