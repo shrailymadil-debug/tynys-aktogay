@@ -1,0 +1,31 @@
+{
+  "model_version": "physics-v4-geomet-maintenance",
+  "seasons": [
+    15,
+    105,
+    196,
+    288
+  ],
+  "days": 14,
+  "seed": 7,
+  "solver": {
+    "time_limit": null,
+    "node_limit": 16,
+    "mip_rel_gap": 0.01
+  },
+  "wind_mw": [
+    450.0
+  ],
+  "pv_mwp": [
+    0,
+    125,
+    250,
+    375,
+    500
+  ],
+  "variants": [
+    "V2fixed"
+  ],
+  "geomet": "10.5281/zenodo.7051975",
+  "csv_sha256": "f9a8caafd6dc1292d5d60d63c3b8ac4a752a4d02b5f75c33380140a468efe7ef"
+}
