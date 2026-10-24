@@ -1,7 +1,5 @@
 # SUBMISSION
 
-<!-- Fill in every section. The AI Jury studies this file together with the code, the Build Report, the presentation and the Stand's interface. Accepted languages: English, Kazakh, Russian. These hint comments may be deleted. -->
-
 ## Concept
 
 **Enterprise:** Реальный медный рудник Актогай (KAZ Minerals, область Абай): карьер, обогатительная фабрика и энергия, которой они питаются.
@@ -20,8 +18,6 @@
 **Real or fictional:** Объект реальный — рудник Актогай. Цифры берутся из открытых отчётов KAZ Minerals и реальной погоды в точке рудника; всё, чего на руднике пока нет (ветряки, солнечные панели, электрические самосвалы), помечается как допущение.
 
 ## Team
-
-<!-- GitHub usernames of the Participants. Other personal data are not required: the repository becomes public after the Freeze (Rules, section 15). -->
 
 | GitHub |
 |---|
