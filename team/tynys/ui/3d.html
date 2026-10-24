@@ -97,7 +97,7 @@ body[data-view=now] .g.co2 b{color:var(--bad)}body[data-view=tynys] .g.ren b{col
 <div class="hud glass" id="why"><div id="whyt">—</div></div>
 <div class="hud" id="caption"></div>
 <div class="hud" id="dots"></div>
-<div class="hud" id="ctrl"><button class="btn primary" id="tour">▶ История: проблема → решение</button><button class="btn" id="reset">Камера на место</button><a class="btn" href="futures.html">Два будущих →</a><a class="btn" href="./" id="to2d">Схема и «что если» →</a></div>
+<div class="hud" id="ctrl"><button class="btn primary" id="tour">▶ История: проблема → решение</button><button class="btn" id="reset">Камера на место</button><a class="btn" href="./" id="to-unity">Unity · главная →</a><a class="btn" href="futures.html">Два будущих →</a><a class="btn" href="./dashboard.html" id="to2d">Схема и «что если» →</a></div>
 
 <div id="intro">
   <div class="card">
@@ -106,8 +106,8 @@ body[data-view=now] .g.co2 b{color:var(--bad)}body[data-view=tynys] .g.ren b{col
     <div class="pr">
       <div class="glass" style="border-color:#7a3a30"><h2 class="bad">Проблема</h2><div class="big">≈ 1,6 млн т CO₂</div>
         <p>в год: рудник круглосуточно берёт ≈ 230 МВт из сети, где 66 % — уголь. Ветер и солнце непостоянны, и рудник, работающий «ровно», не может их использовать — энергию сбрасывают.</p></div>
-      <div class="glass" style="border-color:#2f7a55"><h2 class="good">Отдельный вклад «Тыныс»</h2><div class="big">−2,1 % CO₂</div>
-        <p>Для сравнения: −41 % CO₂ даёт сценарий ВЭС 300 МВт + СЭС 250 МВт. Дополнительно режим координатора «CO₂» снижает CO₂ на 2,1 %. В режиме «медь» модель даёт +1,9 % выпуска меди при +4,1 % CO₂. Эти эффекты показаны отдельно.</p></div>
+      <div class="glass" style="border-color:#2f7a55"><h2 class="good">Отдельный вклад «Тыныс»</h2><div class="big">−1,6 % CO₂ из сети</div>
+        <p>Для сравнения: −41 % CO₂ даёт сценарий ВЭС 300 МВт + СЭС 250 МВт. В том же предрасчёте координатор «CO₂» даёт ещё −1,6 % выбросов из сети относительно ВИЭ без координатора (932,7 → 917,8 тыс. т/год). Режим «медь»: +1,9 % меди с учётом склада и +5,4 % CO₂ из сети. Это разные цели, а не гарантия снижения выбросов в каждом периоде.</p></div>
     </div>
     <div class="row"><button class="btn primary" id="go">▶ Смотреть историю (1 мин)</button><button class="btn" id="skip">Сразу к руднику</button></div>
     <div class="fine">Мышь: вращать · колесо: приближать · пробел/→ в истории: дальше. Процентные эффекты — архив прежней модели; после детализации оборудования не пересчитаны. Цифры: KAZ Minerals 2024, погода Open‑Meteo ERA5 2024, модель команды «Суперкрошки».</div>
@@ -116,9 +116,9 @@ body[data-view=now] .g.co2 b{color:var(--bad)}body[data-view=tynys] .g.ren b{col
 <noscript><p style="padding:20px">Для 3D‑сцены нужен JavaScript и WebGL.</p></noscript>
 <script>
   // если WebGL нет — честно говорим и ведём на 2D‑схему
-  (function(){try{var c=document.createElement('canvas');if(!(c.getContext('webgl2')||c.getContext('webgl')))throw 0}catch(e){document.body.innerHTML='<div style="padding:24px;font:16px system-ui;color:#eee">Браузер не поддерживает WebGL. Откройте <a style="color:#5fe3a1" href="./">2D‑схему рудника</a>.</div>'}})();
+  (function(){try{var c=document.createElement('canvas');if(!(c.getContext('webgl2')||c.getContext('webgl')))throw 0}catch(e){document.body.innerHTML='<div style="padding:24px;font:16px system-ui;color:#eee">Браузер не поддерживает WebGL. Откройте <a style="color:#5fe3a1" href="./dashboard.html">2D‑схему рудника</a>.</div>'}})();
 </script>
-<script type="module" src="scene3d.js"></script>
+<script type="module" src="scene3d.js?v=contest-sync-20261023"></script>
 <script src="demo.js"></script>
 </body>
 </html>

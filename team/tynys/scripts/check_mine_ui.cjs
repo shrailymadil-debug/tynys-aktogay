@@ -9,7 +9,7 @@ const output=process.argv[3];
   try {
     const page=await browser.newPage({viewport:{width:1440,height:1050}});
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
-    await page.goto(url);
+    await page.goto(url+'/dashboard.html');
     await page.waitForFunction(()=>document.querySelectorAll('#equipment-rows tr').length===20);
     await page.waitForFunction(()=>document.querySelector('#flexstat').textContent.includes('physics-v4'));
     const line=page.locator('#equipment-rows tr').filter({hasText:'Линия 1'});
