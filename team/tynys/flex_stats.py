@@ -20,7 +20,7 @@ SEASONS = {15: 'winter', 105: 'spring', 196: 'summer', 288: 'autumn'}
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--days', type=int, default=14)
-    parser.add_argument('--output', type=Path, default=Path('data/flex-physics-v4.csv'))
+    parser.add_argument('--output', type=Path, default=Path('data/flex.csv'))
     args = parser.parse_args()
     if not 1 <= args.days <= 30:
         parser.error('--days must be between 1 and 30')

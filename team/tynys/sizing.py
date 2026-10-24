@@ -8,7 +8,7 @@
             стоит одинаково — минимизируется объём из сети, а не счёт по зонам суток);
   V2fixed — координатор с P80 = 150 мкм, как у V0: отделяет эффект
             адаптации к ВИЭ от эффекта более тонкого помола. Результат —
-data/sizing-physics-v4.csv с метаданными. Архив data/sizing.csv не перезаписывается.
+data/sizing.csv с метаданными (sizing.json). Архив прежней модели — data/archive/.
 """
 import itertools, os, sys, argparse, json, hashlib
 from pathlib import Path
@@ -44,7 +44,7 @@ def main():
     parser.add_argument("variants", nargs="*")
     parser.add_argument("--winds", nargs="+", type=float, default=[0,150,300,450,600])
     parser.add_argument("--pvs", nargs="+", type=float, default=[0,125,250,375,500])
-    parser.add_argument("--output", type=Path, default=Path(__file__).parent/"data/sizing-physics-v4.csv")
+    parser.add_argument("--output", type=Path, default=Path(__file__).parent/"data/sizing.csv")
     args = parser.parse_args()
     only, winds, pvs = args.variants, args.winds, args.pvs
     solver = {"time_limit": None, "node_limit": 16, "mip_rel_gap": .01}

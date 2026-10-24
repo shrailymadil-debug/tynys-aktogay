@@ -42,10 +42,10 @@ jobs:
       - run: pip install -r team/tynys/requirements.txt
       - name: flex_stats.py
         working-directory: team/tynys
-        run: PYTHONPATH=. python flex_stats.py --output data/flex-physics-v4.csv
+        run: PYTHONPATH=. python flex_stats.py --output data/flex.csv
       - name: Результат в ветку
         run: |
           git config user.name github-actions; git config user.email github-actions@users.noreply.github.com
           git checkout --orphan flex-v4; git rm -rfq --cached .
-          git add -f team/tynys/data/flex-physics-v4.csv team/tynys/data/flex-physics-v4.json
+          git add -f team/tynys/data/flex.csv team/tynys/data/flex.json
           git commit -qm "flex v4 ${GITHUB_SHA::7}"; git push -qf origin flex-v4

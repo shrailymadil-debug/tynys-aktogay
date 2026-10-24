@@ -103,21 +103,22 @@ def twins():
                                 "features": copy.deepcopy(body["features"])}
         else:
             types[type_name]["features"].update(copy.deepcopy(body["features"]))
-    # Historical sizing/flex results remain accessible, explicitly versioned.
-    d["energy"]["attributes"].update(sizing=sizing(), sizing_model="legacy-aggregate-v1")
+    # Текущие предрасчёты (data/sizing.csv, data/flex.csv) — на той же физике, что стенд;
+    # результаты прежней агрегированной модели доступны отдельно как архив.
     from pathlib import Path
     import json
     data_dir = Path(__file__).resolve().parents[1]/"data"
     def report(name):
         path = data_dir/name
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-    archived = report("wind-equivalent-archive.json")
-    current = report("wind-equivalent-physics-v4.json")
-    d["energy"]["attributes"].update(wind_equivalent=current if current.get("status") == "ok" else archived,
-        wind_equivalent_current=current, sizing_current=csv_rows("sizing-physics-v4.csv"))
-    current_flex = csv_rows("flex-physics-v4.csv")
-    d["substation"]["attributes"].update(flex_stats=current_flex or csv_rows("flex-physics-v3.csv"),
-        flex_stats_model="physics-v4-geomet-maintenance" if current_flex else "archive-physics-v3")
+    current = report("wind-equivalent.json")
+    d["energy"]["attributes"].update(
+        sizing=sizing(), sizing_model=report("sizing.json").get("model_version", "unknown"),
+        sizing_archive=csv_rows("archive/sizing-legacy-v1.csv"),
+        wind_equivalent=current if current.get("status") == "ok" else report("archive/wind-equivalent-legacy-v1.json"),
+        wind_equivalent_current=current)
+    d["substation"]["attributes"].update(flex_stats=csv_rows("flex.csv"),
+        flex_stats_model=report("flex.json").get("model_version", "unknown"))
     return {**types, **d}
 
 
