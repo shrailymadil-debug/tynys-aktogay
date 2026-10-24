@@ -54,3 +54,12 @@ jobs:
             screen2d.png
           if-no-files-found: warn
           retention-days: 14
+      - name: Журнал и снимки в ветку ci-screens (копия кладётся в main, team/tynys/evidence)
+        if: always() && github.ref == 'refs/heads/main'
+        run: |
+          echo "commit ${GITHUB_SHA} · run ${GITHUB_RUN_ID}" | tee -a ci.log
+          mkdir -p /tmp/ev && cp ci.log screen3d.png screen2d.png /tmp/ev/ 2>/dev/null || true
+          git config user.name github-actions; git config user.email github-actions@users.noreply.github.com
+          git checkout -q --orphan ci-screens; git rm -rfq --cached .
+          cp /tmp/ev/* . ; git add -f ci.log screen3d.png screen2d.png 2>/dev/null || git add -f ci.log
+          git commit -qm "evidence ${GITHUB_SHA::7}"; git push -qf origin ci-screens
