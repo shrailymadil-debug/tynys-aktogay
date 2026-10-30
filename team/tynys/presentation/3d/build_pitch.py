@@ -15,7 +15,7 @@ rep("function pollTrace() { const k = ((performance.now() - tStart) / 1000 / 4.0
     "function pollTrace() { const k = ((performance.now() - tStart) / 1000 / 4.0) % TRACE.length; D = TRACE[Math.floor(k)]; if (window.__pitchOverride) D = window.__pitchOverride(D); }")
 rep("labels.domElement.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2';",
     "labels.domElement.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2'; labels.domElement.id = 'scene-labels';")
-rep("window.__tynys = {", "window.__THREE = THREE; window.__tynys = {")
+rep("window.__tynys = {", "window.__THREE = THREE; window.__trucks = trucks; window.__tynys = {")
 
 rep("source='replay';tStart=performance.now();", "source='replay';tStart=performance.now()-11*4000;")  # запись начинается в 22:00 — показ стартует с 09:00 утра
 
