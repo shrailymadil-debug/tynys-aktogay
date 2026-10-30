@@ -1,7 +1,7 @@
 <div class="pv" id="pv-loading"><b>ТЫНЫС</b><span>запускаем рудник Актогай…</span></div>
 
 <div class="hud2">
-  <div class="chip2" id="chip"><b id="chipT">Тыныс</b><span id="chipS">дышащий рудник Актогай</span></div>
+  <div class="chip2" id="chip"><i class="num2" id="chipN">01</i><b id="chipT">Тыныс</b><span id="chipS">дышащий рудник Актогай</span></div>
   <div class="right2">
     <div class="pill2" id="pill">OPENEGIZ</div>
     <div class="clock2" id="clock2">запись стенда</div>
@@ -26,6 +26,7 @@
 </div>
 
 <div class="cap2" id="cap" aria-live="polite"></div>
+<figure class="map2" id="map2" aria-label="Схема рудника: где сейчас камера"><svg id="mapsvg" viewBox="-440 -540 980 1080"></svg><figcaption>схема · север вверху</figcaption></figure>
 
 <footer class="foot2">
   <div class="prog2" id="prog"></div>
@@ -33,9 +34,10 @@
     <button type="button" id="pprev" aria-label="Назад">←</button>
     <span class="cnt2" id="pcount">01 / 15</span>
     <button type="button" id="pnext" class="nx2" aria-label="Далее">Далее →</button>
+    <button type="button" id="pplay" class="play2" aria-pressed="false" title="Показ сам листает шаги">▶ Смотреть</button>
     <div class="day2" id="pday" role="group" aria-label="Время суток на сцене">
       <button type="button" data-d="slide" aria-pressed="true" title="Свет следует за временем записи стенда">как в модели</button><button type="button" data-d="morning" aria-pressed="false">утро</button><button type="button" data-d="day" aria-pressed="false">день</button><button type="button" data-d="sunset" aria-pressed="false">закат</button><button type="button" data-d="night" aria-pressed="false">ночь</button><button type="button" data-d="cycle" aria-pressed="false">сутки <span id="pdayclock">⟳</span></button>
     </div>
-    <span class="keys2">→ далее · F весь экран · T субтитры · мышь — вращать</span>
+    <span class="keys2">→ далее · пробел — автопоказ · F весь экран · T субтитры</span>
   </div>
 </footer>

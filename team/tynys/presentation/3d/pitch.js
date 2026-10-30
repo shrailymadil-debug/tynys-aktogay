@@ -94,7 +94,7 @@ const N = STEPS.length;
 
 /* ---------- прогресс и управление ---------- */
 const prog = $('prog');
-STEPS.forEach((s, i) => { const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-label', `Шаг ${i + 1}: ${s.chip[0]}`); b.onclick = () => go(i); prog.appendChild(b); });
+STEPS.forEach((s, i) => { const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-label', `Шаг ${i + 1}: ${s.chip[0]}`); b.title = `${i + 1}. ${s.chip[0]}`; b.onclick = () => go(i); prog.appendChild(b); });
 let cur = 0, ready = null;
 function startIdx() { const m = /^#slide-(\d+)$/.exec(location.hash); return m ? Math.min(N, Math.max(1, +m[1])) - 1 : 0; }
 function go(i, fromHash) {
@@ -104,16 +104,28 @@ function go(i, fromHash) {
   $('pnext').textContent = cur === N - 1 ? 'Сначала ↺' : 'Далее →';
   document.body.classList.toggle('first', cur === 0);
   if (!fromHash) { try { history.replaceState(null, '', '#slide-' + (cur + 1)); } catch (e) {} }
+  stepT0 = performance.now(); [...prog.children].forEach((b, k) => b.style.setProperty('--fill', k === cur && playing ? 0 : 1));
   render(STEPS[cur]);
   if (ready) ready(STEPS[cur]);
 }
-$('pprev').onclick = () => go(cur - 1);
+$('pprev').onclick = () => { stopPlay(); go(cur - 1); };
+/* автопоказ: шаг держится столько, сколько читается субтитр */
+let playing = false, stepT0 = performance.now();
+const stepDur = i => Math.max(8000, STEPS[i].cap.length * 68 + 3000);
+function stopPlay() { playing = false; $('pplay').setAttribute('aria-pressed', 'false'); $('pplay').textContent = '▶ Смотреть'; prog.children[cur]?.style.setProperty('--fill', 1); }
+$('pplay').onclick = () => { if (playing) return stopPlay(); playing = true; $('pplay').setAttribute('aria-pressed', 'true'); $('pplay').textContent = '❚❚ Пауза'; if (cur === N - 1) go(0); stepT0 = performance.now(); };
+(function tickPlay(now) {
+  const b = prog.children[cur];
+  if (playing && b) { const k = Math.min(1, (now - stepT0) / stepDur(cur)); b.style.setProperty('--fill', k.toFixed(3)); if (k >= 1) { if (cur === N - 1) stopPlay(); else go(cur + 1); } }
+  requestAnimationFrame(tickPlay);
+})(performance.now());
 $('pnext').onclick = () => go(cur === N - 1 ? 0 : cur + 1);
 addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('input,select,textarea')) return;
   const k = e.key;
-  if (['ArrowRight', 'PageDown', ' ', 'Enter'].includes(k)) { e.preventDefault(); e.stopImmediatePropagation(); go(cur + 1); }
-  else if (['ArrowLeft', 'PageUp', 'Backspace'].includes(k)) { e.preventDefault(); go(cur - 1); }
+  if (['ArrowRight', 'PageDown', 'Enter'].includes(k)) { e.preventDefault(); e.stopImmediatePropagation(); go(cur + 1); }
+  else if (k === ' ') { e.preventDefault(); e.stopImmediatePropagation(); $('pplay').click(); }
+  else if (['ArrowLeft', 'PageUp', 'Backspace'].includes(k)) { e.preventDefault(); stopPlay(); go(cur - 1); }
   else if (k === 'Home') go(0); else if (k === 'End') go(N - 1);
   else if (k === 'f' || k === 'F' || k === 'а' || k === 'А') { const el = document.documentElement; (document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen?.())?.catch?.(() => {}); }
   else if (k === 't' || k === 'T' || k === 'е' || k === 'Е') document.body.classList.toggle('nocap');
@@ -131,7 +143,7 @@ function countUp(el) {
 let chipTimer = null;
 function render(s) {
   const chip = $('chip'); chip.classList.add('swap'); clearTimeout(chipTimer);
-  chipTimer = setTimeout(() => { $('chipT').textContent = s.chip[0]; $('chipS').innerHTML = s.chip[1]; chip.classList.remove('swap'); }, 260);
+  chipTimer = setTimeout(() => { $('chipN').textContent = String(cur + 1).padStart(2, '0'); $('chipT').textContent = s.chip[0]; $('chipS').innerHTML = s.chip[1]; chip.classList.remove('swap'); }, 260);
   const pill = $('pill'); pill.textContent = s.pill; pill.className = 'pill2' + (s.pillCls ? ' ' + s.pillCls : '');
   $('hero').classList.toggle('out', !s.hero);
   const card = $('card');
@@ -240,7 +252,52 @@ function setup(S, T) {
     const [x, z, r, c] = f; R.g.position.set(x, Math.max(0, TH(x, z)) + 1.4, z); R.g.scale.setScalar(r); R.g.visible = true; R.target = 1;
     [R.r1, R.r2, R.disc].forEach(m => m.material.color.setHex(COL[c] || c));
   }
-  function focus(k) { const f = FOCUS[k] || []; ringPool.forEach((_, i) => setRing(i, f[i])); }
+  function focus(k) { const f = FOCUS[k] || []; ringPool.forEach((_, i) => setRing(i, f[i])); mapFocus(f); breath.target = k === 'idea' ? 1 : k === 'final' || k === 'intro' ? .55 : 0; breath.big = k !== 'idea'; if (k !== 'idea') { domeMat.color.setHex(COL.teal); domeEdge.material.color.setHex(COL.teal); } }
+
+  /* --- рудник «дышит»: полупрозрачный купол медленно вдыхает и выдыхает --- */
+  const breath = {target: 0, op: 0, big: false, col: new T.Color(COL.green)};
+  const domeMat = new T.MeshBasicMaterial({color: COL.green, transparent: true, opacity: 0, depthWrite: false, side: T.DoubleSide, fog: false});
+  const dome = new T.Mesh(new T.SphereGeometry(1, 64, 24, 0, Math.PI * 2, 0, Math.PI / 2), domeMat); dome.renderOrder = 7; dome.visible = false; scene.add(dome);
+  const domeEdge = new T.Mesh(new T.TorusGeometry(1, .012, 8, 128).rotateX(Math.PI / 2), new T.MeshBasicMaterial({color: COL.green, transparent: true, opacity: 0, depthWrite: false, fog: false})); dome.add(domeEdge);
+
+  /* --- облака высоко в небе и их тени, бегущие по руднику --- */
+  const puff = document.createElement('canvas'); puff.width = 256; puff.height = 128; const px = puff.getContext('2d');
+  for (let i = 0; i < 9; i++) { const x = 50 + Math.random() * 156, y = 54 + Math.random() * 26, r = 26 + Math.random() * 30, g = px.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, 'rgba(255,255,255,.95)'); g.addColorStop(1, 'rgba(255,255,255,0)'); px.fillStyle = g; px.fillRect(0, 0, 256, 128); }
+  const puffTex = new T.CanvasTexture(puff); puffTex.colorSpace = T.SRGBColorSpace;
+  const shc = document.createElement('canvas'); shc.width = shc.height = 128; const sx = shc.getContext('2d'); const sg = sx.createRadialGradient(64, 64, 4, 64, 64, 64); sg.addColorStop(0, 'rgba(20,30,50,.9)'); sg.addColorStop(1, 'rgba(20,30,50,0)'); sx.fillStyle = sg; sx.fillRect(0, 0, 128, 128);
+  const shTex = new T.CanvasTexture(shc);
+  const clouds = Array.from({length: 14}, (_, i) => {
+    const sp = new T.Sprite(new T.SpriteMaterial({map: puffTex, transparent: true, depthWrite: false, fog: false, opacity: .9}));
+    const w = 420 + Math.random() * 380; sp.scale.set(w, w * .42, 1); sp.position.set(-1400 + Math.random() * 2800, 980 + Math.random() * 180, -1600 + Math.random() * 3200); scene.add(sp);
+    const shd = new T.Mesh(new T.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new T.MeshBasicMaterial({map: shTex, transparent: true, depthWrite: false, opacity: 0})); shd.scale.set(w * .55, 1, w * .32); shd.renderOrder = 4; scene.add(shd);
+    return {sp, shd, v: 9 + Math.random() * 7};
+  });
+
+  /* --- мини-схема рудника: где камера и что подсвечено (север вверху: −x сцены) --- */
+  const SVGNS = 'http://www.w3.org/2000/svg', msvg = $('mapsvg');
+  const mp = (x, z) => [-z, x];
+  const el = (tag, attrs, parent = msvg) => { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent.appendChild(e); return e; };
+  el('rect', {x: -440, y: -540, width: 980, height: 1080, rx: 40, class: 'm-bg'});
+  [[-350, -170, 124], [-390, 160, 104], [-90, -260, 86]].forEach(([x, z, r]) => { const [a, b] = mp(x, z); el('circle', {cx: a, cy: b, r, class: 'm-dump'}); });
+  { const [a, b] = mp(175, -200); el('rect', {x: a - 52, y: b - 80, width: 104, height: 160, rx: 6, class: 'm-heap'}); }
+  { const [a, b] = mp(362, 44); el('ellipse', {cx: a, cy: b, rx: 108, ry: 100, class: 'm-tail'}); el('ellipse', {cx: a - 26, cy: b + 30, rx: 38, ry: 30, class: 'm-pond'}); }
+  { const [a, b] = mp(-130, 10); el('circle', {cx: a, cy: b, r: 100, class: 'm-pit'}); el('circle', {cx: a, cy: b, r: 55, class: 'm-pit2'}); }
+  { const [a, b] = mp(126, -5); el('rect', {x: a - 50, y: b - 32, width: 100, height: 64, rx: 6, class: 'm-plant'}); }
+  { const [a, b] = mp(60, 180); el('rect', {x: -320, y: b, width: 130, height: 260, rx: 6, class: 'm-pv'}); }
+  for (let i = 0; i < 14; i++) { const [a, b] = mp(-60 + (i % 7) * 75 + (Math.floor(i / 7) % 2) * 37, -380 - Math.floor(i / 7) * 95); el('circle', {cx: a, cy: b, r: 11, class: 'm-wind'}); }
+  { const [a, b] = mp(260, -60); el('rect', {x: a - 16, y: b - 16, width: 32, height: 32, class: 'm-sub'}); }
+  el('text', {x: 330, y: 525, class: 'm-t'}).textContent = 'ТЭС ↘';
+  [['карьер', -130, 10], ['фабрика', 126, -5], ['ВЭС', 140, -430], ['хвосты', 362, 44]].forEach(([t, x, z]) => { const [a, b] = mp(x, z); el('text', {x: a, y: b + 22, class: 'm-l'}).textContent = t; });
+  const mFocus = el('g', {}), mCone = el('path', {class: 'm-cone'}), mCam = el('circle', {r: 16, class: 'm-cam'});
+  function mapFocus(f) { mFocus.innerHTML = ''; f.forEach(([x, z, r, c]) => { const [a, b] = mp(Math.min(x, 520), Math.max(z, -600)); el('circle', {cx: a, cy: b, r: Math.min(r, 300), class: 'm-focus', style: `stroke:#${(COL[c] || 0xffffff).toString(16).padStart(6, '0')}`}, mFocus); }); }
+  const camDir = new T.Vector3();
+  function mapCam() {
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const [cx, cy] = mp(camera.position.x, camera.position.z), [tx, ty] = mp(controls.target.x, controls.target.z);
+    const ax = clamp(cx, -420, 520), ay = clamp(cy, -520, 520), ang = Math.atan2(ty - cy, tx - cx), L = 170, s = .42;
+    mCam.setAttribute('cx', ax); mCam.setAttribute('cy', ay);
+    mCone.setAttribute('d', `M${ax},${ay} L${ax + Math.cos(ang - s) * L},${ay + Math.sin(ang - s) * L} A${L},${L} 0 0 1 ${ax + Math.cos(ang + s) * L},${ay + Math.sin(ang + s) * L} Z`);
+  }
 
   /* --- экраны над рудником: пульт и «Два будущих» --- */
   const screens = {};
@@ -352,7 +409,7 @@ function setup(S, T) {
     let D; try { D = S.data; } catch (e) { return; }
     $('clock2').textContent = `запись стенда · ${D.site?.sim_time || ''} · самосвалы ×6`;
     const inhale = /вдох/.test(D.coordinator?.mode || '');
-    if (curStep && curStep.k === 'idea') { const c = inhale ? COL.green : COL.orange; [ringPool[0].r1, ringPool[0].r2, ringPool[0].disc].forEach(m => m.material.color.setHex(c)); }
+    if (curStep && curStep.k === 'idea') { const c = inhale ? COL.green : COL.orange; [ringPool[0].r1, ringPool[0].r2, ringPool[0].disc].forEach(m => m.material.color.setHex(c)); domeMat.color.setHex(c); domeEdge.material.color.setHex(c); }
     if ($('pin')) { $('pin').classList.toggle('live', inhale); $('pout').classList.toggle('live', !inhale); $('modeT').textContent = inhale ? 'Сейчас: вдох — энергии много' : 'Сейчас: выдох — энергии мало'; }
     if ($('pwhy') && D.coordinator?.why) $('pwhy').textContent = '«' + D.coordinator.why + '»';
     if ($('plivegrid')) $('plivegrid').innerHTML = [[D.site?.sim_time || '—', 'модельное время'], [fmt(D.energy?.load_mw) + ' МВт', 'нагрузка рудника'], [fmt(D.energy?.renew_share_pct) + ' %', 'доля ветра и солнца'], [fmt(D.substation?.grid_mw) + ' МВт', 'из сети'], [fmt(D.plant?.feed_tph) + ' т/ч', 'переработка руды'], [fmt(D.coordinator?.charge_mw) + ' МВт', 'зарядка самосвалов']].map(([b, s]) => `<div><b>${b}</b><span>${s}</span></div>`).join('');
@@ -378,6 +435,11 @@ function setup(S, T) {
     if (curStep?.toggle) { toggleT += dt; const v = Math.floor(toggleT / 4.5) % 2 ? 'tynys' : 'now'; if (document.body.dataset.view !== v) S.setView(v); $('chipS').textContent = v === 'now' ? 'ВЭС 300 + СЭС 250 · сцена: как сейчас' : 'ВЭС 300 + СЭС 250 · сцена: с «Тыныс» — СЭС, накопитель, зарядки'; }
     if (curStep?.cycle) { cycleT += dt; const i = Math.floor(cycleT / 5.5) % SCEN.length; if (i !== cycleI) { cycleI = i; overlay = SCEN[i][0]; setRing(0, SCEN_FOCUS[overlay]); const ps = $('pscen'); if (ps) ps.textContent = SCEN[i][1]; document.querySelectorAll('#pscenchips span').forEach(c => c.classList.toggle('hot', c.dataset.s === SCEN[i][0])); } }
     const ts = now / 1000;
+    let dk = 1; try { dk = S.dayK; } catch (e) {}
+    clouds.forEach(c => { c.sp.position.z += c.v * dt * 3; if (c.sp.position.z > 1700) c.sp.position.z = -1700; c.sp.material.opacity = .25 + .65 * dk; const p = c.sp.position; c.shd.position.set(p.x - 120, 1.6 + Math.max(0, TH(p.x - 120, p.z)), p.z); c.shd.material.opacity = .17 * dk; });
+    breath.op += (breath.target - breath.op) * Math.min(1, dt * 2);
+    if (breath.op > .01) { dome.visible = true; const b = .5 + .5 * Math.sin(ts * 2 * Math.PI / 5); const R = breath.big ? 430 : 92; const sc = R * (.88 + .14 * b); dome.scale.set(sc, sc * (breath.big ? .32 : .62), sc); dome.position.set(breath.big ? 40 : 126, 0, breath.big ? -10 : -5); domeMat.opacity = breath.op * (.08 + .1 * b); domeEdge.material.opacity = breath.op * (.35 + .4 * b); } else dome.visible = false;
+    mapCam();
     ringPool.forEach(R => { R.op += (R.target - R.op) * Math.min(1, dt * 2.5); if (R.op < .01 && !R.target) { R.g.visible = false; return; } const k = ((ts * .55 + R.ph) % 1); R.r1.material.opacity = R.op * .9; R.r2.scale.setScalar(1 + k * .45); R.r2.material.opacity = R.op * (1 - k) * .8; R.disc.material.opacity = R.op * (.14 + .06 * Math.sin(ts * 3)); });
     for (let i = 0; i < 18; i++) { pipe.getPointAt((ts * .05 + i / 18) % 1, tmpP); m4.makeTranslation(tmpP.x, tmpP.y + .4, tmpP.z); slurry.setMatrixAt(i, m4); } slurry.instanceMatrix.needsUpdate = true;
     const w = innerWidth, h = innerHeight, tmp = new T.Vector3();
