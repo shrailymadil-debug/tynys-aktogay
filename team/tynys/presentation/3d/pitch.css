@@ -185,3 +185,16 @@ body.nocap .cap2{display:none}
   .tiles2{top:calc(74px + env(safe-area-inset-top,0px))}
 }
 @media (max-width:900px){ .right2{min-width:0;flex-shrink:1;margin-left:auto} .pill2{max-width:40vw} .chip2{flex-shrink:0} }
+/* ярче и «презентационнее» */
+body.pitch canvas#c{filter:saturate(1.32) contrast(1.06) brightness(1.02)}
+.hero2 h1{background:linear-gradient(100deg,#ffffff 0%,#ffffff 38%,#7ff0dc 70%,#ffc95c 100%);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 6px 26px rgba(0,0,0,.35))}
+.hero2 .bar2{width:6px;background:linear-gradient(#8b7bff,#22d3b6 55%,#ffb627)}
+.tile2{background:linear-gradient(160deg,rgba(22,40,66,.92),rgba(12,22,38,.9));border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.tile2 b.bad{color:#ff7b6b;-webkit-text-fill-color:#ff7b6b}.tile2 b.good{color:#4ff0c4;-webkit-text-fill-color:#4ff0c4}.tile2 b.cu{color:#ffb86b;-webkit-text-fill-color:#ffb86b}
+.tile2.on{animation:tilePop .7s cubic-bezier(.2,1.4,.4,1)}
+@keyframes tilePop{0%{transform:translateX(24px) scale(.94)}100%{transform:none}}
+.ctl2 .nx2{background:linear-gradient(90deg,#ffd166,#ffb627);color:#1a1206;border-color:#ffb627;box-shadow:0 6px 24px rgba(255,182,39,.35)}
+body.first .ctl2 .nx2{animation:nudge 1.6s ease-in-out infinite}
+@keyframes nudge{0%,100%{transform:none;box-shadow:0 6px 24px rgba(255,182,39,.35)}50%{transform:translateX(4px);box-shadow:0 0 0 8px rgba(255,182,39,.18),0 6px 24px rgba(255,182,39,.45)}}
+.prog2 button.on{background:linear-gradient(90deg,#22d3b6,#ffb627)!important}
+@media (prefers-reduced-motion:reduce){body.first .ctl2 .nx2,.tile2.on{animation:none}}

@@ -102,6 +102,7 @@ function go(i, fromHash) {
   [...prog.children].forEach((b, k) => { b.classList.toggle('on', k === cur); b.classList.toggle('done', k < cur); });
   $('pcount').textContent = `${String(cur + 1).padStart(2, '0')} / ${N}`;
   $('pnext').textContent = cur === N - 1 ? 'Сначала ↺' : 'Далее →';
+  document.body.classList.toggle('first', cur === 0);
   if (!fromHash) { try { history.replaceState(null, '', '#slide-' + (cur + 1)); } catch (e) {} }
   render(STEPS[cur]);
   if (ready) ready(STEPS[cur]);
@@ -118,6 +119,14 @@ addEventListener('keydown', e => {
   else if (k === 't' || k === 'T' || k === 'е' || k === 'Е') document.body.classList.toggle('nocap');
 }, true);
 
+/* ---------- числа «набегают» при появлении ---------- */
+function countUp(el) {
+  const m = /^([^\d]*?)(\d{1,3}(?: \d{3})*|\d+)(?:,(\d+))?(.*)$/.exec(el.textContent); if (!m || reduce) return;
+  const [, pre, int, dec = '', post] = m, target = Number(int.replace(/ /g, '') + (dec ? '.' + dec : '')), k = dec.length, t0 = performance.now(), dur = 1100;
+  const fmtN = v => v.toLocaleString('ru-RU', {minimumFractionDigits: k, maximumFractionDigits: k}).replace(/\u00a0/g, ' ');
+  (function tick(now) { const x = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - x, 3); el.textContent = pre + fmtN(target * e) + post; if (x < 1) requestAnimationFrame(tick); else el.textContent = pre + int + (dec ? ',' + dec : '') + post; })(t0);
+}
+
 /* ---------- отрисовка шага (HTML) ---------- */
 let chipTimer = null;
 function render(s) {
@@ -132,7 +141,7 @@ function render(s) {
   if (s.tiles) {
     tiles.hidden = false; tiles.classList.toggle('left', false);
     tiles.innerHTML = s.tiles.map(([b, sp, sm, cls]) => `<div class="tile2"><b class="${cls || ''}">${b}</b><span>${sp}</span>${sm ? `<small>${sm}</small>` : ''}</div>`).join('');
-    [...tiles.children].forEach((t, i) => setTimeout(() => t.classList.add('on'), 300 + i * 180));
+    [...tiles.children].forEach((t, i) => setTimeout(() => { t.classList.add('on'); countUp(t.querySelector('b')); }, 300 + i * 180));
   } else tiles.hidden = true;
   $('cap').innerHTML = `<span>${s.cap}</span>`;
 }
@@ -156,40 +165,49 @@ function setup(S, T) {
   const Mt = (c, o = {}) => new T.MeshStandardMaterial(Object.assign({color: c, roughness: .95, metalness: .02}, o));
   const add = (geo, mat, x, y, z) => { const m = new T.Mesh(geo, mat); m.position.set(x, y, z); m.receiveShadow = true; m.castShadow = true; scene.add(m); return m; };
   const dumpsOld = []; let dumpMat = null;
-  if (scene.fog) scene.fog.density = 0.00042;
+  const TH = window.__terrainH || (() => 0);
+  if (scene.fog) scene.fog.density = 0.00024;
   scene.traverse(o => {
     if (!o.isMesh || !o.material || !o.material.color) return;
     const hex = o.material.color.getHex();
-    if (hex === 0x3d8f86 && o.position.y < -60) o.material = o.material.clone(), o.material.color.setHex(0x3f9b6c);   // зелёное озеро в карьере
-    if (hex === 0x6f7c88 && Math.abs(o.position.y - 27) < 1.5) o.material = o.material.clone(), o.material.color.setHex(0x3a7dc4); // синяя крыша фабрики
+    if (hex === 0x3d8f86 && o.position.y < -60) o.material = o.material.clone(), o.material.color.setHex(0x3fae6a);   // зелёное озеро в карьере
     if (hex === 0xd8c7ad && o.parent && o.parent !== scene && !o.parent.userData.old) { o.parent.userData.old = true; dumpsOld.push(o.parent); dumpMat = dumpMat || o.material; }
+    if (o.geometry && o.geometry.type === 'RingGeometry' && o.material.map && hex === 0xffffff) { o.material = o.material.clone(); o.material.color.setHex(0xffe3b0); }  // степь теплее
   });
   // отвалы Актогая — широкие, светлые, с плоским верхом и уступами
   dumpsOld.forEach(g => g.visible = false);
-  const dm = (dumpMat ? dumpMat.clone() : Mt(0xffffff)); dm.color.setHex(0xd9ccb3);
+  const dm = (dumpMat ? dumpMat.clone() : Mt(0xffffff)); dm.color.setHex(0xe2cba2);
   for (const [x, z, r, h] of [[-350, -170, 95, 36], [-390, 160, 80, 30], [-90, -260, 66, 26]]) {
     const R = r * 1.3, H = h * 1.15;
     for (let k = 0; k < 3; k++) { const rb = R * (1 - k * 0.16), rt = rb - 9; add(new T.CylinderGeometry(rt, rb, H / 3, 64), dm, x, H / 6 + k * H / 3, z); }
   }
-  add(new T.CircleGeometry(8, 36).rotateX(-Math.PI / 2), new T.MeshStandardMaterial({color: 0x2f6fb5, roughness: .08, metalness: .5}), PIT.x - 12, -PIT_D + .35, PIT.z + 10).castShadow = false;  // синее озеро в глубокой части
+  add(new T.CircleGeometry(8, 36).rotateX(-Math.PI / 2), new T.MeshStandardMaterial({color: 0x1f78d1, roughness: .08, metalness: .4}), PIT.x - 12, -PIT_D + .35, PIT.z + 10).castShadow = false;  // синее озеро в глубокой части
   // кучное выщелачивание окисленной руды — ярусы с сеткой
   const gcv = document.createElement('canvas'); gcv.width = gcv.height = 128; const gx = gcv.getContext('2d');
-  gx.fillStyle = '#cdb99a'; gx.fillRect(0, 0, 128, 128); gx.strokeStyle = 'rgba(120,100,75,.55)'; gx.lineWidth = 3; for (let i = 0; i <= 128; i += 32) { gx.beginPath(); gx.moveTo(i, 0); gx.lineTo(i, 128); gx.stroke(); gx.beginPath(); gx.moveTo(0, i); gx.lineTo(128, i); gx.stroke(); }
+  gx.fillStyle = '#d9b884'; gx.fillRect(0, 0, 128, 128); gx.strokeStyle = 'rgba(140,96,52,.6)'; gx.lineWidth = 3; for (let i = 0; i <= 128; i += 32) { gx.beginPath(); gx.moveTo(i, 0); gx.lineTo(i, 128); gx.stroke(); gx.beginPath(); gx.moveTo(0, i); gx.lineTo(128, i); gx.stroke(); }
   const gtex = new T.CanvasTexture(gcv); gtex.wrapS = gtex.wrapT = T.RepeatWrapping; gtex.repeat.set(5, 3); gtex.colorSpace = T.SRGBColorSpace;
   const HEAP = V(175, 0, -200);
   [[160, 104, 0], [136, 84, 6], [112, 64, 12]].forEach(([w, d, y]) => add(new T.BoxGeometry(w, 6, d), Mt(0xffffff, {map: gtex}), HEAP.x, y + 3, HEAP.z));
-  add(new T.BoxGeometry(26, .6, 14), new T.MeshStandardMaterial({color: 0x5fb3c9, roughness: .1, metalness: .3}), HEAP.x + 100, .4, HEAP.z + 30);
-  // хвостохранилище: светлый веер с бирюзовым прудом и дамбой
-  const TAIL = V(368, 0, 110);
-  const sh = new T.Shape(); const pts = [[-70, -55], [10, -75], [80, -40], [85, 40], [30, 85], [-50, 70], [-85, 10]];
-  sh.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(([x, z]) => sh.lineTo(x, z)); sh.lineTo(pts[0][0], pts[0][1]);
-  const tg = new T.ShapeGeometry(sh, 12); tg.rotateX(Math.PI / 2);
-  const tail = add(tg, Mt(0xc6c6be, {side: T.DoubleSide}), TAIL.x, .5, TAIL.z); tail.castShadow = false;
-  const pond = add(new T.CircleGeometry(30, 40).rotateX(-Math.PI / 2), new T.MeshStandardMaterial({color: 0x3cb5a6, roughness: .08, metalness: .35}), TAIL.x + 28, .7, TAIL.z + 18); pond.scale.set(1.3, 1, .8); pond.castShadow = false;
-  const dam = new T.CatmullRomCurve3([[-85, 10], [-50, 70], [30, 85], [85, 40]].map(([x, z]) => V(TAIL.x + x, 2, TAIL.z + z)));
-  add(new T.TubeGeometry(dam, 60, 3.2, 6, false), Mt(0xb9ab92), 0, 0, 0);
+  add(new T.BoxGeometry(26, .6, 14), new T.MeshStandardMaterial({color: 0x2bb0d6, roughness: .1, metalness: .3}), HEAP.x + 100, .4, HEAP.z + 30);
+  // хвостохранилище: большой веер на дамбе, бирюзовый пруд, пульпопровод от сгустителя
+  const TAIL = V(362, 0, 44), TS = 1.2;
+  const pts = [[-78, -48], [-30, -72], [30, -76], [78, -50], [92, 10], [80, 62], [36, 88], [-20, 84], [-62, 60], [-88, 12]].map(([x, z]) => [x * TS, z * TS]);
+  let base = 0; for (const [x, z] of pts) base = Math.max(base, TH(TAIL.x + x, TAIL.z + z)); for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) base = Math.max(base, TH(TAIL.x + i * 60, TAIL.z + j * 60));
+  const TOP = base + 7;
+  const sh = new T.Shape(); sh.moveTo(pts[0][0], -pts[0][1]); sh.splineThru([...pts.slice(1), pts[0]].map(([x, z]) => new T.Vector2(x, -z)));
+  const tg = new T.ExtrudeGeometry(sh, {depth: TOP + 30, bevelEnabled: true, bevelThickness: 3, bevelSize: 7, bevelSegments: 3, curveSegments: 48}); tg.rotateX(-Math.PI / 2);
+  const tcv = document.createElement('canvas'); tcv.width = tcv.height = 256; const tx = tcv.getContext('2d');
+  const grd = tx.createRadialGradient(40, 40, 10, 140, 140, 260); grd.addColorStop(0, '#f2f1ea'); grd.addColorStop(.55, '#c9cbc6'); grd.addColorStop(1, '#a9aeab'); tx.fillStyle = grd; tx.fillRect(0, 0, 256, 256);
+  tx.strokeStyle = 'rgba(255,255,255,.35)'; tx.lineWidth = 2; for (let k = 0; k < 14; k++) { tx.beginPath(); tx.moveTo(30, 30); tx.lineTo(256, k * 22); tx.stroke(); }
+  const ttex = new T.CanvasTexture(tcv); ttex.colorSpace = T.SRGBColorSpace;
+  const tail = new T.Mesh(tg, [Mt(0xffffff, {map: ttex}), Mt(0xb08d62)]); tail.position.set(TAIL.x, -33, TAIL.z); tail.receiveShadow = true; scene.add(tail);
+  tg.computeBoundingBox(); const bb = tg.boundingBox, uvA = tg.attributes.uv, pA = tg.attributes.position; for (let i = 0; i < uvA.count; i++) uvA.setXY(i, (pA.getX(i) - bb.min.x) / (bb.max.x - bb.min.x), (pA.getZ(i) - bb.min.z) / (bb.max.z - bb.min.z));
+  const pond = add(new T.CircleGeometry(36, 48).rotateX(-Math.PI / 2), new T.MeshStandardMaterial({color: 0x19c2b0, roughness: .05, metalness: .25, emissive: 0x0a5c55, emissiveIntensity: .35}), TAIL.x + 30, TOP + .6, TAIL.z + 22); pond.scale.set(1.25, 1, .85); pond.castShadow = false;
+  const pipe = new T.CatmullRomCurve3([V(158, 3, 64), V(205, 4, 44), V(TAIL.x - 112, 5, TAIL.z - 6), V(TAIL.x - 92, TOP + 2, TAIL.z - 8), V(TAIL.x - 50, TOP + 2, TAIL.z - 18)]);
+  add(new T.TubeGeometry(pipe, 80, 1.6, 8, false), Mt(0xff8a3d, {roughness: .5, emissive: 0x5a2400, emissiveIntensity: .3}), 0, 0, 0);
+  const slurry = new T.InstancedMesh(new T.SphereGeometry(1.9, 8, 6), new T.MeshBasicMaterial({color: 0xffd2a8}), 18); scene.add(slurry);
   // здания SX-EW и посёлок — синие крыши
-  for (let i = 0; i < 4; i++) { const x = 300 + (i % 2) * 40, z = -122 + Math.floor(i / 2) * 26; add(new T.BoxGeometry(32, 9, 14), Mt(0xc9d0d6), x, 4.5, z); add(new T.BoxGeometry(33, 1.2, 15), Mt(0x3a7dc4, {metalness: .3, roughness: .5}), x, 9.6, z); }
+  for (let i = 0; i < 4; i++) { const x = 300 + (i % 2) * 40, z = -122 + Math.floor(i / 2) * 26; add(new T.BoxGeometry(32, 9, 14), Mt(0xe4e9ee), x, 4.5, z); add(new T.BoxGeometry(33, 1.2, 15), Mt(0x2d73c9, {metalness: .3, roughness: .5}), x, 9.6, z); }
   // технологические дороги от борта карьера к отвалам
   for (const [x, z] of [[-350, -170], [-390, 160], [-90, -260]]) {
     const dir = V(x - PIT.x, 0, z - PIT.z).normalize(), a = PIT.clone().addScaledVector(dir, 104), b = V(x, 0, z).addScaledVector(dir, -100), L = a.distanceTo(b);
@@ -197,10 +215,32 @@ function setup(S, T) {
     const r = add(new T.BoxGeometry(14, .5, L), Mt(0xb8ab95), (a.x + b.x) / 2, .3, (a.z + b.z) / 2); r.lookAt(b.x, .3, b.z); r.castShadow = false;
   }
   // подписи объектов (только на шаге «Актогай»)
-  const TAGS = [[PIT.clone().setY(30), 'Карьер', 'медно-порфировое месторождение'], [V(-372, 70, -170), 'Отвалы', 'пустая порода'], [V(HEAP.x, 30, HEAP.z), 'Выщелачивание', 'окисленная руда · в модели нет'], [V(126, 58, -5), 'Обогатительная фабрика', 'две линии · сульфидная руда'], [V(TAIL.x, 22, TAIL.z), 'Хвостохранилище', 'хвосты флотации'], [V(-40, 70, -420), 'ВЭС 300 МВт', 'допущение «Тыныс»']];
+  const TAGS = [[PIT.clone().setY(30), 'Карьер', 'медно-порфировое месторождение'], [V(-90, 48, -260), 'Отвалы', 'пустая порода'], [V(HEAP.x, 30, HEAP.z), 'Выщелачивание', 'окисленная руда · в модели нет'], [V(126, 74, -5), 'Обогатительная фабрика', 'две линии · сульфидная руда'], [V(TAIL.x + 20, TOP + 26, TAIL.z + 10), 'Хвостохранилище', 'хвосты флотации'], [V(-40, 70, -420), 'ВЭС 300 МВт', 'допущение «Тыныс»']];
   const tagLayer = document.createElement('div'); tagLayer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:7'; document.body.appendChild(tagLayer);
   const tags = TAGS.map(([p, a, b]) => { const el = document.createElement('div'); el.style.cssText = 'position:absolute;transform:translate(-50%,-100%);background:#fbfcfd;color:#0f1c2c;border-radius:7px;padding:6px 10px;font:600 12.5px var(--k-body);box-shadow:0 6px 24px rgba(0,0,0,.3);white-space:nowrap;opacity:0;transition:opacity .6s'; el.innerHTML = `${a}` + (innerWidth > 900 ? `<small style="display:block;font:400 10.5px var(--k-body);color:#4d5d6f">${b}</small>` : ''); tagLayer.appendChild(el); return {p, el}; });
   let tagsOn = false;
+
+  /* --- подсветка: пульсирующие кольца на земле показывают, о чём шаг --- */
+  const COL = {teal: 0x22d3b6, red: 0xff4b3a, gold: 0xffb627, violet: 0x8b7bff, green: 0x37d67a, orange: 0xff7a2f, blue: 0x3d9bff};
+  const ringPool = [0, 1, 2].map(() => {
+    const g = new T.Group(); g.visible = false; scene.add(g);
+    const mk = (geo, o) => { const m = new T.Mesh(geo, new T.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, side: T.DoubleSide, fog: false})); m.renderOrder = 6; g.add(m); return m; };
+    return {g, r1: mk(new T.RingGeometry(.9, 1, 96).rotateX(-Math.PI / 2)), r2: mk(new T.RingGeometry(.96, 1, 96).rotateX(-Math.PI / 2)), disc: mk(new T.CircleGeometry(.9, 64).rotateX(-Math.PI / 2)), op: 0, target: 0, ph: Math.random()};
+  });
+  const FOCUS = {
+    problem: [[1500, -1100, 190, 'red']], waste: [[183, -428, 300, 'gold']],
+    idea: [[126, -5, 80, 'green'], [40, -15, 52, 'violet']], trucks: [[10, 120, 70, 'teal'], [-130, 10, 118, 'gold']],
+    real: [[126, -5, 80, 'violet']], platform: [[-130, 10, 118, 'teal'], [126, -5, 80, 'teal'], [244, 69, 40, 'teal']],
+    sizing: [[183, -428, 300, 'gold'], [190, 235, 150, 'blue']], result: [[190, 235, 150, 'blue'], [244, 69, 42, 'green'], [10, 120, 70, 'teal']],
+    futures: [[260, -60, 45, 'orange']], final: [[126, -5, 80, 'green']],
+  };
+  const SCEN_FOCUS = {lull: [183, -428, 300, 'gold'], trip: [86, -19, 30, 'red'], kegoc: [260, -60, 45, 'orange'], hard: [-130, 10, 118, 'violet'], crusher: [10, -10, 34, 'red']};
+  function setRing(i, f) {
+    const R = ringPool[i]; if (!f) { R.target = 0; return; }
+    const [x, z, r, c] = f; R.g.position.set(x, Math.max(0, TH(x, z)) + 1.4, z); R.g.scale.setScalar(r); R.g.visible = true; R.target = 1;
+    [R.r1, R.r2, R.disc].forEach(m => m.material.color.setHex(COL[c] || c));
+  }
+  function focus(k) { const f = FOCUS[k] || []; ringPool.forEach((_, i) => setRing(i, f[i])); }
 
   /* --- экраны над рудником: пульт и «Два будущих» --- */
   const screens = {};
@@ -230,12 +270,21 @@ function setup(S, T) {
   function ev(d, e) { const h = Number(d.site?.sim_hour || 0); d.scenario = Object.assign({}, d.scenario, {events: JSON.stringify([Object.assign({t0: h - 2, dur: 24, id: 1}, e)])}); }
   function set(d, k, o) { d[k] = Object.assign({}, d[k], o); }
   let overlay = null;
-  window.__pitchOverride = frame => { if (!overlay) return frame; const d = Object.assign({}, frame); OV[overlay](d); return d; };
+  /* у каждого шага — свой отрезок записи стенда (часы, когда видно то, о чём говорим); свет и цифры идут вместе */
+  const TR = Array.isArray(window.TYNYS_TRACE) && window.TYNYS_TRACE.length === 96 ? window.TYNYS_TRACE : null;
+  const FRAMES = {intro: [11, 17], site: [12, 17], problem: [57, 60], waste: [36, 41], idea: [35, 42], trucks: [83, 90], real: [12, 17], platform: [84, 90], pult: [13, 17], sizing: [37, 41], result: [87, 91], futures: [61, 65], scen: [59, 66], jury: [85, 91], final: [21, 23]};
+  let fr = {a: 11, b: 17, t0: performance.now()};
+  window.__pitchOverride = frame => {
+    let d = frame;
+    if (TR && !dayModeFree()) d = TR[Math.min(fr.b, fr.a + Math.floor((performance.now() - fr.t0) / 5000))];
+    if (!overlay) return d; d = Object.assign({}, d); OV[overlay](d); return d;
+  };
+  function dayModeFree() { return dayMode === 'cycle'; }
 
   /* --- кадры камеры --- */
   const SH = {
     intro:    {p: V(300, 280, 460), t: V(20, -20, -20), view: 'tynys', auto: true},
-    site:     {p: V(-300, 640, 820), t: V(140, -10, 10), view: 'now', auto: true},
+    site:     {p: V(-150, 540, 700), t: V(190, -10, 20), view: 'now', auto: true},
     problem:  {p: V(1150, 300, -620), t: V(1500, 120, -1100), view: 'now'},
     waste:    {p: V(330, 200, -60), t: V(130, 80, -400), view: 'now'},
     idea:     {p: V(-40, 120, -190), t: V(70, 0, 0), view: 'tynys'},
@@ -248,7 +297,7 @@ function setup(S, T) {
     futures:  {screen: 'futures', view: 'tynys'},
     scen:     {p: V(270, 250, 340), t: V(0, -20, 0), view: 'tynys'},
     jury:     {p: V(0, 760, 260), t: V(0, 0, -20), view: 'tynys', auto: true},
-    final:    {p: V(300, 280, 460), t: V(20, -20, -20), view: 'tynys', auto: true, night: true},
+    final:    {p: V(300, 280, 460), t: V(20, -20, -20), view: 'tynys', auto: true},
   };
   const SCEN = [['lull', 'штиль'], ['trip', 'авария линии 2'], ['kegoc', 'запрос KEGOC'], ['hard', 'твёрдая руда'], ['crusher', 'отказ дробилки']];
   let fly = null, curStep = null, shotKey = null, toggleT = 0, cycleT = 0, cycleI = -1;
@@ -273,6 +322,8 @@ function setup(S, T) {
     const sh = SH[step.k]; curStep = step;
     S.setView(sh.view); lightForStep();
     document.body.classList.toggle('nolabels', step.labels === false || !!step.tags);
+    focus(step.k);
+    if (FRAMES[step.k]) fr = {a: FRAMES[step.k][0], b: FRAMES[step.k][1], t0: performance.now()};
     overlay = step.ov || null; cycleI = -1; cycleT = 0; toggleT = 0; tagsOn = !!step.tags;
     Object.entries(screens).forEach(([key, s]) => { s.target = step.screen === key ? 1 : 0; if (s.target) s.g.visible = true; });
     hideShot(); shotKey = null;
@@ -301,12 +352,14 @@ function setup(S, T) {
     let D; try { D = S.data; } catch (e) { return; }
     $('clock2').textContent = `запись стенда · ${D.site?.sim_time || ''} · самосвалы ×6`;
     const inhale = /вдох/.test(D.coordinator?.mode || '');
+    if (curStep && curStep.k === 'idea') { const c = inhale ? COL.green : COL.orange; [ringPool[0].r1, ringPool[0].r2, ringPool[0].disc].forEach(m => m.material.color.setHex(c)); }
     if ($('pin')) { $('pin').classList.toggle('live', inhale); $('pout').classList.toggle('live', !inhale); $('modeT').textContent = inhale ? 'Сейчас: вдох — энергии много' : 'Сейчас: выдох — энергии мало'; }
     if ($('pwhy') && D.coordinator?.why) $('pwhy').textContent = '«' + D.coordinator.why + '»';
     if ($('plivegrid')) $('plivegrid').innerHTML = [[D.site?.sim_time || '—', 'модельное время'], [fmt(D.energy?.load_mw) + ' МВт', 'нагрузка рудника'], [fmt(D.energy?.renew_share_pct) + ' %', 'доля ветра и солнца'], [fmt(D.substation?.grid_mw) + ' МВт', 'из сети'], [fmt(D.plant?.feed_tph) + ' т/ч', 'переработка руды'], [fmt(D.coordinator?.charge_mw) + ' МВт', 'зарядка самосвалов']].map(([b, s]) => `<div><b>${b}</b><span>${s}</span></div>`).join('');
   }
   setInterval(readLive, 1500);
 
+  const tmpP = new T.Vector3(), m4 = new T.Matrix4();
   const ease = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
   let last = performance.now();
   function loop(now) {
@@ -323,7 +376,10 @@ function setup(S, T) {
     if (shotKey && !$('pshot').hidden) { camera.updateMatrixWorld(); placeShot(shotKey); }
     Object.values(screens).forEach(s => { s.show += (s.target - s.show) * Math.min(1, dt * 3); s.g.scale.setScalar(Math.max(.001, s.show)); s.g.rotation.y = (1 - s.show) * .6; if (s.show < .01 && !s.target) s.g.visible = false; });
     if (curStep?.toggle) { toggleT += dt; const v = Math.floor(toggleT / 4.5) % 2 ? 'tynys' : 'now'; if (document.body.dataset.view !== v) S.setView(v); $('chipS').textContent = v === 'now' ? 'ВЭС 300 + СЭС 250 · сцена: как сейчас' : 'ВЭС 300 + СЭС 250 · сцена: с «Тыныс» — СЭС, накопитель, зарядки'; }
-    if (curStep?.cycle) { cycleT += dt; const i = Math.floor(cycleT / 5.5) % SCEN.length; if (i !== cycleI) { cycleI = i; overlay = SCEN[i][0]; const ps = $('pscen'); if (ps) ps.textContent = SCEN[i][1]; document.querySelectorAll('#pscenchips span').forEach(c => c.classList.toggle('hot', c.dataset.s === SCEN[i][0])); } }
+    if (curStep?.cycle) { cycleT += dt; const i = Math.floor(cycleT / 5.5) % SCEN.length; if (i !== cycleI) { cycleI = i; overlay = SCEN[i][0]; setRing(0, SCEN_FOCUS[overlay]); const ps = $('pscen'); if (ps) ps.textContent = SCEN[i][1]; document.querySelectorAll('#pscenchips span').forEach(c => c.classList.toggle('hot', c.dataset.s === SCEN[i][0])); } }
+    const ts = now / 1000;
+    ringPool.forEach(R => { R.op += (R.target - R.op) * Math.min(1, dt * 2.5); if (R.op < .01 && !R.target) { R.g.visible = false; return; } const k = ((ts * .55 + R.ph) % 1); R.r1.material.opacity = R.op * .9; R.r2.scale.setScalar(1 + k * .45); R.r2.material.opacity = R.op * (1 - k) * .8; R.disc.material.opacity = R.op * (.14 + .06 * Math.sin(ts * 3)); });
+    for (let i = 0; i < 18; i++) { pipe.getPointAt((ts * .05 + i / 18) % 1, tmpP); m4.makeTranslation(tmpP.x, tmpP.y + .4, tmpP.z); slurry.setMatrixAt(i, m4); } slurry.instanceMatrix.needsUpdate = true;
     const w = innerWidth, h = innerHeight, tmp = new T.Vector3();
     tags.forEach(t => { const on = tagsOn && !fly; if (on) { tmp.copy(t.p).project(camera); const vis = tmp.z < 1 && Math.abs(tmp.x) < 1 && Math.abs(tmp.y) < 1; t.el.style.left = ((tmp.x + 1) / 2 * w) + 'px'; t.el.style.top = ((1 - tmp.y) / 2 * h) + 'px'; t.el.style.opacity = vis ? 1 : 0; } else t.el.style.opacity = 0; });
     requestAnimationFrame(loop);

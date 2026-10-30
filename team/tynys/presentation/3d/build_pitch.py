@@ -15,7 +15,7 @@ rep("function pollTrace() { const k = ((performance.now() - tStart) / 1000 / 4.0
     "function pollTrace() { const k = ((performance.now() - tStart) / 1000 / 4.0) % TRACE.length; D = TRACE[Math.floor(k)]; if (window.__pitchOverride) D = window.__pitchOverride(D); }")
 rep("labels.domElement.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2';",
     "labels.domElement.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2'; labels.domElement.id = 'scene-labels';")
-rep("window.__tynys = {", "window.__THREE = THREE; window.__trucks = trucks; window.__tynys = {")
+rep("window.__tynys = {", "window.__THREE = THREE; window.__trucks = trucks; window.__terrainH = terrainH; window.__tynys = {")
 
 rep("source='replay';tStart=performance.now();", "source='replay';tStart=performance.now()-11*4000;")  # запись начинается в 22:00 — показ стартует с 09:00 утра
 
@@ -55,6 +55,19 @@ rep("""    const upNow = tr.phase < 0.5, kmh = upNow ? 12 : 30;
     const w = ((truckU + tr.off) % 1 + 1) % 1, up = w < TRUCK_A, f = Math.min(0.9995, up ? w / TRUCK_A : 1 - (w - TRUCK_A) / (1 - TRUCK_A)); tr._f = f; tr._up = up;""")
 rep("multiplyScalar(up ? 2.3 : -2.3)", "multiplyScalar(up ? 7.2 : -7.2)")
 rep("  if(!LOW)dustIM.instanceMatrix.needsUpdate = true;", "  truckRelax(dt);\n  if(!LOW)dustIM.instanceMatrix.needsUpdate = true;")
+
+# 1c) презентация: ярче небо и степь, фабрика крупнее — как корпуса Актогая
+rep("new THREE.Color(0x3a78bb), dayK);", "new THREE.Color(0x1f6fd6), dayK);")
+rep("new THREE.Color(0xe2e8e9), dayK);", "new THREE.Color(0xa6d2f4), dayK);")
+rep("new THREE.Color(0xd3dde2), dayK);", "new THREE.Color(0xb9d6ee), dayK);")
+rep("renderer.toneMappingExposure = 1 + 0.25 * dayK;", "renderer.toneMappingExposure = 1.05 + 0.3 * dayK;")
+rep("const wall = M(0xb9c3cc, { metalness: 0.35, roughness: 0.55 });", "const wall = M(0xe4e9ee, { metalness: 0.2, roughness: 0.6 });")
+rep("mesh(new THREE.BoxGeometry(60, 26, 70), wall, PLANT.x + 6, 13, PLANT.z);", "mesh(new THREE.BoxGeometry(60, 36, 98), wall, PLANT.x + 6, 18, PLANT.z);")
+rep("mesh(new THREE.BoxGeometry(62, 2, 72), M(0x6f7c88, { metalness: 0.5 }), PLANT.x + 6, 27, PLANT.z);", "mesh(new THREE.BoxGeometry(63, 2.4, 101), M(0x2d73c9, { metalness: 0.3, roughness: 0.45 }), PLANT.x + 6, 37, PLANT.z);")
+rep("mesh(new THREE.BoxGeometry(20, 36, 20), wall, PLANT.x + 28, 18, PLANT.z - 30);", "mesh(new THREE.BoxGeometry(22, 58, 22), wall, PLANT.x + 28, 29, PLANT.z - 34); mesh(new THREE.BoxGeometry(23, 2, 23), M(0x2d73c9, { metalness: 0.3, roughness: 0.45 }), PLANT.x + 28, 59, PLANT.z - 34);")
+rep("""label('<b>Фабрика · две линии</b><span id="l-pl">—</span>', PLANT.x + 10, 52, PLANT.z - 20);""", """label('<b>Фабрика · две линии</b><span id="l-pl">—</span>', PLANT.x + 10, 70, PLANT.z - 20);""")
+rep("new THREE.Vector3(PLANT.x + 60, 36, PLANT.z - 30), new THREE.Vector3(PLANT.x + 20, 28, PLANT.z)", "new THREE.Vector3(PLANT.x + 60, 46, PLANT.z - 30), new THREE.Vector3(PLANT.x + 20, 40, PLANT.z)")
+rep("target('plant','Фабрика',[PLANT.x+10,15,PLANT.z],[67,30,72]);", "target('plant','Фабрика',[PLANT.x+10,19,PLANT.z],[67,40,100]);")
 
 
 # 2) обёртка документа: заголовок, шрифты
