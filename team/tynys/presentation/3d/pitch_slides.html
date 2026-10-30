@@ -1,0 +1,197 @@
+<div class="pv" id="pv-loading">ЗАПУСКАЕМ РУДНИК АКТОГАЙ…</div>
+<header class="ptop">
+  <div class="pbrand"><i>Т</i><span>ТЫНЫС<small>АКТОГАЙ · ЦИФРОВОЙ ДВОЙНИК НА OPENEGIZ</small></span></div>
+  <div class="plive" id="plive">● запись стенда</div>
+  <div class="pday" id="pday" role="group" aria-label="Время суток на сцене"><button type="button" data-d="slide" aria-pressed="true" title="Свет следует за модельным временем записи">как в модели</button><button type="button" data-d="morning" aria-pressed="false">утро</button><button type="button" data-d="day" aria-pressed="false">день</button><button type="button" data-d="sunset" aria-pressed="false">закат</button><button type="button" data-d="night" aria-pressed="false">ночь</button><button type="button" data-d="cycle" aria-pressed="false">сутки <span id="pdayclock">⟳</span></button></div>
+  <div class="pcount" id="pcount"><b>01</b> / 14</div>
+</header>
+
+<main class="pstage" id="pstage">
+
+<section class="ps on" data-k="title" aria-label="Титул">
+  <p class="eb">Конкурс «Цифровой рудник на OpenEgiz» · команда «Суперкрошки»</p>
+  <h1>Тыныс</h1>
+  <p class="sub">дышащий рудник Актогай</p>
+  <p>Цифровой двойник реального медного рудника. Всё, что вы видите, движется по записи нашего стенда: самосвалы возят руду из карьера, мельницы крутятся, ветряки ловят ветер 2024 года.</p>
+  <div class="chips"><span class="chip hot">8 место из 46 в отборе</span><span class="chip">51 двойник OpenEgiz</span><span class="chip w">реальная погода 2024</span></div>
+  <p class="src">shrailymadil-debug · liyaaal · yusubovanazik</p>
+</section>
+
+<section class="ps" data-k="problem" aria-label="Проблема">
+  <p class="eb">Проблема · так сейчас</p>
+  <h2>Рудник круглые сутки берёт из сети <span class="cu">≈ 230 МВт</span></h2>
+  <div class="stats">
+    <div class="stat"><b>2 030</b><span>ГВт·ч электроэнергии в год</span><small>KAZ Minerals, Annual Report 2024</small></div>
+    <div class="stat"><b class="bad">66 %</b><span>электроэнергии Казахстана — уголь</span><small>Agora Energiewende, 2023</small></div>
+    <div class="stat"><b class="bad">1,66 млн т</b><span>CO₂ в год из-за энергии рудника</span><small>модель «как сейчас»</small></div>
+  </div>
+  <p class="muted">На сцене — угольная станция на горизонте. Густота дыма следует за мощностью, которую рудник берёт из сети.</p>
+</section>
+
+<section class="ps" data-k="waste" aria-label="Ветер выбрасывают">
+  <p class="eb">Проблема · ветер есть</p>
+  <h2>Ветер дует не тогда, когда он нужен</h2>
+  <p>Рудник работает ровно, а ветер и солнце меняются каждый час. Когда энергии больше, чем нужно, её сбрасывают — часть ветряков просто стоит.</p>
+  <div class="stats">
+    <div class="stat"><b>94</b><span>ГВт·ч ветра и солнца в год пропадает при ВЭС 300 + СЭС 250 без координации</span><small>sizing.py · год на погоде 2024</small></div>
+  </div>
+  <p class="q">Как руднику брать больше ветра и солнца и не потерять медь?</p>
+</section>
+
+<section class="ps" data-k="idea" aria-label="Идея">
+  <p class="eb">Идея · с «Тыныс»</p>
+  <h2>Рудник <em>дышит</em> вместе с ветром и солнцем</h2>
+  <p><span class="pill" id="pmode">режим координатора…</span></p>
+  <div class="breath">
+    <div class="in" id="pin"><h3>ВДОХ</h3><ul><li>мелем твёрдую руду — ей нужно больше энергии</li><li>заряжаем самосвалы и накопитель</li></ul></div>
+    <div class="out" id="pout"><h3>ВЫДОХ</h3><ul><li>мелем мягкую, твёрдую копим на складе</li><li>самосвалы ездят на заряде</li></ul></div>
+  </div>
+  <div class="quote"><span id="pwhy">…</span><small>«Почему так» — объяснение координатора из записи стенда, обновляется каждый модельный час</small></div>
+</section>
+
+<section class="ps" data-k="trucks" aria-label="Электросамосвалы">
+  <p class="eb">Карьер · электросамосвалы</p>
+  <h2>Самосвалы — тоже <em>батарея</em></h2>
+  <ul class="list">
+    <li><span><b>42 электросамосвала в 14 звеньях</b> возят руду из карьера на дробилку: в подъём гружёные (12 км/ч), вниз порожние (30 км/ч).</span></li>
+    <li><span><b>Заряжаются, когда дует ветер,</b> и возят руду на заряде, когда ветра нет. 12 зарядных станций в 4 группах.</span></li>
+    <li><span><b>Склады мягкой и твёрдой руды</b> помнят тоннаж, медь и твёрдость каждой партии.</span></li>
+  </ul>
+  <p class="muted">Подписи над оборудованием — живые числа из двойников. Движение самосвалов по дороге ускорено в 6 раз; заряд и груз — из модели.</p>
+</section>
+
+<section class="ps" data-k="real" aria-label="Реальные данные">
+  <p class="eb">Объект реальный</p>
+  <h2>Модель «как сейчас» сходится с отчётом KAZ Minerals</h2>
+  <div class="bars">
+    <div class="bar"><h4>Медь с учётом склада <span>тыс. т в год</span></h4>
+      <div class="track"><span>модель</span><i style="width:99.1%"></i><em>219,1</em></div>
+      <div class="track"><span>отчёт</span><i class="r" style="width:100%"></i><em>221</em></div></div>
+    <div class="bar"><h4>Электроэнергия <span>ГВт·ч в год · калибровка</span></h4>
+      <div class="track"><span>модель</span><i style="width:100%"></i><em>2 031</em></div>
+      <div class="track"><span>отчёт</span><i class="r" style="width:99.95%"></i><em>≈ 2 030</em></div></div>
+    <div class="bar"><h4>Удельный расход <span>кВт·ч на тонну руды</span></h4>
+      <div class="track"><span>модель</span><i style="width:100%"></i><em>36,3</em></div>
+      <div class="track"><span>отчёт</span><i class="r" style="width:96.4%"></i><em>≈ 35</em></div></div>
+  </div>
+  <p class="src">KAZ Minerals Annual Report 2024 · Open-Meteo ERA5 в точке рудника · 60 проб GeoMet (CC BY 4.0)</p>
+</section>
+
+<section class="ps" data-k="platform" aria-label="Платформа OpenEgiz">
+  <p class="eb">Устройство</p>
+  <h2><em>51 двойник</em> — все данные идут через OpenEgiz</h2>
+  <div class="flow"><span>модель рудника</span><b>→</b><span>MQTT</span><b>→</b><span class="k">Eclipse Ditto</span><b>→</b><span>Telegraf</span><b>→</b><span>InfluxDB</span><b>→</b><span>Grafana</span></div>
+  <div class="tree">
+    <div><b>25</b><span>карьер</span></div><div><b>12</b><span>фабрика</span></div><div><b>5</b><span>энергия</span></div><div><b>8</b><span>службы</span></div>
+  </div>
+  <div class="livegrid" id="plivegrid"></div>
+  <p class="muted">Цифры выше — текущий час записи стенда. <span class="cmd">make tynys</span> поднимает всё с нуля за 200 секунд (проверка в GitHub Actions).</p>
+</section>
+
+<section class="ps" data-k="pult" aria-label="Пульт энергетика">
+  <p class="eb">Внутри · пульт энергетика</p>
+  <h2>Заглянем в <em>пульт</em> рудника</h2>
+  <ol class="hot-legend" data-for="pult">
+    <li><b>Вдох / выдох</b> — режим, который выбрал координатор</li>
+    <li><b>CO₂ из сети сейчас</b> — тонн в час</li>
+    <li><b>Медь к «как сейчас»</b> — с учётом склада</li>
+    <li><b>Резерв для KEGOC</b> — МВт на следующий час</li>
+    <li><b>Линии мельниц</b> — подача и загрузка из двойников</li>
+    <li><b>Ремонт на выдохе</b> — окно ТО по прогнозу энергии</li>
+  </ol>
+  <p class="muted">Снимок пульта со стенда в GitHub Actions. На стенде он живой: <code>localhost:8095/dashboard.html</code></p>
+</section>
+
+<section class="ps" data-k="sizing" aria-label="Сколько строить">
+  <p class="eb">Результат 1 · сколько строить</p>
+  <h2>ВЭС 300 + СЭС 250 МВт: <em>−41 % CO₂</em></h2>
+  <p class="muted">CO₂ в год без координатора, тыс. т · строки — ВЭС, столбцы — СЭС, МВт</p>
+  <div class="heat" id="pheat"></div>
+  <p>Медь та же — 219,1 тыс. т. Но 94 ГВт·ч ветра и солнца в год пропадает. С этим работает координатор.</p>
+</section>
+
+<section class="ps" data-k="result" aria-label="Что даёт координатор">
+  <p class="eb">Результат 2 · сцена переключается: <span id="pview">как сейчас</span></p>
+  <h2>Что добавляет «Тыныс» — и сколько это стоит</h2>
+  <div class="bars">
+    <div class="bar"><h4>CO₂ <span>тыс. т в год</span></h4>
+      <div class="track"><span>сегодня</span><i class="k" style="width:100%"></i><em>1 661</em></div>
+      <div class="track"><span>ВИЭ</span><i class="g" style="width:58.9%"></i><em>978</em></div>
+      <div class="track"><span>«CO₂»</span><i style="width:56.3%"></i><em>935</em></div>
+      <div class="track"><span>«медь»</span><i class="c" style="width:60.2%"></i><em>1 000</em></div></div>
+    <div class="bar"><h4>Сброс ветра и солнца <span>ГВт·ч в год</span></h4>
+      <div class="track"><span>ВИЭ</span><i class="g" style="width:100%"></i><em>94</em></div>
+      <div class="track"><span>«CO₂»</span><i style="width:52.6%"></i><em>49</em></div></div>
+  </div>
+  <div class="trio">
+    <div class="a"><b>Цель «CO₂»</b><span>−4,4 % CO₂, как ≈ 89 МВт ветряков. Медь −1 %.</span></div>
+    <div class="m"><b>Цель «медь»</b><span>+2 076 т меди — ≈ +22 млн $ в год.</span></div>
+    <div class="n"><b>Без компромисса</b><span>«Медь» + 150 МВт ВЭС: больше меди и меньше CO₂, ≈ 4,4 года.</span></div>
+  </div>
+</section>
+
+<section class="ps" data-k="futures" aria-label="Два будущих">
+  <p class="eb">Результат 3 · помощь энергосистеме</p>
+  <h2>Запрос KEGOC: <em>два будущих</em> рядом</h2>
+  <p>Рудник может отдать сети в среднем ≈ 50 МВт за час. Прежде чем ответить, энергетик проверяет запрос в двойнике.</p>
+  <ol class="hot-legend" data-for="futures">
+    <li><b>Запрос</b> — лимит сети −80 МВт на 4 часа</li>
+    <li><b>Обычное управление</b> — из того же снимка рудника</li>
+    <li><b>С планом «Тыныс»</b> — подготовка, событие, восстановление</li>
+    <li><b>Шкала времени</b> — 4 часа ограничения и 24 часа после</li>
+  </ol>
+  <p class="muted">На сцене до этого: подстанция мигает — предел сети 260 → 180 МВт.</p>
+</section>
+
+<section class="ps" data-k="scen" aria-label="Сценарии">
+  <p class="eb">Что если · сейчас на сцене</p>
+  <h2><em>16 сценариев</em> прямо на стенде</h2>
+  <p class="nowscen">Сейчас: <b id="pscen">штиль</b></p>
+  <div class="chips" id="pscenchips">
+    <span class="chip" data-s="lull">Штиль на сутки</span><span class="chip" data-s="trip">Авария линии 2</span><span class="chip" data-s="kegoc">Запрос KEGOC −80 МВт</span><span class="chip" data-s="hard">Твёрдая руда</span><span class="chip" data-s="crusher">Отказ дробилки</span>
+    <span class="chip">План добычи +10 %</span><span class="chip">Отказ накопителя</span><span class="chip">Отказ экскаватора</span><span class="chip">Отказ конвейера</span><span class="chip">Отказ водовода</span><span class="chip">Отказ зарядки</span><span class="chip">ТО дробилки</span><span class="chip">Поломка самосвалов</span><span class="chip">Поломка экскаватора</span><span class="chip">Падение содержания меди</span><span class="chip">Смена тарифа</span>
+  </div>
+  <p class="muted">Каждый запускается одной кнопкой и меняет всю цепочку; отмена — тоже одной кнопкой.</p>
+</section>
+
+<section class="ps" data-k="jury" aria-label="Оценка жюри">
+  <p class="eb">Отборочный этап · ИИ-жюри</p>
+  <div class="score"><b>77,5</b><span>балла из 100<br>8 место из 46 команд</span></div>
+  <div class="crit">
+    <div><span>Правдоподобие</span><i><u style="width:100%"></u></i><em>20 / 20</em></div>
+    <div><span>Модули</span><i><u style="width:91.7%"></u></i><em>4,6 / 5</em></div>
+    <div><span>Сценарии</span><i><u style="width:83.3%"></u></i><em>8,3 / 10</em></div>
+    <div><span>Модель рудника</span><i><u style="width:75%"></u></i><em>18,8 / 25</em></div>
+    <div><span>Концепция</span><i><u style="width:75%"></u></i><em>11,3 / 15</em></div>
+    <div><span>Визуализация</span><i><u class="lo" style="width:58.3%"></u></i><em>14,6 / 25</em></div>
+  </div>
+  <div class="two">
+    <div class="p"><h3>СИЛЬНЕЕ ВСЕГО</h3><ul><li>судьи сами пересчитали руду, медь и энергию — всё сошлось</li></ul></div>
+    <div class="m"><h3>КУДА РАСТИ</h3><ul><li>рельеф и скважины Актогая</li><li>каждая машина отдельно</li><li>«до и после» у сценариев</li></ul></div>
+  </div>
+</section>
+
+<section class="ps" data-k="final" aria-label="Финал">
+  <p class="eb">Итог</p>
+  <h2>Рудник, который <em>дышит</em> вместе с ветром и солнцем</h2>
+  <div class="cards">
+    <div class="card"><p class="eb">руководству</p><h3>Сколько строить</h3><p>ВЭС 300 и СЭС 250 МВт снимают 41 % выбросов CO₂.</p></div>
+    <div class="card"><p class="eb">энергетику</p><h3>Что делать каждый час</h3><p>Какую руду молоть и когда заряжать — с объяснением почему.</p></div>
+    <div class="card"><p class="eb">энергосистеме</p><h3>Чего стоит помощь</h3><p>Ответ на запрос KEGOC, проверенный в модели.</p></div>
+  </div>
+  <h1 class="thanks"><em>Спасибо!</em></h1>
+</section>
+
+</main>
+
+<div class="pshot" id="pshot" hidden>
+  <div class="pshot-box" id="pshotbox"><img id="pshotimg" alt="Снимок экрана стенда"><div id="pshothot"></div></div>
+</div>
+
+<p class="phint">← → пробел — листать · мышь — вращать рудник · клик по оборудованию — данные двойника</p>
+<nav class="pnav" aria-label="Слайды">
+  <button id="pprev" type="button" aria-label="Назад">←<span class="blbl"> Назад</span></button>
+  <div class="pdots" id="pdots"></div>
+  <button id="pauto" type="button" aria-pressed="false">▶<span class="blbl"> Автопоказ</span></button>
+  <button id="pnext" class="next" type="button">Далее →</button>
+</nav>
