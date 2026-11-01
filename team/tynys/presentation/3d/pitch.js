@@ -74,14 +74,14 @@ const STEPS = [
      <span data-s="lull">Штиль на сутки</span><span data-s="trip">Авария линии 2</span><span data-s="kegoc">Запрос KEGOC −80 МВт</span><span data-s="hard">Твёрдая руда</span><span data-s="crusher">Отказ дробилки</span>
      <span>План добычи +10 %</span><span>Отказ накопителя</span><span>Отказ экскаватора</span><span>Отказ конвейера</span><span>Отказ водовода</span><span>Отказ зарядки</span><span>ТО дробилки</span><span>Поломка самосвалов</span><span>Поломка экскаватора</span><span>Падение содержания меди</span><span>Смена тарифа</span></div>`,
    cap: 'На стенде 16 сценариев. Штиль останавливает ветряки, авария линии останавливает мельницу, отказ дробилки — весь карьер. Всё видно сразу.'},
-  {k: 'jury', chip: ['Отборочный этап', 'ИИ-жюри конкурса'], pill: '8 место из 46', side: 'left',
-   tiles: [['77,5', 'балла из 100 — среднее трёх судей', 'qualifying-results · team-084'], ['20 / 20', 'за правдоподобие у всех трёх судей', 'судьи сами пересчитали руду, медь и энергию', 'good']],
-   card: () => `<h3>Баллы по критериям</h3><p class="meta">среднее трёх судей</p><div class="crit2">
-     <div><span>Правдоподобие</span><i><u style="width:100%"></u></i><em>20 / 20</em></div><div><span>Модули</span><i><u style="width:91.7%"></u></i><em>4,6 / 5</em></div>
+  {k: 'jury', chip: ['Отборочный этап', 'ИИ-жюри конкурса · после апелляции'], pill: '8 место из 46 · 80 баллов', side: 'left',
+   tiles: [['80', 'баллов из 100 — апелляция удовлетворена, было 77,5', 'qualifying-results · appeals/01-team-084'], ['20 / 20', 'за правдоподобие у всех трёх судей', 'судьи сами пересчитали руду, медь и энергию', 'good']],
+   card: () => `<h3>Баллы по критериям</h3><p class="meta">среднее трёх судей · после апелляции</p><div class="crit2">
+     <div><span>Правдоподобие</span><i><u style="width:100%"></u></i><em>20 / 20</em></div><div><span>Модули</span><i><u style="width:100%"></u></i><em>5 / 5</em></div>
      <div><span>Сценарии</span><i><u style="width:83.3%"></u></i><em>8,3 / 10</em></div><div><span>Модель рудника</span><i><u style="width:75%"></u></i><em>18,8 / 25</em></div>
-     <div><span>Концепция</span><i><u style="width:75%"></u></i><em>11,3 / 15</em></div><div><span>Визуализация</span><i><u class="lo" style="width:58.3%"></u></i><em>14,6 / 25</em></div></div>
-     <p class="src">Куда растём: рельеф и скважины Актогая, каждая машина отдельно, сравнение «до и после» у сценариев.</p>`,
-   cap: 'В отборочном этапе мы заняли 8 место из 46. Все три судьи поставили максимум за правдоподобие: цифры модели сошлись.'},
+     <div><span>Концепция</span><i><u style="width:75%"></u></i><em>11,3 / 15</em></div><div><span>Визуализация</span><i><u class="lo" style="width:66.7%"></u></i><em>16,7 / 25</em></div></div>
+     <p class="src">Апелляцию по сценарию «Твёрдая руда» удовлетворили: средняя доля твёрдой руды за 72 ч — 0,8, как и заявлено. Куда растём: рельеф Актогая и сравнение «до и после» у сценариев.</p>`,
+   cap: 'В отборочном этапе мы заняли 8 место из 46. Апелляцию удовлетворили — 80 баллов из 100. Все три судьи поставили максимум за правдоподобие.'},
   {k: 'final', chip: ['Тыныс', 'рудник, который дышит вместе с ветром и солнцем'], pill: 'Спасибо', side: 'left',
    card: () => `<h3>Три решения — один двойник</h3><p class="meta">команда «Суперкрошки» · OpenEgiz v1.0.4</p><div class="three2">
      <div><p class="eb">руководству</p><b>Сколько строить</b><span>ВЭС 300 и СЭС 250 МВт снимают 41 % выбросов CO₂</span></div>
@@ -140,23 +140,28 @@ function countUp(el) {
 }
 
 /* ---------- отрисовка шага (HTML) ---------- */
-let chipTimer = null;
+let chipTimer = null, capTimer = null, cardTimer = null, tileTimer = null;
 function render(s) {
+  clearTimeout(capTimer); clearTimeout(cardTimer); clearTimeout(tileTimer);
   const chip = $('chip'); chip.classList.add('swap'); clearTimeout(chipTimer);
   chipTimer = setTimeout(() => { $('chipN').textContent = String(cur + 1).padStart(2, '0'); $('chipT').textContent = s.chip[0]; $('chipS').innerHTML = s.chip[1]; chip.classList.remove('swap'); }, 260);
   const pill = $('pill'); pill.textContent = s.pill; pill.className = 'pill2' + (s.pillCls ? ' ' + s.pillCls : '');
-  $('hero').classList.toggle('out', !s.hero);
+  $('hero').classList.toggle('out', !s.hero); if (s.hero) cardTimer = setTimeout(() => $('hero').classList.add('out'), 9000);
   const card = $('card');
-  if (s.card) { card.className = 'card2 hide ' + (s.side || 'left'); card.hidden = false; card.innerHTML = s.card(); requestAnimationFrame(() => requestAnimationFrame(() => card.classList.remove('hide'))); }
+  if (s.card) { card.className = 'card2 hide ' + (s.side || 'left'); card.hidden = false; card.innerHTML = s.card() + '<p class="more2">▸ подробнее</p>'; cardTimer = setTimeout(() => card.classList.add('mini'), s.k === 'sizing' || s.k === 'real' || s.k === 'jury' ? 13000 : 10000); requestAnimationFrame(() => requestAnimationFrame(() => card.classList.remove('hide'))); }
   else { card.classList.add('hide'); setTimeout(() => { if (!STEPS[cur].card) card.hidden = true; }, 600); }
   const tiles = $('tiles');
   if (s.tiles) {
-    tiles.hidden = false; tiles.classList.toggle('left', false);
+    tiles.hidden = false; tiles.classList.toggle('left', false); tiles.classList.remove('mini'); tileTimer = setTimeout(() => tiles.classList.add('mini'), 9000);
     tiles.innerHTML = s.tiles.map(([b, sp, sm, cls]) => `<div class="tile2"><b class="${cls || ''}">${b}</b><span>${sp}</span>${sm ? `<small>${sm}</small>` : ''}</div>`).join('');
     [...tiles.children].forEach((t, i) => setTimeout(() => { t.classList.add('on'); countUp(t.querySelector('b')); }, 300 + i * 180));
   } else tiles.hidden = true;
-  $('cap').innerHTML = `<span>${s.cap}</span>`;
+  const capEl = $('cap'); capEl.classList.remove('gone'); capEl.innerHTML = `<span>${s.cap}</span>`; capTimer = setTimeout(() => capEl.classList.add('gone'), Math.max(7000, s.cap.length * 62));
 }
+
+$('card').addEventListener('click', e => { if (e.target.closest('a,button')) return; $('card').classList.toggle('mini'); });
+$('tiles').addEventListener('click', () => $('tiles').classList.toggle('mini'));
+$('cap').addEventListener('click', () => $('cap').classList.toggle('gone'));
 
 /* ---------- ждём сцену стенда ---------- */
 const t0 = performance.now();
@@ -376,9 +381,10 @@ function setup(S, T) {
     return {p: V(s.pos.x + dx, s.pos.y + dy, s.pos.z + d), t: V(s.pos.x + dx, s.pos.y + dy, s.pos.z)};
   }
   function apply(step) {
+    if (inside) exitInside(true);
     const sh = SH[step.k]; curStep = step;
     S.setView(sh.view); lightForStep();
-    document.body.classList.toggle('nolabels', step.labels === false || !!step.tags);
+    document.body.classList.toggle('nolabels', !!step.tags);
     focus(step.k);
     if (FRAMES[step.k]) fr = {a: FRAMES[step.k][0], b: FRAMES[step.k][1], t0: performance.now()};
     overlay = step.ov || null; cycleI = -1; cycleT = 0; toggleT = 0; tagsOn = !!step.tags;
@@ -439,13 +445,14 @@ function setup(S, T) {
     clouds.forEach(c => { c.sp.position.z += c.v * dt * 3; if (c.sp.position.z > 1700) c.sp.position.z = -1700; c.sp.material.opacity = .25 + .65 * dk; const p = c.sp.position; c.shd.position.set(p.x - 120, 1.6 + Math.max(0, TH(p.x - 120, p.z)), p.z); c.shd.material.opacity = .17 * dk; });
     breath.op += (breath.target - breath.op) * Math.min(1, dt * 2);
     if (breath.op > .01) { dome.visible = true; const b = .5 + .5 * Math.sin(ts * 2 * Math.PI / 5); const R = breath.big ? 430 : 92; const sc = R * (.88 + .14 * b); dome.scale.set(sc, sc * (breath.big ? .32 : .62), sc); dome.position.set(breath.big ? 40 : 126, 0, breath.big ? -10 : -5); domeMat.opacity = breath.op * (.08 + .1 * b); domeEdge.material.opacity = breath.op * (.35 + .4 * b); } else dome.visible = false;
-    mapCam();
-    ringPool.forEach(R => { R.op += (R.target - R.op) * Math.min(1, dt * 2.5); if (R.op < .01 && !R.target) { R.g.visible = false; return; } const k = ((ts * .55 + R.ph) % 1); R.r1.material.opacity = R.op * .9; R.r2.scale.setScalar(1 + k * .45); R.r2.material.opacity = R.op * (1 - k) * .8; R.disc.material.opacity = R.op * (.14 + .06 * Math.sin(ts * 3)); });
+    mapCam(); insideTick(dt, now); fpsGuard(dt);
+    ringPool.forEach(R => { R.op += (R.target - R.op) * Math.min(1, dt * 2.5); if (R.op < .01 && !R.target) { R.g.visible = false; return; } const k = ((ts * .55 + R.ph) % 1); R.r1.material.opacity = R.op * .6; R.r2.scale.setScalar(1 + k * .45); R.r2.material.opacity = R.op * (1 - k) * .8; R.disc.material.opacity = R.op * (.05 + .03 * Math.sin(ts * 3)); });
     for (let i = 0; i < 18; i++) { pipe.getPointAt((ts * .05 + i / 18) % 1, tmpP); m4.makeTranslation(tmpP.x, tmpP.y + .4, tmpP.z); slurry.setMatrixAt(i, m4); } slurry.instanceMatrix.needsUpdate = true;
     const w = innerWidth, h = innerHeight, tmp = new T.Vector3();
     tags.forEach(t => { const on = tagsOn && !fly; if (on) { tmp.copy(t.p).project(camera); const vis = tmp.z < 1 && Math.abs(tmp.x) < 1 && Math.abs(tmp.y) < 1; t.el.style.left = ((tmp.x + 1) / 2 * w) + 'px'; t.el.style.top = ((1 - tmp.y) / 2 * h) + 'px'; t.el.style.opacity = vis ? 1 : 0; } else t.el.style.opacity = 0; });
     requestAnimationFrame(loop);
   }
+/*__REAL__*/
   requestAnimationFrame(loop);
   ready = apply;
   camera.position.set(1400, 900, 1700); controls.target.set(60, 0, -40);

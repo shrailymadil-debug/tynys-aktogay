@@ -26,6 +26,8 @@
 </div>
 
 <div class="cap2" id="cap" aria-live="polite"></div>
+<aside class="insp" id="insp" hidden aria-live="polite"><button type="button" class="x" id="inspX" aria-label="Закрыть">×</button><p class="eb" id="inspEb"></p><h3 id="inspT"></h3><div id="inspG"></div><dl id="inspV"></dl><button type="button" class="in" id="inspIn">Заглянуть внутрь ▸</button><p class="nt">цифры — из двойника, оборудование внутри показано схематично</p></aside>
+<div class="insidebar" id="insideBar" hidden><span class="dot"></span><b id="insideT"></b><button type="button" id="insideX">← Выйти · Esc</button></div>
 <figure class="map2" id="map2" aria-label="Схема рудника: где сейчас камера"><svg id="mapsvg" viewBox="-440 -540 980 1080"></svg><figcaption>схема · север вверху</figcaption></figure>
 
 <footer class="foot2">
@@ -35,9 +37,10 @@
     <span class="cnt2" id="pcount">01 / 15</span>
     <button type="button" id="pnext" class="nx2" aria-label="Далее">Далее →</button>
     <button type="button" id="pplay" class="play2" aria-pressed="false" title="Показ сам листает шаги">▶ Смотреть</button>
+    <button type="button" id="plbl" class="tg2" aria-pressed="false" title="Подписи над оборудованием (L)">Подписи</button><button type="button" id="pq" class="tg2" aria-pressed="true" title="Качество картинки (Q)">Кино</button>
     <div class="day2" id="pday" role="group" aria-label="Время суток на сцене">
       <button type="button" data-d="slide" aria-pressed="true" title="Свет следует за временем записи стенда">как в модели</button><button type="button" data-d="morning" aria-pressed="false">утро</button><button type="button" data-d="day" aria-pressed="false">день</button><button type="button" data-d="sunset" aria-pressed="false">закат</button><button type="button" data-d="night" aria-pressed="false">ночь</button><button type="button" data-d="cycle" aria-pressed="false">сутки <span id="pdayclock">⟳</span></button>
     </div>
-    <span class="keys2">→ далее · пробел — автопоказ · F весь экран · T субтитры</span>
+    <span class="keys2">клик по оборудованию — внутрь · → далее · F экран</span>
   </div>
 </footer>

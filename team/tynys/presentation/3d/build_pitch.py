@@ -69,6 +69,15 @@ rep("""label('<b>Фабрика · две линии</b><span id="l-pl">—</spa
 rep("new THREE.Vector3(PLANT.x + 60, 36, PLANT.z - 30), new THREE.Vector3(PLANT.x + 20, 28, PLANT.z)", "new THREE.Vector3(PLANT.x + 60, 46, PLANT.z - 30), new THREE.Vector3(PLANT.x + 20, 40, PLANT.z)")
 rep("target('plant','Фабрика',[PLANT.x+10,15,PLANT.z],[67,30,72]);", "target('plant','Фабрика',[PLANT.x+10,19,PLANT.z],[67,40,100]);")
 
+# 1d) кино-рендер: модули постобработки и крючок отрисовки
+J = "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/"
+rep("import { mergeGeometries } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js';",
+    "import { mergeGeometries } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js';\n"
+    f"import {{ EffectComposer }} from '{J}EffectComposer.js';\nimport {{ RenderPass }} from '{J}RenderPass.js';\nimport {{ GTAOPass }} from '{J}GTAOPass.js';\n"
+    f"import {{ UnrealBloomPass }} from '{J}UnrealBloomPass.js';\nimport {{ OutputPass }} from '{J}OutputPass.js';\n"
+    "window.__PP = { EffectComposer, RenderPass, GTAOPass, UnrealBloomPass, OutputPass };")
+rep("  renderer.render(scene, camera); labels.render(scene, camera);", "  if (window.__pitchRender) window.__pitchRender(); else renderer.render(scene, camera); labels.render(scene, camera);")
+
 
 # 2) обёртка документа: заголовок, шрифты
 head_end = html.index("</head>")
@@ -83,10 +92,11 @@ fonts = ('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="
 top = '<title>Тыныс в 3D</title>\n<meta name="claude:viewport-fit-sides" content="cover">\n' + fonts + "\n"
 
 img = lambda p: "data:image/jpeg;base64," + base64.b64encode((HERE / p).read_bytes()).decode()
+js = (HERE / "pitch.js").read_text(encoding="utf-8").replace("/*__REAL__*/", (HERE / "pitch_real.js").read_text(encoding="utf-8"))
 pitch = ("<style>" + (HERE / "pitch.css").read_text(encoding="utf-8") + "</style>\n"
          + (HERE / "pitch_slides.html").read_text(encoding="utf-8")
          + f"\n<script>window.PITCH_IMG={{pult:'{img('pult.jpg')}',futures:'{img('futures.jpg')}'}};document.body.dataset.view='tynys';</script>\n"
-         + "<script>" + (HERE / "pitch.js").read_text(encoding="utf-8") + "</script>\n")
+         + "<script>" + js + "</script>\n")
 out = top + head + body + pitch
-(HERE / "tynys-3d.html").write_text(out, encoding="utf-8")
-print("tynys-3d.html", len(out) // 1024, "KB")
+(HERE / "tynys-pitch.html").write_text(out, encoding="utf-8")
+print("tynys-pitch.html", len(out) // 1024, "KB")
