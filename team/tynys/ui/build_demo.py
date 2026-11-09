@@ -20,7 +20,7 @@ js = js.replace("import { installSceneDetails, mergeStaticMeshes } from './scene
 js = js.replace("'./vendor/OrbitControls.js'", f"'{CDN}/examples/jsm/controls/OrbitControls.js'")
 js = js.replace("'./vendor/CSS2DRenderer.js'", f"'{CDN}/examples/jsm/renderers/CSS2DRenderer.js'")
 html = html.replace('{"imports":{"three":"./vendor/three.module.js"}}', '{"imports":{"three":"%s/build/three.module.js"}}' % CDN)
-# A single-file replay has no sibling Unity, dashboard or experiment pages.
+# A single-file replay has no sibling dashboard or experiment pages.
 html = re.sub(r'<a class="btn" href="(?:\./|\./dashboard\.html|futures\.html)"(?: id="[^"]+")?>[^<]+</a>', '', html)
 html = html.replace('<a style="color:#5fe3a1" href="./dashboard.html">2D‑схему рудника</a>', '2D‑схему на стенде')
 html = html.replace('<script src="demo.js"></script>', '')  # live-only guided demo

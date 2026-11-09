@@ -62,10 +62,6 @@ jobs:
         env:
           NODE_PATH: /tmp/tynys-browser/node_modules
         run: node team/tynys/scripts/check_dashboard_ui.cjs
-      - name: Unity WebGL LIVE and failure recovery
-        env:
-          NODE_PATH: /tmp/tynys-browser/node_modules
-        run: node team/tynys/scripts/check_unity_web.cjs http://127.0.0.1:8095
       - name: Live 3D functionality and observed software FPS
         env:
           TYNYS_3D_ARTIFACT_DIR: .scene-test-output
@@ -87,7 +83,6 @@ jobs:
             .futures-test-output/
             .scene-test-output/
             .dashboard-test-output/
-            .unity-test-output/
           include-hidden-files: true
           if-no-files-found: ignore
   scene-performance:

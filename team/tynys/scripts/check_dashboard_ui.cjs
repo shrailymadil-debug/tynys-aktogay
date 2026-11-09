@@ -150,7 +150,7 @@ async function main() {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth+1),'Dashboard overflows mobile viewport');
     await page.screenshot({path:path.join(out,'dashboard-mobile.png'),fullPage:true});
     assert.deepEqual(errors,[]);
-    checks.push('Dashboard route, Unity navigation and mobile layout work without JS errors');
+    checks.push('Dashboard route, navigation and mobile layout work without JS errors');
     fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({status:'PASS',transport:'local HTTP + intercepted Ditto fixture; no live writes',checks,errors},null,2));
     console.log('Dashboard fixture PASS:',checks.length,'checks');
   } finally {

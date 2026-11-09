@@ -35,11 +35,10 @@ def check(base):
     def get(path):
         with urllib.request.urlopen(base.rstrip('/') + '/' + path, timeout=30) as response:
             return response.read()
-    # Check actual runtime assets, including the prebuilt Unity player.
+    # Check actual runtime assets.
     paths = ['index.html', 'dashboard.html', 'app.js', '3d.html', 'scene3d.js',
              'scene-details.js', 'futures.html', 'futures.js', 'futures.css',
-             'future-scene.js', 'unity-shell.js', 'unity-shell.css', 'unity/index.html']
-    paths += [p.relative_to(ROOT / 'ui').as_posix() for p in (ROOT / 'ui/unity/Build').iterdir() if p.is_file()]
+             'future-scene.js', 'shell.js', 'shell.css']
     for path in paths:
         actual = hashlib.sha256(get(path)).digest()
         expected = hashlib.sha256((ROOT / 'ui' / path).read_bytes()).digest()

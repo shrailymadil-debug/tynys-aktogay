@@ -120,7 +120,7 @@ def slides():
 <div class="box" style="font-size:22px;line-height:1.8"><b>Модель рудника</b> → MQTT <code>telemetry/&lt;двойник&gt;</code> → <b>Eclipse Ditto</b> → Telegraf → InfluxDB → <b>Grafana</b><br>
 <b>Координатор</b> ⇄ Ditto: читает состояние и сценарий, пишет план, уставки и объяснение<br>
 <b>Лаборатория «Два будущих»</b> ⇄ Ditto: запрос и результат расчёта — через двойники<br>
-<b>Экраны</b> (Unity на главной, пульт, лёгкая 3D, «Два будущих») читают двойники и пишут сценарии «что если»</div>
+<b>Экраны</b> (3D на главной, пульт, «Два будущих») читают двойники и пишут сценарии «что если»</div>
 <p style="margin-top:22px">Рудник → карьер (экскаваторы, 14 звеньев самосвалов, зарядки) · фабрика (склады мягкой и твёрдой руды, 2 линии, флотация) · энергия (ВЭС, СЭС, накопитель, подстанция). Связи «кто кому передаёт руду и энергию» записаны в атрибутах двойников.</p>
 <p class="sm">Запуск: <code>sudo apt-get update &amp;&amp; sudo apt-get install -y make</code> · <code>make tynys</code> — проверено с нуля на Ubuntu 24.04 в GitHub Actions.</p><div class="n">5</div></div>""")
     S.append(f"""<div class="s"><p class="eb">МОДЕЛЬ РУДНИКА</p><h2>Оборудование, потоки и состояние — как на настоящем руднике</h2>
@@ -141,7 +141,7 @@ def slides():
 <div class="grid" style="grid-template-columns:780px 1fr;gap:26px"><img class="shot" src="img/3d.png" style="width:780px">
 <ul style="padding-left:20px;margin:0"><li style="font-size:18px">«История: проблема → решение» — облёт с подписями</li>
 <li style="font-size:18px">«Как сейчас / С „Тыныс“» — тот же час без координации и с ней</li><li style="font-size:18px">Щелчок по оборудованию — числа из двойника</li>
-<li style="font-size:18px">Сценарии видны на оборудовании: красная линия, лимит сети на ЛЭП, отказ накопителя</li><li style="font-size:18px">Без видеокарты сцена сама переходит в облегчённый режим</li><li style="font-size:18px">Главная <code>http://localhost:8095</code> — та же шахта в Unity; плашка сверху показывает активные сценарии и ведёт к их запуску</li></ul></div><div class="n">8</div></div>""")
+<li style="font-size:18px">Сценарии видны на оборудовании: красная линия, лимит сети на ЛЭП, отказ накопителя</li><li style="font-size:18px">Без видеокарты сцена сама переходит в облегчённый режим</li><li style="font-size:18px">Главная <code>http://localhost:8095</code> — та же 3D-сцена рудника; плашка сверху показывает активные сценарии и ведёт к их запуску</li></ul></div><div class="n">8</div></div>""")
     S.append(f"""<div class="s" style="padding:40px 50px"><p class="eb">ГДЕ СМОТРЕТЬ НА СТЕНДЕ · 3 / 3</p><h2 style="font-size:30px;margin-bottom:14px">Два будущих — <code>/futures.html</code></h2>
 <div class="grid" style="grid-template-columns:780px 1fr;gap:26px"><img class="shot" src="img/futures.png" style="width:780px">
 <ul style="padding-left:20px;margin:0"><li style="font-size:18px">Запрос KEGOC: на сколько МВт и часов снизить лимит</li>
